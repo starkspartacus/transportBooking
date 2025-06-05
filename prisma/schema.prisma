@@ -1,0 +1,354 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  phone         String?   @unique
+  countryCode   String?
+  password      String?
+  role          UserRole  @default(CLIENT)
+  
+  // Personal Info
+  firstName     String?
+  lastName      String?
+  country       String?
+  city          String?
+  commune       String?
+  address       String?
+  
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  company       Company?  @relation("CompanyOwner")
+  employeeAt    Company?  @relation("CompanyEmployee", fields: [companyId], references: [id])
+  companyId     String?
+  
+  // Client relations
+  reservations  Reservation[]
+  tickets       Ticket[]
+  notifications Notification[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@unique([phone, countryCode])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum UserRole {
+  ADMIN
+  PATRON
+  GESTIONNAIRE
+  CAISSIER
+  CLIENT
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  logo        String?
+  
+  // Contact Info
+  email       String   @unique
+  phone       String
+  countryCode String
+  address     String
+  country     String
+  city        String
+  commune     String?
+  
+  // Business Info
+  licenseNumber String @unique
+  isVerified    Boolean @default(false)
+  isActive      Boolean @default(true)
+  
+  // Relations
+  owner       User     @relation("CompanyOwner", fields: [ownerId], references: [id])
+  ownerId     String   @unique
+  employees   User[]   @relation("CompanyEmployee")
+  
+  buses       Bus[]
+  routes      Route[]
+  stations    Station[]
+  trips       Trip[]
+  reservations Reservation[]
+  tickets     Ticket[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([phone, countryCode])
+}
+
+model Bus {
+  id          String   @id @default(cuid())
+  plateNumber String   @unique
+  model       String
+  capacity    Int
+  isActive    Boolean  @default(true)
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  companyId   String
+  
+  trips       Trip[]
+  seats       Seat[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Seat {
+  id        String   @id @default(cuid())
+  number    String
+  isWindow  Boolean  @default(false)
+  
+  bus       Bus      @relation(fields: [busId], references: [id])
+  busId     String
+  
+  reservations Reservation[]
+  tickets   Ticket[]
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([busId, number])
+}
+
+model Station {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  address   String
+  city      String
+  country   String
+  latitude  Float?
+  longitude Float?
+  
+  company   Company  @relation(fields: [companyId], references: [id])
+  companyId String
+  
+  departureRoutes Route[] @relation("DepartureStation")
+  arrivalRoutes   Route[] @relation("ArrivalStation")
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Route {
+  id          String   @id @default(cuid())
+  name        String
+  distance    Float
+  duration    Int      // in minutes
+  price       Float
+  
+  departure   Station  @relation("DepartureStation", fields: [departureId], references: [id])
+  departureId String
+  arrival     Station  @relation("ArrivalStation", fields: [arrivalId], references: [id])
+  arrivalId   String
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  companyId   String
+  
+  trips       Trip[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([departureId, arrivalId, companyId])
+}
+
+model Trip {
+  id            String     @id @default(cuid())
+  departureTime DateTime
+  arrivalTime   DateTime
+  status        TripStatus @default(SCHEDULED)
+  availableSeats Int
+  
+  route         Route      @relation(fields: [routeId], references: [id])
+  routeId       String
+  bus           Bus        @relation(fields: [busId], references: [id])
+  busId         String
+  company       Company    @relation(fields: [companyId], references: [id])
+  companyId     String
+  
+  reservations  Reservation[]
+  tickets       Ticket[]
+  
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+enum TripStatus {
+  SCHEDULED
+  BOARDING
+  DEPARTED
+  ARRIVED
+  CANCELLED
+  DELAYED
+}
+
+model Reservation {
+  id            String            @id @default(cuid())
+  reservationCode String          @unique
+  status        ReservationStatus @default(PENDING)
+  expiresAt     DateTime
+  totalAmount   Float
+  
+  user          User              @relation(fields: [userId], references: [id])
+  userId        String
+  trip          Trip              @relation(fields: [tripId], references: [id])
+  tripId        String
+  seat          Seat              @relation(fields: [seatId], references: [id])
+  seatId        String
+  company       Company           @relation(fields: [companyId], references: [id])
+  companyId     String
+  
+  ticket        Ticket?
+  
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  EXPIRED
+  CANCELLED
+}
+
+model Ticket {
+  id          String       @id @default(cuid())
+  ticketCode  String       @unique
+  qrCode      String       @unique
+  status      TicketStatus @default(ACTIVE)
+  issuedAt    DateTime     @default(now())
+  validatedAt DateTime?
+  
+  reservation Reservation  @relation(fields: [reservationId], references: [id])
+  reservationId String     @unique
+  
+  user        User         @relation(fields: [userId], references: [id])
+  userId      String
+  trip        Trip         @relation(fields: [tripId], references: [id])
+  tripId      String
+  seat        Seat         @relation(fields: [seatId], references: [id])
+  seatId      String
+  company     Company      @relation(fields: [companyId], references: [id])
+  companyId   String
+  
+  payment     Payment?
+  
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+enum TicketStatus {
+  ACTIVE
+  USED
+  CANCELLED
+  EXPIRED
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  amount        Float
+  currency      String        @default("XOF")
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  transactionId String?       @unique
+  
+  ticket        Ticket        @relation(fields: [ticketId], references: [id])
+  ticketId      String        @unique
+  
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  MOBILE_MONEY
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  
+  user      User             @relation(fields: [userId], references: [id])
+  userId    String
+  
+  createdAt DateTime         @default(now())
+}
+
+enum NotificationType {
+  RESERVATION_CONFIRMED
+  PAYMENT_RECEIVED
+  TRIP_REMINDER
+  TRIP_CANCELLED
+  TRIP_DELAYED
+  SEAT_AVAILABLE
+  SYSTEM_UPDATE
+}
+
+model Country {
+  id          String @id @default(cuid())
+  name        String @unique
+  code        String @unique
+  phonePrefix String @unique
+  flag        String?
+}
