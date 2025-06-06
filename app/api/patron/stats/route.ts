@@ -11,145 +11,178 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    const companyId = session.user.companyId;
+    const userId = session.user.id;
 
-    if (!companyId) {
-      return NextResponse.json(
-        { error: "Entreprise non trouvée" },
-        { status: 404 }
-      );
+    // Récupérer l'entreprise active ou utiliser toutes les entreprises
+    const { searchParams } = new URL(request.url);
+    const companyId = searchParams.get("companyId");
+
+    let whereClause: any = {};
+
+    if (companyId) {
+      // Vérifier que l'entreprise appartient au patron
+      const company = await prisma.company.findFirst({
+        where: {
+          id: companyId,
+          ownerId: userId,
+        },
+      });
+
+      if (!company) {
+        return NextResponse.json(
+          { error: "Entreprise non trouvée" },
+          { status: 404 }
+        );
+      }
+
+      whereClause = { companyId };
+    } else {
+      // Utiliser toutes les entreprises du patron
+      const companies = await prisma.company.findMany({
+        where: { ownerId: userId },
+        select: { id: true },
+      });
+
+      const companyIds = companies.map((company) => company.id);
+      whereClause = { companyId: { in: companyIds } };
     }
 
-    // Get date range for current month
+    // Get current month start and end
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
+    // Get stats
     const [
       totalRevenue,
+      currentMonthRevenue,
+      lastMonthRevenue,
       totalTrips,
-      totalReservations,
+      activeTrips,
+      totalEmployees,
+      totalBuses,
+      pendingReservations,
       totalSeats,
       occupiedSeats,
     ] = await Promise.all([
-      // Total revenue - Fixed: Use correct relation path
+      // Total revenue
       prisma.payment.aggregate({
+        where: {
+          status: "COMPLETED",
+          ticket: {
+            ...whereClause,
+          },
+        },
         _sum: { amount: true },
+      }),
+
+      // Current month revenue
+      prisma.payment.aggregate({
+        where: {
+          status: "COMPLETED",
+          createdAt: { gte: currentMonthStart },
+          ticket: {
+            ...whereClause,
+          },
+        },
+        _sum: { amount: true },
+      }),
+
+      // Last month revenue
+      prisma.payment.aggregate({
         where: {
           status: "COMPLETED",
           createdAt: {
-            gte: startOfMonth,
-            lte: endOfMonth,
+            gte: lastMonthStart,
+            lte: lastMonthEnd,
           },
           ticket: {
-            trip: {
-              companyId,
-            },
+            ...whereClause,
           },
         },
+        _sum: { amount: true },
       }),
 
       // Total trips
       prisma.trip.count({
+        where: whereClause,
+      }),
+
+      // Active trips
+      prisma.trip.count({
         where: {
-          companyId,
-          createdAt: {
-            gte: startOfMonth,
-            lte: endOfMonth,
-          },
+          ...whereClause,
+          status: { in: ["SCHEDULED", "BOARDING", "DEPARTED"] },
         },
       }),
 
-      // Total reservations
+      // Total employees
+      prisma.user.count({
+        where: {
+          ...whereClause,
+          role: { in: ["GESTIONNAIRE", "CAISSIER"] },
+        },
+      }),
+
+      // Total buses
+      prisma.bus.count({
+        where: whereClause,
+      }),
+
+      // Pending reservations
       prisma.reservation.count({
         where: {
-          companyId,
-          createdAt: {
-            gte: startOfMonth,
-            lte: endOfMonth,
-          },
+          status: "PENDING",
+          ...whereClause,
         },
       }),
 
-      // Total seats available
+      // Total seats for occupancy calculation
       prisma.trip.aggregate({
-        _sum: { availableSeats: true },
         where: {
-          companyId,
-          createdAt: {
-            gte: startOfMonth,
-            lte: endOfMonth,
-          },
+          ...whereClause,
+          departureTime: { gte: currentMonthStart },
+        },
+        _sum: {
+          totalSeats: true,
         },
       }),
 
       // Occupied seats
       prisma.reservation.count({
         where: {
-          companyId,
-          status: { in: ["CONFIRMED", "CHECKED_IN"] },
+          status: { in: ["CONFIRMED", "PENDING"] },
           trip: {
-            createdAt: {
-              gte: startOfMonth,
-              lte: endOfMonth,
-            },
+            ...whereClause,
+            departureTime: { gte: currentMonthStart },
           },
         },
       }),
     ]);
 
-    // Calculate occupancy rate
-    const totalSeatsCount = totalSeats._sum.availableSeats || 0;
-    const occupancyRate =
-      totalSeatsCount > 0 ? (occupiedSeats / totalSeatsCount) * 100 : 0;
+    // Calculate monthly growth
+    const currentRevenue = currentMonthRevenue._sum.amount || 0;
+    const lastRevenue = lastMonthRevenue._sum.amount || 0;
+    const monthlyGrowth =
+      lastRevenue > 0
+        ? Math.round(((currentRevenue - lastRevenue) / lastRevenue) * 100)
+        : 0;
 
-    // Get recent trips
-    const recentTrips = await prisma.trip.findMany({
-      where: { companyId },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      include: {
-        route: {
-          include: {
-            departure: { select: { name: true } },
-            arrival: { select: { name: true } },
-          },
-        },
-        bus: { select: { plateNumber: true } },
-        _count: { select: { reservations: true } },
-      },
-    });
+    // Calculate occupancy rate
+    const totalCapacity = totalSeats._sum.totalSeats || 0;
+    const occupancyRate =
+      totalCapacity > 0 ? Math.round((occupiedSeats / totalCapacity) * 100) : 0;
 
     const stats = {
-      revenue: {
-        total: totalRevenue._sum.amount || 0,
-        currency: "XOF",
-        change: 0, // TODO: Calculate change from previous month
-      },
-      trips: {
-        total: totalTrips,
-        completed: 0, // TODO: Count completed trips
-        cancelled: 0, // TODO: Count cancelled trips
-      },
-      reservations: {
-        total: totalReservations,
-        confirmed: occupiedSeats,
-        pending: 0, // TODO: Count pending reservations
-      },
-      occupancy: {
-        rate: Math.round(occupancyRate),
-        totalSeats: totalSeatsCount,
-        occupiedSeats,
-      },
-      recentTrips: recentTrips.map((trip) => ({
-        id: trip.id,
-        route: `${trip.route.departure.name} → ${trip.route.arrival.name}`,
-        departureTime: trip.departureTime.toISOString(),
-        status: trip.status,
-        bus: trip.bus.plateNumber,
-        reservations: trip._count.reservations,
-        availableSeats: trip.availableSeats,
-      })),
+      totalRevenue: totalRevenue._sum.amount || 0,
+      totalTrips,
+      activeTrips,
+      totalEmployees,
+      totalBuses,
+      pendingReservations,
+      monthlyGrowth,
+      occupancyRate,
     };
 
     return NextResponse.json(stats);

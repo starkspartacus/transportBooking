@@ -31,7 +31,7 @@ export const authOptions: NextAuthOptions = {
           if (isEmail) {
             user = await prisma.user.findUnique({
               where: { email: credentials.identifier },
-              include: { company: true },
+              include: { employeeAt: true },
             });
           } else {
             user = await prisma.user.findFirst({
@@ -39,7 +39,7 @@ export const authOptions: NextAuthOptions = {
                 phone: credentials.identifier,
                 countryCode: credentials.countryCode || "+1",
               },
-              include: { company: true },
+              include: { employeeAt: true },
             });
           }
 

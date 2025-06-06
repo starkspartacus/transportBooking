@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
-import PatronDashboard from "@/components/patron/patron-dashboard";
+import MultiCompanyDashboard from "@/components/patron/multi-company-dashboard";
 
 export default async function PatronPage() {
   const session = await getServerSession(authOptions);
@@ -10,5 +10,5 @@ export default async function PatronPage() {
     redirect("/auth/signin");
   }
 
-  return <PatronDashboard />;
+  return <MultiCompanyDashboard />;
 }

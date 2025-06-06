@@ -68,9 +68,17 @@ model User {
   // Relations
   accounts      Account[]
   sessions      Session[]
-  company       Company?  @relation("CompanyOwner")
+  
+  // Relation modifiée: un patron peut avoir plusieurs entreprises
+  ownedCompanies Company[]  @relation("CompanyOwner")
+  
+  // Relation pour les employés (inchangée)
   employeeAt    Company?  @relation("CompanyEmployee", fields: [companyId], references: [id])
   companyId     String?
+  
+  // Relation pour l'entreprise active du patron
+  activeCompany Company? @relation("ActiveCompany", fields: [activeCompanyId], references: [id])
+  activeCompanyId String?
   
   // Client relations
   reservations  Reservation[]
@@ -156,6 +164,7 @@ model Company {
   description String?
   logo        String?
   coverImage  String?
+  galleryImages CompanyImage[] // Ajout: Images de galerie
   
   // Contact Info
   email       String   @unique
@@ -176,10 +185,23 @@ model Company {
   isActive    Boolean @default(true)
   status      CompanyStatus @default(PENDING)
   
-  // Relations
+  // Nouveaux champs
+  slogan      String?
+  colors      String? // Couleurs de la marque au format JSON
+  operatingHours String? // Heures d'ouverture au format JSON
+  specialties String[] // Spécialités de l'entreprise
+  isArchived  Boolean @default(false) // Pour l'archivage au lieu de la suppression
+  
+  // Relations modifiées
   owner       User     @relation("CompanyOwner", fields: [ownerId], references: [id])
-  ownerId     String   @unique
+  ownerId     String
   employees   User[]   @relation("CompanyEmployee")
+  
+  // Relation pour les utilisateurs qui ont cette entreprise comme active
+  activeForUsers User[] @relation("ActiveCompany")
+  
+  // Relations avec les pays d'opération
+  operatingCountries CompanyOperatingCountry[]
   
   buses       Bus[]
   routes      Route[]
@@ -203,6 +225,42 @@ model Company {
   updatedAt   DateTime @updatedAt
   
   @@unique([phone, countryCode])
+}
+
+// Nouveau modèle pour les images d'entreprise
+model CompanyImage {
+  id        String   @id @default(cuid())
+  url       String
+  alt       String?
+  type      ImageType @default(GALLERY)
+  isPrimary Boolean  @default(false)
+  
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  
+  createdAt DateTime @default(now())
+}
+
+enum ImageType {
+  LOGO
+  COVER
+  GALLERY
+  DOCUMENT
+}
+
+// Nouveau modèle pour les pays d'opération
+model CompanyOperatingCountry {
+  id        String   @id @default(cuid())
+  countryCode String
+  countryName String
+  isMainCountry Boolean @default(false)
+  
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([companyId, countryCode])
 }
 
 enum CompanySize {
@@ -253,6 +311,8 @@ enum ActivityType {
   ROUTE_CREATED
   EMPLOYEE_ADDED
   SYSTEM_UPDATE
+  COMPANY_CREATED
+  COMPANY_UPDATED
 }
 
 enum ActivityStatus {
@@ -284,6 +344,19 @@ model Bus {
   nextMaintenance DateTime?
   mileage     Int?
   
+  // Nouveaux champs
+  manufacturer String?
+  modelDetails String?
+  chassisNumber String?
+  engineNumber String?
+  insuranceNumber String?
+  insuranceExpiry DateTime?
+  registrationExpiry DateTime?
+  purchaseDate DateTime?
+  purchasePrice Float?
+  currentValue Float?
+  maintenanceHistory MaintenanceRecord[]
+  
   // Images
   images      BusImage[]
   
@@ -295,6 +368,31 @@ model Bus {
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// Nouveau modèle pour l'historique de maintenance
+model MaintenanceRecord {
+  id          String   @id @default(cuid())
+  date        DateTime
+  description String
+  cost        Float
+  odometerReading Int?
+  maintenanceType MaintenanceType
+  performedBy String?
+  notes       String?
+  
+  bus         Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
+  busId       String
+  
+  createdAt   DateTime @default(now())
+}
+
+enum MaintenanceType {
+  ROUTINE
+  REPAIR
+  INSPECTION
+  EMERGENCY
+  OTHER
 }
 
 enum BusStatus {
@@ -315,6 +413,7 @@ enum FuelType {
 model BusImage {
   id        String   @id @default(cuid())
   url       String
+  alt       String?
   isPrimary Boolean  @default(false)
   
   bus       Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
@@ -366,6 +465,15 @@ model Station {
   images      StationImage[]
   isActive    Boolean @default(true)
   
+  // Nouveaux champs
+  openingHours String? // Format JSON
+  contactPhone String?
+  contactEmail String?
+  hasWaitingRoom Boolean @default(false)
+  hasRestaurant Boolean @default(false)
+  hasParking Boolean @default(false)
+  parkingCapacity Int?
+  
   company   Company  @relation(fields: [companyId], references: [id])
   companyId String
   
@@ -379,6 +487,7 @@ model Station {
 model StationImage {
   id        String   @id @default(cuid())
   url       String
+  alt       String?
   isPrimary Boolean  @default(false)
   
   station   Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
@@ -400,6 +509,12 @@ model Route {
   isPopular   Boolean  @default(false)
   isActive    Boolean  @default(true)
   
+  // Nouveaux champs
+  stops       RouteStop[]
+  estimatedFuelConsumption Float?
+  routeType   RouteType @default(REGULAR)
+  frequency   RouteFrequency?
+  
   departure   Station  @relation("DepartureStation", fields: [departureId], references: [id])
   departureId String
   arrival     Station  @relation("ArrivalStation", fields: [arrivalId], references: [id])
@@ -415,6 +530,38 @@ model Route {
   updatedAt   DateTime @updatedAt
   
   @@unique([departureId, arrivalId, companyId])
+}
+
+// Nouveau modèle pour les arrêts intermédiaires
+model RouteStop {
+  id          String   @id @default(cuid())
+  name        String
+  city        String
+  country     String
+  stopOrder   Int
+  timeFromStart Int // minutes from route start
+  
+  route       Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  routeId     String
+  
+  createdAt   DateTime @default(now())
+}
+
+enum RouteType {
+  REGULAR
+  EXPRESS
+  NIGHT
+  WEEKEND
+  SEASONAL
+}
+
+enum RouteFrequency {
+  DAILY
+  WEEKDAYS
+  WEEKENDS
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
 }
 
 model FavoriteRoute {
@@ -447,6 +594,18 @@ model Trip {
   driverName    String?
   driverContact String?
   trackingCode  String?    @unique
+  
+  // Nouveaux champs
+  boardingTime  DateTime? // Heure d'embarquement (avant départ)
+  gateNumber    String?
+  platform      String?
+  coDriverName  String?
+  weatherConditions String?
+  estimatedDelay Int? // minutes
+  delayReason   String?
+  isFeatured    Boolean @default(false)
+  promotionCode String?
+  promotionDiscount Float?
   
   route         Route      @relation(fields: [routeId], references: [id])
   routeId       String
