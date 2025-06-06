@@ -10,9 +10,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id;
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID not found in session" },
+        { status: 400 }
+      );
+    }
+
     const reservations = await prisma.reservation.findMany({
       where: {
-        userId: session.user.id,
+        userId: userId,
       },
       include: {
         trip: {

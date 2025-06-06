@@ -1,58 +1,81 @@
-import { withAuth } from "next-auth/middleware"
-import { NextResponse } from "next/server"
+import { withAuth } from "next-auth/middleware";
+import { NextResponse } from "next/server";
 
 export default withAuth(
   function middleware(req) {
-    const token = req.nextauth.token
-    const { pathname } = req.nextUrl
+    const token = req.nextauth.token;
+    const { pathname } = req.nextUrl;
 
     // Admin routes
     if (pathname.startsWith("/admin")) {
       if (token?.role !== "ADMIN") {
-        return NextResponse.redirect(new URL("/unauthorized", req.url))
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
     }
 
     // Patron routes
     if (pathname.startsWith("/patron")) {
       if (!["ADMIN", "PATRON"].includes(token?.role as string)) {
-        return NextResponse.redirect(new URL("/unauthorized", req.url))
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
     }
 
     // Gestionnaire routes
     if (pathname.startsWith("/gestionnaire")) {
-      if (!["ADMIN", "PATRON", "GESTIONNAIRE"].includes(token?.role as string)) {
-        return NextResponse.redirect(new URL("/unauthorized", req.url))
+      if (
+        !["ADMIN", "PATRON", "GESTIONNAIRE"].includes(token?.role as string)
+      ) {
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
     }
 
     // Caissier routes
     if (pathname.startsWith("/caissier")) {
-      if (!["ADMIN", "PATRON", "GESTIONNAIRE", "CAISSIER"].includes(token?.role as string)) {
-        return NextResponse.redirect(new URL("/unauthorized", req.url))
+      if (
+        !["ADMIN", "PATRON", "GESTIONNAIRE", "CAISSIER"].includes(
+          token?.role as string
+        )
+      ) {
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
+      }
+    }
+
+    // Client routes
+    if (pathname.startsWith("/client")) {
+      if (token?.role !== "CLIENT") {
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
     }
 
     // API routes protection
     if (pathname.startsWith("/api/admin")) {
       if (token?.role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     }
 
     if (pathname.startsWith("/api/company")) {
-      if (!["ADMIN", "PATRON", "GESTIONNAIRE", "CAISSIER"].includes(token?.role as string)) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      if (
+        !["ADMIN", "PATRON", "GESTIONNAIRE", "CAISSIER"].includes(
+          token?.role as string
+        )
+      ) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     }
 
-    return NextResponse.next()
+    if (pathname.startsWith("/api/client")) {
+      if (token?.role !== "CLIENT") {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
+
+    return NextResponse.next();
   },
   {
     callbacks: {
       authorized: ({ token, req }) => {
-        const { pathname } = req.nextUrl
+        const { pathname } = req.nextUrl;
 
         // Public routes
         if (
@@ -62,15 +85,15 @@ export default withAuth(
           pathname.startsWith("/search") ||
           pathname.startsWith("/booking")
         ) {
-          return true
+          return true;
         }
 
         // Protected routes require authentication
-        return !!token
+        return !!token;
       },
     },
-  },
-)
+  }
+);
 
 export const config = {
   matcher: [
@@ -78,10 +101,12 @@ export const config = {
     "/patron/:path*",
     "/gestionnaire/:path*",
     "/caissier/:path*",
+    "/client/:path*",
     "/dashboard/:path*",
     "/profile/:path*",
     "/api/admin/:path*",
     "/api/company/:path*",
+    "/api/client/:path*",
     "/api/user/:path*",
   ],
-}
+};

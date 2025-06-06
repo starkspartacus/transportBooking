@@ -16,7 +16,7 @@ export default function SocketHandler(
     console.log("Socket is already running");
   } else {
     console.log("Socket is initializing");
-    const io = new ServerIO(res.socket.server, {
+    const io = new ServerIO(res.socket.server as any, {
       path: "/api/socket/io",
       addTrailingSlash: false,
       cors: {

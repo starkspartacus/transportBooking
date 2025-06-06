@@ -13,6 +13,15 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id;
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID not found in session" },
+        { status: 400 }
+      );
+    }
+
     const reservationId = params.id;
 
     // Get reservation details
@@ -36,7 +45,7 @@ export async function POST(
     }
 
     // Check if user owns this reservation
-    if (reservation.userId !== session.user.id) {
+    if (reservation.userId !== userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
