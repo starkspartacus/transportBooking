@@ -224,13 +224,23 @@ export function CompanySelector() {
             </DialogTitle>
           </DialogHeader>
 
-          {/* Formulaire de création d'entreprise */}
           <div className="py-4">
-            <p className="text-sm text-gray-500">
-              Formulaire de création d'entreprise à implémenter ici.
+            <p className="text-sm text-gray-500 mb-4">
+              Vous allez être redirigé vers le formulaire de création
+              d'entreprise complet.
             </p>
-            <div className="flex justify-end mt-4">
-              <Button onClick={() => setShowNewDialog(false)}>Fermer</Button>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowNewDialog(false)}>
+                Annuler
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowNewDialog(false);
+                  router.push("/patron/companies/new");
+                }}
+              >
+                Continuer
+              </Button>
             </div>
           </div>
         </DialogContent>

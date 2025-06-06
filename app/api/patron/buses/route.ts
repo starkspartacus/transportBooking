@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// GET - Récupérer tous les bus d'une entreprise
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -11,9 +12,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    const companyId = session.user.companyId;
+    const { searchParams } = new URL(request.url);
+    const companyId = searchParams.get("companyId");
 
     if (!companyId) {
+      return NextResponse.json(
+        { error: "ID de l'entreprise requis" },
+        { status: 400 }
+      );
+    }
+
+    // Vérifier que l'entreprise appartient au patron
+    const company = await prisma.company.findFirst({
+      where: {
+        id: companyId,
+        ownerId: session.user.id,
+      },
+    });
+
+    if (!company) {
       return NextResponse.json(
         { error: "Entreprise non trouvée" },
         { status: 404 }
@@ -21,32 +38,22 @@ export async function GET(request: NextRequest) {
     }
 
     const buses = await prisma.bus.findMany({
-      where: { companyId },
-      orderBy: { createdAt: "desc" },
+      where: {
+        companyId: companyId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
 
-    // Format the data for the frontend
-    const formattedBuses = buses.map((bus) => ({
-      id: bus.id,
-      plateNumber: bus.plateNumber,
-      model: bus.model,
-      capacity: bus.capacity,
-      status: bus.status || "ACTIVE",
-      lastMaintenance:
-        bus.lastMaintenance?.toISOString() || new Date().toISOString(),
-      nextMaintenance:
-        bus.nextMaintenance?.toISOString() ||
-        new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-      totalKm: bus.totalKm || 0,
-    }));
-
-    return NextResponse.json(formattedBuses);
+    return NextResponse.json(buses);
   } catch (error) {
     console.error("Error fetching buses:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }
 
+// POST - Créer un nouveau bus
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -55,27 +62,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    const companyId = session.user.companyId;
+    const data = await request.json();
 
-    if (!companyId) {
+    // Validation des données
+    const requiredFields = [
+      "plateNumber",
+      "model",
+      "brand",
+      "capacity",
+      "year",
+      "fuelType",
+      "companyId",
+    ];
+
+    for (const field of requiredFields) {
+      if (!data[field]) {
+        return NextResponse.json(
+          { error: `Le champ ${field} est requis` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Vérifier que l'entreprise appartient au patron
+    const company = await prisma.company.findFirst({
+      where: {
+        id: data.companyId,
+        ownerId: session.user.id,
+      },
+    });
+
+    if (!company) {
       return NextResponse.json(
         { error: "Entreprise non trouvée" },
         { status: 404 }
       );
     }
 
-    const data = await request.json();
-
-    // Validate required fields
-    if (!data.plateNumber || !data.model || !data.capacity) {
-      return NextResponse.json(
-        { error: "Données incomplètes" },
-        { status: 400 }
-      );
-    }
-
-    // Check if plate number already exists
-    const existingBus = await prisma.bus.findFirst({
+    // Vérifier l'unicité du numéro d'immatriculation
+    const existingBus = await prisma.bus.findUnique({
       where: { plateNumber: data.plateNumber },
     });
 
@@ -86,34 +111,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create new bus
-    const newBus = await prisma.bus.create({
+    // Créer le bus
+    const bus = await prisma.bus.create({
       data: {
         plateNumber: data.plateNumber,
         model: data.model,
+        brand: data.brand,
         capacity: Number.parseInt(data.capacity),
-        status: "ACTIVE",
-        companyId,
+        year: Number.parseInt(data.year),
+        color: data.color || "",
+        fuelType: data.fuelType,
+        status: data.status || "ACTIVE",
         totalKm: data.totalKm || 0,
-        lastMaintenance: data.lastMaintenance
-          ? new Date(data.lastMaintenance)
-          : new Date(),
-        nextMaintenance: data.nextMaintenance
-          ? new Date(data.nextMaintenance)
-          : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+        insuranceExpiry: new Date(data.insuranceExpiry),
+        technicalControlExpiry: new Date(data.technicalControlExpiry),
+        lastMaintenance: new Date(data.lastMaintenance),
+        nextMaintenance: new Date(data.nextMaintenance),
+        features: data.features || [],
+        companyId: data.companyId,
       },
     });
 
-    return NextResponse.json({
-      id: newBus.id,
-      plateNumber: newBus.plateNumber,
-      model: newBus.model,
-      capacity: newBus.capacity,
-      status: newBus.status,
-      lastMaintenance: newBus.lastMaintenance.toISOString(),
-      nextMaintenance: newBus.nextMaintenance.toISOString(),
-      totalKm: newBus.totalKm,
+    // Enregistrer l'activité
+    await prisma.activity.create({
+      data: {
+        type: "BUS_ADDED",
+        description: `Bus ${bus.plateNumber} ajouté à la flotte`,
+        status: "SUCCESS",
+        userId: session.user.id,
+        companyId: data.companyId,
+      },
     });
+
+    return NextResponse.json(bus);
   } catch (error) {
     console.error("Error creating bus:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

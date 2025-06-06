@@ -159,7 +159,7 @@ export default function MultiCompanyDashboard() {
                       Entreprises
                     </p>
                     <p className="text-2xl font-bold text-purple-600">
-                      {dashboardData.globalStats.totalCompanies}
+                      {dashboardData?.globalStats?.totalCompanies || 0}
                     </p>
                   </div>
                   <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -177,7 +177,9 @@ export default function MultiCompanyDashboard() {
                       Revenus totaux
                     </p>
                     <p className="text-2xl font-bold text-green-600">
-                      {formatCurrency(dashboardData.globalStats.totalRevenue)}
+                      {formatCurrency(
+                        dashboardData?.globalStats?.totalRevenue || 0
+                      )}
                     </p>
                   </div>
                   <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -193,7 +195,7 @@ export default function MultiCompanyDashboard() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Voyages</p>
                     <p className="text-2xl font-bold text-blue-600">
-                      {dashboardData.globalStats.totalTrips}
+                      {dashboardData?.globalStats?.totalTrips || 0}
                     </p>
                   </div>
                   <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -211,7 +213,7 @@ export default function MultiCompanyDashboard() {
                       Employés
                     </p>
                     <p className="text-2xl font-bold text-amber-600">
-                      {dashboardData.globalStats.totalEmployees}
+                      {dashboardData?.globalStats?.totalEmployees || 0}
                     </p>
                   </div>
                   <div className="h-12 w-12 bg-amber-100 rounded-lg flex items-center justify-center">
@@ -227,7 +229,7 @@ export default function MultiCompanyDashboard() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Bus</p>
                     <p className="text-2xl font-bold text-indigo-600">
-                      {dashboardData.globalStats.totalBuses}
+                      {dashboardData?.globalStats?.totalBuses || 0}
                     </p>
                   </div>
                   <div className="h-12 w-12 bg-indigo-100 rounded-lg flex items-center justify-center">
@@ -245,7 +247,7 @@ export default function MultiCompanyDashboard() {
                       Réservations
                     </p>
                     <p className="text-2xl font-bold text-orange-600">
-                      {dashboardData.globalStats.totalReservations}
+                      {dashboardData?.globalStats?.totalReservations || 0}
                     </p>
                   </div>
                   <div className="h-12 w-12 bg-orange-100 rounded-lg flex items-center justify-center">

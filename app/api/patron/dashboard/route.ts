@@ -41,11 +41,7 @@ export async function GET(request: NextRequest) {
         _sum: { amount: true },
         where: {
           status: "COMPLETED",
-          ticket: {
-            company: {
-              id: { in: companyIds },
-            },
-          },
+          companyId: { in: companyIds },
         },
       }),
 
@@ -102,9 +98,7 @@ export async function GET(request: NextRequest) {
               _sum: { amount: true },
               where: {
                 status: "COMPLETED",
-                ticket: {
-                  companyId: company.id,
-                },
+                companyId: company.id,
               },
             }),
             prisma.trip.count({ where: { companyId: company.id } }),

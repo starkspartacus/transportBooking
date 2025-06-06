@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -45,11 +48,11 @@ model User {
   password      String?
   role          UserRole  @default(CLIENT)
   status        UserStatus @default(ACTIVE)
-  
+
   // Password reset fields
   resetToken        String?
   resetTokenExpiry  DateTime?
-  
+
   // Personal Info
   firstName     String?
   lastName      String?
@@ -59,45 +62,107 @@ model User {
   address       String?
   dateOfBirth   DateTime?
   gender        Gender?
-  
+  nationality   String?
+  idNumber      String?
+  idType        IdentificationType?
+  idExpiryDate  DateTime?
+
   // Preferences
   language      String?   @default("fr")
   theme         String?   @default("light")
+  currency      String?   @default("XOF")
   notificationPreferences NotificationPreference[]
-  
+
   // Relations
   accounts      Account[]
   sessions      Session[]
-  
-  // Relation modifiée: un patron peut avoir plusieurs entreprises
+
+  // Company relations - Updated for multi-company support
   ownedCompanies Company[]  @relation("CompanyOwner")
-  
-  // Relation pour les employés (inchangée)
   employeeAt    Company?  @relation("CompanyEmployee", fields: [companyId], references: [id])
   companyId     String?
-  
-  // Relation pour l'entreprise active du patron
   activeCompany Company? @relation("ActiveCompany", fields: [activeCompanyId], references: [id])
   activeCompanyId String?
-  
+  employeeRole  EmployeeRole?
+
   // Client relations
   reservations  Reservation[]
   tickets       Ticket[]
   notifications Notification[]
   reviews       Review[]
   favorites     FavoriteRoute[]
-  
+  payments      Payment[]
+  refunds       Refund[]
+
   // Activity tracking
   lastLogin     DateTime?
   loginCount    Int       @default(0)
   deviceTokens  DeviceToken[]
   activityLogs  ActivityLog[]
   activities    Activity[]
-  
+  loginHistory  LoginHistory[]
+
+  // Marketing
+  marketingConsent Boolean @default(false)
+  referralCode    String?  @unique
+  referredBy      String?
+  referralCount   Int      @default(0)
+
+  // Security
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
+  securityQuestions SecurityQuestion[]
+  passwordHistory  PasswordHistory[]
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  
+
   @@unique([phone, countryCode])
+  @@index([email])
+  @@index([phone, countryCode])
+  @@index([role])
+}
+
+model PasswordHistory {
+  id        String   @id @default(cuid())
+  password  String
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  @@index([userId])
+}
+
+model SecurityQuestion {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model LoginHistory {
+  id        String   @id @default(cuid())
+  ipAddress String?
+  device    String?
+  browser   String?
+  location  String?
+  success   Boolean  @default(true)
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model VerificationToken {
@@ -129,20 +194,38 @@ enum Gender {
   OTHER
 }
 
+enum IdentificationType {
+  PASSPORT
+  NATIONAL_ID
+  DRIVERS_LICENSE
+  OTHER
+}
+
+enum EmployeeRole {
+  MANAGER
+  CASHIER
+  DRIVER
+  CUSTOMER_SERVICE
+  MAINTENANCE
+  ADMIN
+}
+
 model NotificationPreference {
   id        String   @id @default(cuid())
   type      NotificationType
   email     Boolean  @default(true)
   push      Boolean  @default(true)
   sms       Boolean  @default(false)
-  
+  inApp     Boolean  @default(true)
+
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@unique([userId, type])
+  @@index([userId])
 }
 
 model DeviceToken {
@@ -150,12 +233,17 @@ model DeviceToken {
   token     String   @unique
   device    String?
   platform  String?
-  
+  appVersion String?
+  lastUsed  DateTime?
+
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([token])
 }
 
 model Company {
@@ -164,8 +252,7 @@ model Company {
   description String?
   logo        String?
   coverImage  String?
-  galleryImages CompanyImage[] // Ajout: Images de galerie
-  
+
   // Contact Info
   email       String   @unique
   phone       String
@@ -175,7 +262,8 @@ model Company {
   city        String
   commune     String?
   website     String?
-  
+  postalCode  String?
+
   // Business Info
   licenseNumber String @unique
   taxId       String?
@@ -185,24 +273,54 @@ model Company {
   isActive    Boolean @default(true)
   status      CompanyStatus @default(PENDING)
   
-  // Nouveaux champs
-  slogan      String?
-  colors      String? // Couleurs de la marque au format JSON
-  operatingHours String? // Heures d'ouverture au format JSON
-  specialties String[] // Spécialités de l'entreprise
-  isArchived  Boolean @default(false) // Pour l'archivage au lieu de la suppression
+  // Conserver les champs existants
+  isArchived  Boolean @default(false)
+  tripCount   Int     @default(0)
+
+  // Enhanced business information
+  operatingCountries String[] @default([])
+  primaryRoutes      Json?
+  services          String[] @default([])
+  vehicleTypes      String[] @default([])
+  businessHours     Json?
+  socialMedia       Json?
+  certifications    String[] @default([])
   
-  // Relations modifiées
+  // Operational settings
+  bookingSettings   Json?
+  paymentMethods    String[] @default([])
+  cancellationPolicy String?
+  refundPolicy      String?
+  termsAndConditions String?
+  
+  // Performance metrics
+  rating            Float?   @default(0)
+  totalTrips        Int      @default(0)
+  totalRevenue      Float    @default(0)
+  customerCount     Int      @default(0)
+  completedTrips    Int      @default(0)
+  cancelledTrips    Int      @default(0)
+  
+  // Legal and compliance
+  legalStatus       String?
+  insuranceProvider String?
+  insurancePolicy   String?
+  insuranceExpiry   DateTime?
+  safetyRating      Int?     @default(0)
+  
+  // Banking information
+  bankName          String?
+  bankAccountNumber String?
+  bankAccountName   String?
+  bankCode          String?
+  swiftCode         String?
+
+  // Relations
   owner       User     @relation("CompanyOwner", fields: [ownerId], references: [id])
   ownerId     String
   employees   User[]   @relation("CompanyEmployee")
-  
-  // Relation pour les utilisateurs qui ont cette entreprise comme active
   activeForUsers User[] @relation("ActiveCompany")
-  
-  // Relations avec les pays d'opération
-  operatingCountries CompanyOperatingCountry[]
-  
+
   buses       Bus[]
   routes      Route[]
   stations    Station[]
@@ -211,56 +329,81 @@ model Company {
   tickets     Ticket[]
   reviews     Review[]
   activities  Activity[]
-  
-  // Analytics
-  rating      Float?   @default(0)
-  tripCount   Int      @default(0)
-  customerCount Int     @default(0)
-  
+  promotions  Promotion[]
+  payments    Payment[]
+  refunds     Refund[]
+  documents   CompanyDocument[]
+
   // Subscription
   subscriptionTier SubscriptionTier @default(BASIC)
   subscriptionExpiry DateTime?
-  
+  subscriptionHistory SubscriptionHistory[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   @@unique([phone, countryCode])
+  @@index([status])
+  @@index([ownerId])
+  @@index([country])
 }
 
-// Nouveau modèle pour les images d'entreprise
-model CompanyImage {
-  id        String   @id @default(cuid())
-  url       String
-  alt       String?
-  type      ImageType @default(GALLERY)
-  isPrimary Boolean  @default(false)
+model CompanyDocument {
+  id          String   @id @default(cuid())
+  name        String
+  type        DocumentType
+  fileUrl     String
+  fileSize    Int?
+  mimeType    String?
+  isVerified  Boolean  @default(false)
+  verifiedAt  DateTime?
+  verifiedBy  String?
+  expiryDate  DateTime?
   
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId String
-  
-  createdAt DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId   String
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([type])
 }
 
-enum ImageType {
-  LOGO
-  COVER
-  GALLERY
-  DOCUMENT
+enum DocumentType {
+  LICENSE
+  REGISTRATION
+  INSURANCE
+  TAX
+  PERMIT
+  CERTIFICATE
+  OTHER
 }
 
-// Nouveau modèle pour les pays d'opération
-model CompanyOperatingCountry {
-  id        String   @id @default(cuid())
-  countryCode String
-  countryName String
-  isMainCountry Boolean @default(false)
+model SubscriptionHistory {
+  id          String   @id @default(cuid())
+  tier        SubscriptionTier
+  startDate   DateTime
+  endDate     DateTime
+  amount      Float
+  paymentId   String?
+  status      SubscriptionStatus @default(ACTIVE)
   
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId String
-  
-  createdAt DateTime @default(now())
-  
-  @@unique([companyId, countryCode])
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId   String
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  PENDING
 }
 
 enum CompanySize {
@@ -275,6 +418,7 @@ enum CompanyStatus {
   APPROVED
   REJECTED
   SUSPENDED
+  ARCHIVED
 }
 
 enum SubscriptionTier {
@@ -289,14 +433,22 @@ model Activity {
   type        ActivityType
   description String
   status      ActivityStatus @default(INFO)
-  
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+
   user        User?        @relation(fields: [userId], references: [id])
   userId      String?
   company     Company      @relation(fields: [companyId], references: [id])
   companyId   String
-  
+
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([type])
+  @@index([createdAt])
 }
 
 enum ActivityType {
@@ -313,6 +465,17 @@ enum ActivityType {
   SYSTEM_UPDATE
   COMPANY_CREATED
   COMPANY_UPDATED
+  COMPANY_VERIFIED
+  COMPANY_SUSPENDED
+  BUS_MAINTENANCE
+  ROUTE_UPDATED
+  TRIP_CANCELLED
+  TICKET_ISSUED
+  PAYMENT_FAILED
+  REFUND_PROCESSED
+  REVIEW_SUBMITTED
+  PROMOTION_CREATED
+  EMPLOYEE_ROLE_CHANGED
 }
 
 enum ActivityStatus {
@@ -326,432 +489,581 @@ model Bus {
   id          String   @id @default(cuid())
   plateNumber String   @unique
   model       String
+  brand       String
   capacity    Int
-  year        Int?
-  isActive    Boolean  @default(true)
-  status      BusStatus @default(AVAILABLE)
+  year        Int
+  color       String?
+  fuelType    FuelType @default(DIESEL)
+  status      BusStatus @default(ACTIVE)
+
+  // Maintenance and documents
+  lastMaintenance         DateTime @default(now())
+  nextMaintenance         DateTime
+  totalKm                 Int      @default(0)
+  insuranceExpiry         DateTime
+  technicalControlExpiry  DateTime
+  registrationExpiry      DateTime?
+  purchaseDate            DateTime?
+  purchasePrice           Float?
+
+  // Equipment and services
+  features    String[] @default([])
+  amenities   Json?
   
-  // Features
-  hasAC       Boolean  @default(false)
-  hasWifi     Boolean  @default(false)
-  hasToilet   Boolean  @default(false)
-  hasTV       Boolean  @default(false)
-  hasUSB      Boolean  @default(false)
+  // Operational info
+  driverAssigned String?
+  currentLocation String?
+  gpsEnabled     Boolean @default(false)
+  gpsDeviceId    String?
+  fuelEfficiency Float?  // km per liter
   
-  // Technical details
-  fuelType    FuelType?
-  lastMaintenance DateTime?
-  nextMaintenance DateTime?
-  mileage     Int?
+  // Maintenance history
+  maintenanceHistory Json[] @default([])
+  accidentHistory    Json[] @default([])
   
-  // Nouveaux champs
-  manufacturer String?
-  modelDetails String?
-  chassisNumber String?
-  engineNumber String?
-  insuranceNumber String?
-  insuranceExpiry DateTime?
-  registrationExpiry DateTime?
-  purchaseDate DateTime?
-  purchasePrice Float?
-  currentValue Float?
-  maintenanceHistory MaintenanceRecord[]
+  // Financial tracking
+  maintenanceCosts   Float   @default(0)
+  fuelCosts          Float   @default(0)
+  revenueGenerated   Float   @default(0)
   
-  // Images
-  images      BusImage[]
+  // Seating configuration
+  seatMap            Json?
+  hasAccessibility   Boolean @default(false)
   
-  company     Company  @relation(fields: [companyId], references: [id])
+  // Documents
+  documents          BusDocument[]
+
+  // Relations
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId   String
-  
   trips       Trip[]
-  seats       Seat[]
-  
+
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+  @@index([plateNumber])
 }
 
-// Nouveau modèle pour l'historique de maintenance
-model MaintenanceRecord {
+model BusDocument {
   id          String   @id @default(cuid())
-  date        DateTime
-  description String
-  cost        Float
-  odometerReading Int?
-  maintenanceType MaintenanceType
-  performedBy String?
-  notes       String?
+  name        String
+  type        BusDocumentType
+  fileUrl     String
+  fileSize    Int?
+  mimeType    String?
+  isVerified  Boolean  @default(false)
+  verifiedAt  DateTime?
+  verifiedBy  String?
+  expiryDate  DateTime?
   
   bus         Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
   busId       String
-  
+
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([busId])
+  @@index([type])
 }
 
-enum MaintenanceType {
-  ROUTINE
-  REPAIR
-  INSPECTION
-  EMERGENCY
+enum BusDocumentType {
+  REGISTRATION
+  INSURANCE
+  TECHNICAL_CONTROL
+  PERMIT
+  MAINTENANCE_RECORD
   OTHER
-}
-
-enum BusStatus {
-  AVAILABLE
-  IN_SERVICE
-  MAINTENANCE
-  OUT_OF_SERVICE
 }
 
 enum FuelType {
   DIESEL
   GASOLINE
-  ELECTRIC
   HYBRID
-  GAS
+  ELECTRIC
+  CNG
+  LPG
+  BIODIESEL
 }
 
-model BusImage {
-  id        String   @id @default(cuid())
-  url       String
-  alt       String?
-  isPrimary Boolean  @default(false)
-  
-  bus       Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
-  busId     String
-  
-  createdAt DateTime @default(now())
-}
-
-model Seat {
-  id        String   @id @default(cuid())
-  number    String
-  isWindow  Boolean  @default(false)
-  type      SeatType @default(STANDARD)
-  position  String?  // e.g., "A1", "B2"
-  deck      Int?     @default(1) // For double-decker buses
-  
-  bus       Bus      @relation(fields: [busId], references: [id])
-  busId     String
-  
-  reservations Reservation[]
-  tickets   Ticket[]
-  
-  createdAt DateTime @default(now())
-  
-  @@unique([busId, number])
-}
-
-enum SeatType {
-  STANDARD
-  PREMIUM
-  VIP
-  SLEEPER
-}
-
-model Station {
-  id        String   @id @default(cuid())
-  name      String
-  code      String   @unique
-  address   String
-  city      String
-  commune   String?
-  country   String
-  latitude  Float?
-  longitude Float?
-  
-  // Additional info
-  description String?
-  facilities  String[]
-  images      StationImage[]
-  isActive    Boolean @default(true)
-  
-  // Nouveaux champs
-  openingHours String? // Format JSON
-  contactPhone String?
-  contactEmail String?
-  hasWaitingRoom Boolean @default(false)
-  hasRestaurant Boolean @default(false)
-  hasParking Boolean @default(false)
-  parkingCapacity Int?
-  
-  company   Company  @relation(fields: [companyId], references: [id])
-  companyId String
-  
-  departureRoutes Route[] @relation("DepartureStation")
-  arrivalRoutes   Route[] @relation("ArrivalStation")
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model StationImage {
-  id        String   @id @default(cuid())
-  url       String
-  alt       String?
-  isPrimary Boolean  @default(false)
-  
-  station   Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
-  stationId String
-  
-  createdAt DateTime @default(now())
+enum BusStatus {
+  ACTIVE
+  MAINTENANCE
+  OUT_OF_SERVICE
+  INSPECTION
+  RETIRED
+  SOLD
+  RENTED
 }
 
 model Route {
-  id          String   @id @default(cuid())
-  name        String
-  distance    Float
-  duration    Int      // in minutes
-  price       Float
+  id                String   @id @default(cuid())
+  name              String
+  departureLocation String
+  arrivalLocation   String
+  departureCountry  String
+  arrivalCountry    String
+  distance          Float    @default(0)
+  estimatedDuration Int      // en minutes
+  basePrice         Float
+  description       String?
+  isInternational   Boolean  @default(false)
+  status            RouteStatus @default(ACTIVE)
+
+  // Enhanced route information
+  routeType         RouteType @default(DOMESTIC)
+  difficulty        String?   @default("EASY")
+  scenicRating      Int?      @default(3)
+  roadCondition     String?   @default("GOOD")
   
-  // Additional info
-  description String?
-  mapUrl      String?
-  isPopular   Boolean  @default(false)
-  isActive    Boolean  @default(true)
+  // Pricing strategy
+  dynamicPricing    Boolean   @default(false)
+  peakSeasonMultiplier Float? @default(1.0)
+  weekendMultiplier Float?    @default(1.0)
+  holidayMultiplier Float?    @default(1.2)
   
-  // Nouveaux champs
-  stops       RouteStop[]
-  estimatedFuelConsumption Float?
-  routeType   RouteType @default(REGULAR)
-  frequency   RouteFrequency?
+  // Operational settings
+  minimumBookingTime Int?     @default(30) // minutes before departure
+  maximumBookingDays Int?     @default(30) // days in advance
   
-  departure   Station  @relation("DepartureStation", fields: [departureId], references: [id])
-  departureId String
-  arrival     Station  @relation("ArrivalStation", fields: [arrivalId], references: [id])
-  arrivalId   String
+  // Route details
+  waypoints         Json[]    @default([])
+  tollFees          Float?    @default(0)
+  borderCrossings   String[]  @default([])
   
-  company     Company  @relation(fields: [companyId], references: [id])
-  companyId   String
+  // Popularity metrics
+  popularityScore   Float?    @default(0)
+  searchCount       Int       @default(0)
+  bookingCount      Int       @default(0)
   
-  trips       Trip[]
-  favorites   FavoriteRoute[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  @@unique([departureId, arrivalId, companyId])
+  // Geographical data
+  departureCoordinates Json?
+  arrivalCoordinates   Json?
+  routePath            Json?   // GeoJSON for route visualization
+
+  // Intermediate stops
+  stops             RouteStop[]
+
+  // Relations
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId         String
+  trips             Trip[]
+  favorites         FavoriteRoute[]
+  promotions        Promotion[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([departureCountry, arrivalCountry])
+  @@index([status])
+  @@index([routeType])
 }
 
-// Nouveau modèle pour les arrêts intermédiaires
 model RouteStop {
-  id          String   @id @default(cuid())
-  name        String
-  city        String
-  country     String
-  stopOrder   Int
-  timeFromStart Int // minutes from route start
+  id               String   @id @default(cuid())
+  name             String
+  country          String
+  city             String
+  address          String?
+  latitude         Float?
+  longitude        Float?
+  order            Int
+  estimatedArrival Int      // minutes depuis le départ
+  stopDuration     Int?     @default(10) // minutes d'arrêt
+  isOptional       Boolean  @default(false)
   
-  route       Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
-  routeId     String
+  // Additional stop information
+  facilities       String[] @default([])
+  description      String?
+  contactPhone     String?
+  isActive         Boolean  @default(true)
   
-  createdAt   DateTime @default(now())
+  // Pricing adjustments
+  priceAdjustment  Float?   @default(0) // Additional cost for boarding/alighting here
+
+  route            Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  routeId          String
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([routeId])
+  @@index([country, city])
 }
 
-enum RouteType {
-  REGULAR
-  EXPRESS
-  NIGHT
-  WEEKEND
+enum RouteStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  SUSPENDED
   SEASONAL
 }
 
-enum RouteFrequency {
-  DAILY
-  WEEKDAYS
-  WEEKENDS
-  WEEKLY
-  BIWEEKLY
-  MONTHLY
+enum RouteType {
+  DOMESTIC
+  INTERNATIONAL
+  REGIONAL
+  EXPRESS
+  LUXURY
+  ECONOMY
+  NIGHT
+  SHUTTLE
 }
 
 model FavoriteRoute {
   id        String   @id @default(cuid())
-  
+
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
   routeId   String
-  
+
   createdAt DateTime @default(now())
-  
+
   @@unique([userId, routeId])
+  @@index([userId])
+  @@index([routeId])
+}
+
+model Station {
+  id          String   @id @default(cuid())
+  name        String
+  address     String
+  city        String
+  country     String
+  latitude    Float?
+  longitude   Float?
+  
+  // Station details
+  stationType StationType @default(BUS_STOP)
+  facilities  String[] @default([])
+  isActive    Boolean  @default(true)
+  
+  // Contact info
+  phone       String?
+  email       String?
+  manager     String?
+  
+  // Operational details
+  openingHours Json?
+  capacity     Int?
+  hasWifi      Boolean @default(false)
+  hasRestrooms Boolean @default(false)
+  hasWaitingRoom Boolean @default(false)
+  hasTicketCounter Boolean @default(true)
+  hasCafeteria Boolean @default(false)
+  
+  // Images and media
+  images      String[] @default([])
+  virtualTour String?
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  companyId   String
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([country, city])
+  @@index([stationType])
+}
+
+enum StationType {
+  BUS_STOP
+  TERMINAL
+  DEPOT
+  SERVICE_CENTER
+  AGENCY
+  PARTNER_LOCATION
 }
 
 model Trip {
-  id            String     @id @default(cuid())
+  id            String      @id @default(cuid())
   departureTime DateTime
   arrivalTime   DateTime
-  status        TripStatus @default(SCHEDULED)
-  availableSeats Int
-  totalSeats    Int        @default(0)
-  
-  // Dynamic pricing
   basePrice     Float
   currentPrice  Float
+  availableSeats Int
+  status        TripStatus  @default(SCHEDULED)
   
-  // Additional info
-  notes         String?
+  // Enhanced trip information
+  boardingTime  DateTime?
+  actualDepartureTime DateTime?
+  actualArrivalTime   DateTime?
+  delayMinutes  Int?        @default(0)
+  
+  // Trip details
   driverName    String?
-  driverContact String?
-  trackingCode  String?    @unique
+  driverPhone   String?
+  driverLicense String?
+  vehicleNumber String?
   
-  // Nouveaux champs
-  boardingTime  DateTime? // Heure d'embarquement (avant départ)
-  gateNumber    String?
-  platform      String?
-  coDriverName  String?
+  // Operational info
   weatherConditions String?
-  estimatedDelay Int? // minutes
-  delayReason   String?
-  isFeatured    Boolean @default(false)
-  promotionCode String?
-  promotionDiscount Float?
+  roadConditions    String?
+  notes            String?
+  cancellationReason String?
   
-  route         Route      @relation(fields: [routeId], references: [id])
+  // Pricing and promotions
+  discountPercentage Float? @default(0)
+  promotionCode     String?
+  
+  // Recurring trip settings
+  isRecurring       Boolean @default(false)
+  recurringPattern  Json?
+  parentTripId      String?
+  
+  // Seat availability tracking
+  seatMap           Json?
+  bookedSeats       Int[]    @default([])
+  
+  // Performance metrics
+  occupancyRate     Float?   @default(0)
+  revenue           Float?   @default(0)
+  costEstimate      Float?   @default(0)
+  profitMargin      Float?   @default(0)
+  
+  // Customer experience
+  onTimePerformance Float?   @default(0)
+  customerRating    Float?   @default(0)
+
+  route         Route       @relation(fields: [routeId], references: [id])
   routeId       String
-  bus           Bus        @relation(fields: [busId], references: [id])
+  bus           Bus         @relation(fields: [busId], references: [id])
   busId         String
-  company       Company    @relation(fields: [companyId], references: [id])
+  company       Company     @relation(fields: [companyId], references: [id])
   companyId     String
-  
+
   reservations  Reservation[]
   tickets       Ticket[]
-  statusUpdates TripStatusUpdate[]
-  
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-}
+  promotions    PromotionTrip[]
 
-model TripStatusUpdate {
-  id          String     @id @default(cuid())
-  status      TripStatus
-  location    String?
-  latitude    Float?
-  longitude   Float?
-  notes       String?
-  
-  trip        Trip       @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  tripId      String
-  
-  createdAt   DateTime   @default(now())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([companyId])
+  @@index([routeId])
+  @@index([busId])
+  @@index([status])
+  @@index([departureTime])
 }
 
 enum TripStatus {
   SCHEDULED
   BOARDING
   DEPARTED
-  IN_TRANSIT
+  IN_TRANSIT  // Conserver cette valeur existante
   ARRIVED
-  COMPLETED
   CANCELLED
   DELAYED
+  COMPLETED
+  MAINTENANCE
+}
+
+model Promotion {
+  id            String      @id @default(cuid())
+  name          String
+  description   String?
+  code          String      @unique
+  discountType  DiscountType @default(PERCENTAGE)
+  discountValue Float
+  minPurchase   Float?
+  maxDiscount   Float?
+  startDate     DateTime
+  endDate       DateTime
+  isActive      Boolean     @default(true)
+  
+  // Usage limits
+  usageLimit    Int?
+  usageCount    Int         @default(0)
+  perUserLimit  Int?        @default(1)
+  
+  // Targeting
+  targetUserType UserRole?
+  targetRoutes   Route[]
+  targetTrips    PromotionTrip[]
+  
+  // Marketing
+  image         String?
+  termsAndConditions String?
+  
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([companyId])
+  @@index([code])
+  @@index([isActive])
+  @@index([startDate, endDate])
+}
+
+model PromotionTrip {
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  promotionId String
+  trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  tripId      String
+
+  @@id([promotionId, tripId])
+  @@index([promotionId])
+  @@index([tripId])
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  BUY_ONE_GET_ONE
+  FREE_UPGRADE
 }
 
 model Reservation {
   id            String            @id @default(cuid())
-  reservationCode String          @unique
-  status        ReservationStatus @default(PENDING)
-  expiresAt     DateTime
-  totalAmount   Float
-  
-  // Passenger info
-  passengerName String?
-  passengerPhone String?
+  reservationNumber String        @unique @default(cuid())
+  passengerName String
+  passengerPhone String
   passengerEmail String?
+  seatNumbers   Int[]             @default([])
+  totalAmount   Float
+  status        ReservationStatus @default(PENDING)
+  paymentStatus PaymentStatus     @default(PENDING)
   
-  user          User              @relation(fields: [userId], references: [id])
-  userId        String
+  // Payment information
+  paymentMethod String?
+  paymentReference String?
+  paidAmount    Float?            @default(0)
+  
+  // Booking details
+  bookingSource String?           @default("WEB")
+  specialRequests String?
+  emergencyContact String?
+  
+  // Passenger details
+  passengerCount Int              @default(1)
+  passengerDetails Json?
+  
+  // Cancellation info
+  cancellationReason String?
+  cancellationDate   DateTime?
+  refundAmount      Float?         @default(0)
+  refundStatus      RefundStatus?  @default(NONE)
+  
+  // Promotion
+  promotionCode     String?
+  discountAmount    Float?         @default(0)
+  
+  // Expiration
+  expiresAt     DateTime?
+
   trip          Trip              @relation(fields: [tripId], references: [id])
   tripId        String
-  seat          Seat              @relation(fields: [seatId], references: [id])
-  seatId        String
+  user          User              @relation(fields: [userId], references: [id])
+  userId        String
   company       Company           @relation(fields: [companyId], references: [id])
   companyId     String
-  
-  ticket        Ticket?
-  
+
+  tickets       Ticket[]
+  payments      Payment[]
+  refunds       Refund[]
+
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([tripId])
+  @@index([companyId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([reservationNumber])
+}
+
+model Payment {
+  id            String       @id @default(cuid())
+  amount        Float
+  currency      String       @default("XOF")
+  status        PaymentStatus @default(PENDING)
+  method        PaymentMethod
+  reference     String?      @unique
+  
+  // Payment details
+  processorId   String?      // ID from payment processor
+  processorFee  Float?       @default(0)
+  metadata      Json?
+  receiptUrl    String?
+  
+  // Relations
+  user          User         @relation(fields: [userId], references: [id])
+  userId        String
+  company       Company      @relation(fields: [companyId], references: [id])
+  companyId     String
+  reservation   Reservation? @relation(fields: [reservationId], references: [id])
+  reservationId String?
+
+  refunds       Refund[]
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([reservationId])
+  @@index([status])
+  @@index([method])
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  MOBILE_MONEY
+  BANK_TRANSFER
+  CASH
+  PAYPAL
+  CRYPTO
+  OTHER
+}
+
+model Refund {
+  id            String       @id @default(cuid())
+  amount        Float
+  reason        String
+  status        RefundStatus @default(PROCESSING)
+  
+  // Refund details
+  processorId   String?      // ID from payment processor
+  processorFee  Float?       @default(0)
+  metadata      Json?
+  notes         String?
+  
+  // Relations
+  user          User         @relation(fields: [userId], references: [id])
+  userId        String
+  company       Company      @relation(fields: [companyId], references: [id])
+  companyId     String
+  reservation   Reservation  @relation(fields: [reservationId], references: [id])
+  reservationId String
+  payment       Payment      @relation(fields: [paymentId], references: [id])
+  paymentId     String
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([reservationId])
+  @@index([paymentId])
+  @@index([status])
 }
 
 enum ReservationStatus {
   PENDING
   CONFIRMED
-  EXPIRED
   CANCELLED
+  COMPLETED
+  EXPIRED
+  NO_SHOW
   CHECKED_IN
-}
-
-model Ticket {
-  id          String       @id @default(cuid())
-  ticketCode  String       @unique
-  qrCode      String       @unique
-  status      TicketStatus @default(ACTIVE)
-  issuedAt    DateTime     @default(now())
-  validatedAt DateTime?
-  
-  // Additional info
-  boardingPass String?
-  notes        String?
-  
-  reservation Reservation  @relation(fields: [reservationId], references: [id])
-  reservationId String     @unique
-  
-  user        User         @relation(fields: [userId], references: [id])
-  userId      String
-  trip        Trip         @relation(fields: [tripId], references: [id])
-  tripId      String
-  seat        Seat         @relation(fields: [seatId], references: [id])
-  seatId      String
-  company     Company      @relation(fields: [companyId], references: [id])
-  companyId   String
-  
-  payment     Payment?
-  
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-}
-
-enum TicketStatus {
-  ACTIVE
-  USED
-  CANCELLED
-  EXPIRED
-  REFUNDED
-}
-
-model Payment {
-  id            String        @id @default(cuid())
-  amount        Float
-  currency      String        @default("XOF")
-  method        PaymentMethod
-  status        PaymentStatus @default(PENDING)
-  transactionId String?       @unique
-  
-  // Payment details
-  paymentGateway String?
-  paymentReference String?
-  receiptUrl     String?
-  
-  // Refund info
-  refundAmount   Float?
-  refundReason   String?
-  refundedAt     DateTime?
-  
-  ticket        Ticket        @relation(fields: [ticketId], references: [id])
-  ticketId      String        @unique
-  
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-}
-
-enum PaymentMethod {
-  CASH
-  CARD
-  MOBILE_MONEY
-  BANK_TRANSFER
-  PAYPAL
-  CRYPTO
 }
 
 enum PaymentStatus {
@@ -760,6 +1072,132 @@ enum PaymentStatus {
   FAILED
   REFUNDED
   PARTIALLY_REFUNDED
+  DISPUTED
+  EXPIRED
+}
+
+enum RefundStatus {
+  NONE
+  REQUESTED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  PARTIAL
+}
+
+model Ticket {
+  id            String       @id @default(cuid())
+  ticketNumber  String       @unique
+  passengerName String
+  passengerPhone String
+  passengerEmail String?
+  seatNumber    Int
+  price         Float
+  status        TicketStatus @default(VALID)
+  
+  // Ticket details
+  qrCode        String?
+  barcode       String?
+  issueDate     DateTime     @default(now())
+  validUntil    DateTime?
+  usedAt        DateTime?
+  
+  // Verification
+  verificationCode String?
+  isVerified    Boolean      @default(false)
+  verifiedBy    String?
+  verifiedAt    DateTime?
+  
+  // Passenger details
+  passengerType PassengerType @default(ADULT)
+  passengerDetails Json?
+  
+  // Boarding details
+  boardingPoint String?
+  alightingPoint String?
+  
+  // Additional services
+  hasLuggage    Boolean      @default(false)
+  luggageDetails Json?
+  specialServices String[]   @default([])
+
+  trip          Trip         @relation(fields: [tripId], references: [id])
+  tripId        String
+  user          User         @relation(fields: [userId], references: [id])
+  userId        String
+  company       Company      @relation(fields: [companyId], references: [id])
+  companyId     String
+  reservation   Reservation? @relation(fields: [reservationId], references: [id])
+  reservationId String?
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([tripId])
+  @@index([companyId])
+  @@index([reservationId])
+  @@index([status])
+  @@index([ticketNumber])
+}
+
+enum PassengerType {
+  ADULT
+  CHILD
+  SENIOR
+  STUDENT
+  DISABLED
+  MILITARY
+}
+
+enum TicketStatus {
+  VALID
+  USED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+  CHECKED_IN
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // 1-5
+  comment   String?
+  
+  // Review details
+  serviceRating     Int? // 1-5
+  comfortRating     Int? // 1-5
+  punctualityRating Int? // 1-5
+  driverRating      Int? // 1-5
+  
+  // Review metadata
+  isVerified Boolean @default(false)
+  isPublic   Boolean @default(true)
+  helpfulCount Int   @default(0)
+  reportCount Int    @default(0)
+  
+  // Trip details for context
+  tripDate   DateTime?
+  routeName  String?
+  tripId     String?
+  
+  // Response from company
+  response   String?
+  responseDate DateTime?
+  responseBy String?
+
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  company   Company  @relation(fields: [companyId], references: [id])
+  companyId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([rating])
+  @@index([createdAt])
 }
 
 model Notification {
@@ -769,29 +1207,49 @@ model Notification {
   type      NotificationType
   isRead    Boolean          @default(false)
   
-  // Additional info
+  // Notification details
+  priority  NotificationPriority @default(NORMAL)
+  category  String?
   actionUrl String?
   imageUrl  String?
-  priority  NotificationPriority @default(NORMAL)
   
+  // Delivery info
+  sentAt    DateTime?
+  readAt    DateTime?
+  
+  // Metadata
+  metadata  Json?
+  
+  // Related entities
+  relatedEntityType String?
+  relatedEntityId   String?
+
   user      User             @relation(fields: [userId], references: [id])
   userId    String
-  
+
   createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([type])
+  @@index([createdAt])
 }
 
 enum NotificationType {
-  RESERVATION_CONFIRMED
-  PAYMENT_RECEIVED
   TRIP_REMINDER
+  PAYMENT_CONFIRMATION
+  BOOKING_CONFIRMATION
   TRIP_CANCELLED
   TRIP_DELAYED
-  TRIP_STATUS_UPDATE
-  SEAT_AVAILABLE
-  PRICE_DROP
+  MAINTENANCE_ALERT
   SYSTEM_UPDATE
-  ACCOUNT_UPDATE
   PROMOTION
+  REVIEW_REQUEST
+  REFUND_PROCESSED
+  ACCOUNT_UPDATE
+  PRICE_DROP
+  COMPANY_NEWS
 }
 
 enum NotificationPriority {
@@ -801,107 +1259,55 @@ enum NotificationPriority {
   URGENT
 }
 
-model Review {
-  id        String   @id @default(cuid())
-  rating    Int      // 1-5 stars
-  comment   String?
-  isVerified Boolean @default(false)
-  
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
-  company   Company  @relation(fields: [companyId], references: [id])
-  companyId String
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  @@unique([userId, companyId])
-}
-
-model Country {
-  id          String @id @default(cuid())
-  name        String @unique
-  code        String @unique
-  phonePrefix String @unique
-  flag        String?
-  
-  // Additional info
-  continent   String?
-  currency    String?
-  languages   String[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
 model ActivityLog {
-  id        String   @id @default(cuid())
-  action    String
-  details   String?
-  ipAddress String?
-  userAgent String?
-  
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
-  
-  createdAt DateTime @default(now())
-}
-
-model SystemAlert {
-  id        String   @id @default(cuid())
-  title     String
-  message   String
-  type      AlertType
-  severity  AlertSeverity
-  isResolved Boolean  @default(false)
-  resolvedAt DateTime?
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-enum AlertType {
-  SECURITY
-  PERFORMANCE
-  ERROR
-  SYSTEM
-  PAYMENT
-  DATABASE
-}
-
-enum AlertSeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
-model Promotion {
   id          String   @id @default(cuid())
-  title       String
-  description String
-  code        String   @unique
-  discountType DiscountType
-  discountValue Float
-  startDate   DateTime
-  endDate     DateTime
-  isActive    Boolean  @default(true)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-enum DiscountType {
-  PERCENTAGE
-  FIXED_AMOUNT
-}
-
-model Settings {
-  id          String   @id @default(cuid())
-  key         String   @unique
-  value       String
+  action      String
   description String?
+  ipAddress   String?
+  userAgent   String?
+  
+  // Enhanced logging
+  method      String?  // HTTP method
+  endpoint    String?  // API endpoint
+  statusCode  Int?     // Response status
+  duration    Int?     // Request duration in ms
+  
+  // Context
+  sessionId   String?
+  deviceInfo  Json?
+  location    Json?
+  
+  // Related entity
+  entityType  String?
+  entityId    String?
+
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
+
+// Table qui semble exister dans la base de données mais pas dans le schéma
+model TripStatusUpdate {
+  id          String   @id @default(cuid())
+  status      TripStatus_old
+  // Autres champs nécessaires
   
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+}
+
+// Enum existant qui ne peut pas être supprimé
+enum TripStatus_old {
+  SCHEDULED
+  BOARDING
+  DEPARTED
+  IN_TRANSIT
+  ARRIVED
+  CANCELLED
+  DELAYED
 }

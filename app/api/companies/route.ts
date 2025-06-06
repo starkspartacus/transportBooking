@@ -1,24 +1,10 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url);
-    const isActive = searchParams.get("isActive");
-    const isVerified = searchParams.get("isVerified");
-
-    const whereClause: any = {};
-
-    if (isActive !== null) {
-      whereClause.isActive = isActive === "true";
-    }
-
-    if (isVerified !== null) {
-      whereClause.isVerified = isVerified === "true";
-    }
-
     const companies = await prisma.company.findMany({
-      where: whereClause,
+      where: { isActive: true },
       select: {
         id: true,
         name: true,
@@ -26,20 +12,17 @@ export async function GET(request: NextRequest) {
         country: true,
         city: true,
         commune: true,
-        email: true,
-        phone: true,
-        isActive: true,
-        isVerified: true,
-        createdAt: true,
+        rating: true,
+        totalTrips: true,
       },
       orderBy: { name: "asc" },
     });
 
     return NextResponse.json(companies);
   } catch (error) {
-    console.error("Get companies error:", error);
+    console.error(error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { message: "Could not fetch companies" },
       { status: 500 }
     );
   }
