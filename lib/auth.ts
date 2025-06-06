@@ -1,12 +1,18 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { prisma } from "./prisma";
+import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import type { UserRole } from "@prisma/client";
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  session: {
+    strategy: "jwt",
+  },
+  pages: {
+    signIn: "/auth/signin",
+    error: "/auth/error",
+  },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -31,7 +37,6 @@ export const authOptions: NextAuthOptions = {
           if (isEmail) {
             user = await prisma.user.findUnique({
               where: { email: credentials.identifier },
-              include: { employeeAt: true },
             });
           } else {
             user = await prisma.user.findFirst({
@@ -39,7 +44,6 @@ export const authOptions: NextAuthOptions = {
                 phone: credentials.identifier,
                 countryCode: credentials.countryCode || "+1",
               },
-              include: { employeeAt: true },
             });
           }
 
@@ -64,6 +68,7 @@ export const authOptions: NextAuthOptions = {
             phone: user.phone || undefined,
             countryCode: user.countryCode || undefined,
             companyId: user.companyId || undefined,
+            activeCompanyId: user.activeCompanyId || undefined,
             image: user.image || undefined,
           };
         } catch (error) {
@@ -73,34 +78,95 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
-  session: {
-    strategy: "jwt",
-  },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
-        token.phone = user.phone;
-        token.countryCode = user.countryCode;
-        token.companyId = user.companyId;
+        token.phone = user.phone || undefined;
+        token.countryCode = user.countryCode || undefined;
+        token.companyId = user.companyId || undefined;
+        token.activeCompanyId = user.activeCompanyId || undefined;
       }
+
+      // Handle Google OAuth
+      if (account?.provider === "google" && user?.email) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: user.email },
+          });
+
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.role = dbUser.role;
+            token.phone = dbUser.phone || undefined;
+            token.countryCode = dbUser.countryCode || undefined;
+            token.companyId = dbUser.companyId || undefined;
+            token.activeCompanyId = dbUser.activeCompanyId || undefined;
+          }
+        } catch (error) {
+          console.error("Error fetching user from database:", error);
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as string;
-        session.user.phone = token.phone as string | undefined;
-        session.user.countryCode = token.countryCode as string | undefined;
-        session.user.companyId = token.companyId as string | undefined;
+        session.user.role = token.role as UserRole;
+        session.user.phone = token.phone;
+        session.user.countryCode = token.countryCode;
+        session.user.companyId = token.companyId;
+        session.user.activeCompanyId = token.activeCompanyId;
       }
       return session;
     },
+    async signIn({ user, account }) {
+      // Handle Google OAuth sign-in
+      if (account?.provider === "google" && user?.email) {
+        try {
+          const existingUser = await prisma.user.findUnique({
+            where: { email: user.email },
+          });
+
+          if (!existingUser) {
+            // Create new user for Google OAuth
+            await prisma.user.create({
+              data: {
+                email: user.email,
+                name: user.name || "",
+                image: user.image,
+                role: "CLIENT", // Default role for new Google users
+              },
+            });
+          }
+          return true;
+        } catch (error) {
+          console.error("Error handling Google sign-in:", error);
+          return false;
+        }
+      }
+
+      return true;
+    },
   },
-  pages: {
-    signIn: "/auth/signin",
-    error: "/auth/error",
+  events: {
+    async signIn({ user }) {
+      console.log(`User signed in: ${user.email}`);
+      try {
+        await prisma.activity.create({
+          data: {
+            type: "USER_LOGIN",
+            description: `User ${user.email} logged in`,
+            status: "SUCCESS",
+            userId: user.id,
+            companyId: "system",
+          },
+        });
+      } catch (error) {
+        console.error("Error creating activity log:", error);
+      }
+    },
   },
-  secret: process.env.NEXTAUTH_SECRET,
 };

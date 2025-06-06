@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@auth/core": "latest",
+    "@auth/prisma-adapter": "^2.9.1",
     "@hookform/resolvers": "^3.9.1",
     "@next-auth/prisma-adapter": "latest",
     "@prisma/adapter-pg": "^6.9.0",
