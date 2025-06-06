@@ -1,58 +1,34 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { User, Building, Eye, EyeOff, Chrome } from "lucide-react"
-import { signIn } from "next-auth/react"
-
-interface Country {
-  id: string
-  name: string
-  code: string
-  phonePrefix: string
-  flag: string
-}
-
-const countries: Country[] = [
-  { id: "1", name: "Sénégal", code: "SN", phonePrefix: "+221", flag: "🇸🇳" },
-  { id: "2", name: "Côte d'Ivoire", code: "CI", phonePrefix: "+225", flag: "🇨🇮" },
-  { id: "3", name: "Mali", code: "ML", phonePrefix: "+223", flag: "🇲🇱" },
-  { id: "4", name: "Burkina Faso", code: "BF", phonePrefix: "+226", flag: "🇧🇫" },
-  { id: "5", name: "Togo", code: "TG", phonePrefix: "+228", flag: "🇹🇬" },
-  { id: "6", name: "Bénin", code: "BJ", phonePrefix: "+229", flag: "🇧🇯" },
-]
-
-const cities = {
-  SN: ["Dakar", "Thiès", "Kaolack", "Saint-Louis", "Ziguinchor"],
-  CI: ["Abidjan", "Bouaké", "Daloa", "Yamoussoukro", "San-Pédro"],
-  ML: ["Bamako", "Sikasso", "Mopti", "Ségou", "Kayes"],
-  BF: ["Ouagadougou", "Bobo-Dioulasso", "Koudougou", "Ouahigouya", "Banfora"],
-  TG: ["Lomé", "Sokodé", "Kara", "Atakpamé", "Dapaong"],
-  BJ: ["Cotonou", "Porto-Novo", "Parakou", "Djougou", "Bohicon"],
-}
-
-const communes = {
-  Dakar: ["Plateau", "Médina", "Fann", "Mermoz", "Ouakam"],
-  Abidjan: ["Cocody", "Yopougon", "Adjamé", "Plateau", "Marcory"],
-  Bamako: ["Commune I", "Commune II", "Commune III", "Commune IV", "Commune V"],
-  Ouagadougou: ["Baskuy", "Bogodogo", "Boulmiougou", "Nongremassom", "Sig-Nonghin"],
-  Lomé: ["Golfe", "Agoe-Nyive", "Lacs", "Vo", "Yoto"],
-  Cotonou: ["1er Arrondissement", "2ème Arrondissement", "3ème Arrondissement", "4ème Arrondissement"],
-}
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { User, Building, Eye, EyeOff, Chrome } from "lucide-react";
+import { signIn } from "next-auth/react";
+import {
+  AFRICAN_COUNTRIES,
+  getCitiesByCountryCode,
+  getCommunesByCity,
+} from "@/constants/countries";
 
 export default function RegistrationForm() {
-  const [activeTab, setActiveTab] = useState("client")
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState("client");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Form states
   const [clientForm, setClientForm] = useState({
@@ -66,7 +42,7 @@ export default function RegistrationForm() {
     city: "",
     commune: "",
     address: "",
-  })
+  });
 
   const [companyForm, setCompanyForm] = useState({
     // Owner info
@@ -87,106 +63,134 @@ export default function RegistrationForm() {
     companyPhone: "",
     companyAddress: "",
     licenseNumber: "",
-  })
+  });
 
-  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null)
-  const [availableCities, setAvailableCities] = useState<string[]>([])
-  const [availableCommunes, setAvailableCommunes] = useState<string[]>([])
+  const [selectedCountry, setSelectedCountry] = useState<string>("");
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const [availableCommunes, setAvailableCommunes] = useState<string[]>([]);
 
-  const handleCountryChange = (countryCode: string, formType: "client" | "company") => {
-    const country = countries.find((c) => c.code === countryCode)
+  const handleCountryChange = (
+    countryCode: string,
+    formType: "client" | "company"
+  ) => {
+    const country = AFRICAN_COUNTRIES.find((c) => c.code === countryCode);
     if (country) {
-      setSelectedCountry(country)
-      setAvailableCities(cities[countryCode as keyof typeof cities] || [])
-      setAvailableCommunes([])
+      setSelectedCountry(countryCode);
+      const cities = getCitiesByCountryCode(countryCode);
+      setAvailableCities(cities.map((city) => city.name));
+      setAvailableCommunes([]);
 
       if (formType === "client") {
-        setClientForm((prev) => ({ ...prev, country: countryCode, city: "", commune: "" }))
+        setClientForm((prev) => ({
+          ...prev,
+          country: countryCode,
+          city: "",
+          commune: "",
+        }));
       } else {
-        setCompanyForm((prev) => ({ ...prev, country: countryCode, city: "", commune: "" }))
+        setCompanyForm((prev) => ({
+          ...prev,
+          country: countryCode,
+          city: "",
+          commune: "",
+        }));
       }
     }
-  }
+  };
 
   const handleCityChange = (city: string, formType: "client" | "company") => {
-    setAvailableCommunes(communes[city as keyof typeof communes] || [])
+    const communes = getCommunesByCity(selectedCountry, city);
+    setAvailableCommunes(communes);
 
     if (formType === "client") {
-      setClientForm((prev) => ({ ...prev, city, commune: "" }))
+      setClientForm((prev) => ({ ...prev, city, commune: "" }));
     } else {
-      setCompanyForm((prev) => ({ ...prev, city, commune: "" }))
+      setCompanyForm((prev) => ({ ...prev, city, commune: "" }));
     }
-  }
+  };
+
+  const getSelectedCountryPrefix = () => {
+    const country = AFRICAN_COUNTRIES.find((c) => c.code === selectedCountry);
+    return country?.phonePrefix || "+XXX";
+  };
 
   const handleClientSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (clientForm.password !== clientForm.confirmPassword) {
-      alert("Les mots de passe ne correspondent pas")
-      return
+      alert("Les mots de passe ne correspondent pas");
+      return;
     }
 
-    setIsLoading(true)
+    setIsLoading(true);
     try {
+      const selectedCountryData = AFRICAN_COUNTRIES.find(
+        (c) => c.code === clientForm.country
+      );
+
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...clientForm,
           role: "CLIENT",
-          countryCode: selectedCountry?.phonePrefix,
+          countryCode: selectedCountryData?.phonePrefix,
         }),
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (response.ok) {
-        alert("Inscription réussie! Vous pouvez maintenant vous connecter.")
+        alert("Inscription réussie! Vous pouvez maintenant vous connecter.");
         // Redirect to login
       } else {
-        alert(result.error || "Erreur lors de l'inscription")
+        alert(result.error || "Erreur lors de l'inscription");
       }
     } catch (error) {
-      console.error("Registration error:", error)
-      alert("Erreur lors de l'inscription")
+      console.error("Registration error:", error);
+      alert("Erreur lors de l'inscription");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleCompanySubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (companyForm.password !== companyForm.confirmPassword) {
-      alert("Les mots de passe ne correspondent pas")
-      return
+      alert("Les mots de passe ne correspondent pas");
+      return;
     }
 
-    setIsLoading(true)
+    setIsLoading(true);
     try {
+      const selectedCountryData = AFRICAN_COUNTRIES.find(
+        (c) => c.code === companyForm.country
+      );
+
       const response = await fetch("/api/auth/register-company", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...companyForm,
           role: "PATRON",
-          countryCode: selectedCountry?.phonePrefix,
+          countryCode: selectedCountryData?.phonePrefix,
         }),
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (response.ok) {
-        alert("Inscription de l'entreprise réussie! En attente de validation.")
+        alert("Inscription de l'entreprise réussie! En attente de validation.");
         // Redirect to login
       } else {
-        alert(result.error || "Erreur lors de l'inscription")
+        alert(result.error || "Erreur lors de l'inscription");
       }
     } catch (error) {
-      console.error("Company registration error:", error)
-      alert("Erreur lors de l'inscription de l'entreprise")
+      console.error("Company registration error:", error);
+      alert("Erreur lors de l'inscription de l'entreprise");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
@@ -199,7 +203,11 @@ export default function RegistrationForm() {
         </CardHeader>
 
         <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="space-y-6"
+          >
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="client" className="flex items-center gap-2">
                 <User className="h-4 w-4" />
@@ -215,11 +223,16 @@ export default function RegistrationForm() {
             <TabsContent value="client">
               <form onSubmit={handleClientSubmit} className="space-y-6">
                 <div className="text-center mb-6">
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                  <Badge
+                    variant="outline"
+                    className="bg-blue-50 text-blue-700 border-blue-200"
+                  >
                     <User className="h-3 w-3 mr-1" />
                     Compte Client
                   </Badge>
-                  <p className="text-sm text-gray-600 mt-2">Réservez et achetez vos billets de transport</p>
+                  <p className="text-sm text-gray-600 mt-2">
+                    Réservez et achetez vos billets de transport
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -228,7 +241,12 @@ export default function RegistrationForm() {
                     <Input
                       id="firstName"
                       value={clientForm.firstName}
-                      onChange={(e) => setClientForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                      onChange={(e) =>
+                        setClientForm((prev) => ({
+                          ...prev,
+                          firstName: e.target.value,
+                        }))
+                      }
                       required
                     />
                   </div>
@@ -237,7 +255,12 @@ export default function RegistrationForm() {
                     <Input
                       id="lastName"
                       value={clientForm.lastName}
-                      onChange={(e) => setClientForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                      onChange={(e) =>
+                        setClientForm((prev) => ({
+                          ...prev,
+                          lastName: e.target.value,
+                        }))
+                      }
                       required
                     />
                   </div>
@@ -249,7 +272,12 @@ export default function RegistrationForm() {
                     id="email"
                     type="email"
                     value={clientForm.email}
-                    onChange={(e) => setClientForm((prev) => ({ ...prev, email: e.target.value }))}
+                    onChange={(e) =>
+                      setClientForm((prev) => ({
+                        ...prev,
+                        email: e.target.value,
+                      }))
+                    }
                     required
                   />
                 </div>
@@ -257,17 +285,23 @@ export default function RegistrationForm() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <Label>Pays *</Label>
-                    <Select onValueChange={(value) => handleCountryChange(value, "client")}>
+                    <Select
+                      onValueChange={(value) =>
+                        handleCountryChange(value, "client")
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Choisir le pays" />
                       </SelectTrigger>
                       <SelectContent>
-                        {countries.map((country) => (
+                        {AFRICAN_COUNTRIES.map((country) => (
                           <SelectItem key={country.id} value={country.code}>
                             <div className="flex items-center gap-2">
                               <span>{country.flag}</span>
                               <span>{country.name}</span>
-                              <span className="text-gray-500">({country.phonePrefix})</span>
+                              <span className="text-gray-500">
+                                ({country.phonePrefix})
+                              </span>
                             </div>
                           </SelectItem>
                         ))}
@@ -278,13 +312,20 @@ export default function RegistrationForm() {
                     <Label htmlFor="phone">Téléphone *</Label>
                     <div className="flex">
                       <div className="flex items-center px-3 bg-gray-100 border border-r-0 rounded-l-md">
-                        <span className="text-sm">{selectedCountry?.phonePrefix || "+XXX"}</span>
+                        <span className="text-sm">
+                          {getSelectedCountryPrefix()}
+                        </span>
                       </div>
                       <Input
                         id="phone"
                         className="rounded-l-none"
                         value={clientForm.phone}
-                        onChange={(e) => setClientForm((prev) => ({ ...prev, phone: e.target.value }))}
+                        onChange={(e) =>
+                          setClientForm((prev) => ({
+                            ...prev,
+                            phone: e.target.value,
+                          }))
+                        }
                         placeholder="77 123 45 67"
                         required
                       />
@@ -297,7 +338,9 @@ export default function RegistrationForm() {
                     <Label>Ville *</Label>
                     <Select
                       value={clientForm.city}
-                      onValueChange={(value) => handleCityChange(value, "client")}
+                      onValueChange={(value) =>
+                        handleCityChange(value, "client")
+                      }
                       disabled={!clientForm.country}
                     >
                       <SelectTrigger>
@@ -316,7 +359,9 @@ export default function RegistrationForm() {
                     <Label>Commune</Label>
                     <Select
                       value={clientForm.commune}
-                      onValueChange={(value) => setClientForm((prev) => ({ ...prev, commune: value }))}
+                      onValueChange={(value) =>
+                        setClientForm((prev) => ({ ...prev, commune: value }))
+                      }
                       disabled={!clientForm.city}
                     >
                       <SelectTrigger>
@@ -338,7 +383,12 @@ export default function RegistrationForm() {
                   <Input
                     id="address"
                     value={clientForm.address}
-                    onChange={(e) => setClientForm((prev) => ({ ...prev, address: e.target.value }))}
+                    onChange={(e) =>
+                      setClientForm((prev) => ({
+                        ...prev,
+                        address: e.target.value,
+                      }))
+                    }
                     placeholder="Adresse complète"
                   />
                 </div>
@@ -351,7 +401,12 @@ export default function RegistrationForm() {
                         id="password"
                         type={showPassword ? "text" : "password"}
                         value={clientForm.password}
-                        onChange={(e) => setClientForm((prev) => ({ ...prev, password: e.target.value }))}
+                        onChange={(e) =>
+                          setClientForm((prev) => ({
+                            ...prev,
+                            password: e.target.value,
+                          }))
+                        }
                         required
                       />
                       <Button
@@ -361,17 +416,28 @@ export default function RegistrationForm() {
                         className="absolute right-0 top-0 h-full px-3"
                         onClick={() => setShowPassword(!showPassword)}
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="confirmPassword">Confirmer le mot de passe *</Label>
+                    <Label htmlFor="confirmPassword">
+                      Confirmer le mot de passe *
+                    </Label>
                     <Input
                       id="confirmPassword"
                       type="password"
                       value={clientForm.confirmPassword}
-                      onChange={(e) => setClientForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                      onChange={(e) =>
+                        setClientForm((prev) => ({
+                          ...prev,
+                          confirmPassword: e.target.value,
+                        }))
+                      }
                       required
                     />
                   </div>
@@ -379,7 +445,9 @@ export default function RegistrationForm() {
 
                 <div className="space-y-4">
                   <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Inscription en cours..." : "Créer mon compte client"}
+                    {isLoading
+                      ? "Inscription en cours..."
+                      : "Créer mon compte client"}
                   </Button>
 
                   <div className="relative">
@@ -391,7 +459,12 @@ export default function RegistrationForm() {
                     </div>
                   </div>
 
-                  <Button type="button" variant="outline" className="w-full" onClick={() => signIn("google")}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => signIn("google")}
+                  >
                     <Chrome className="h-4 w-4 mr-2" />
                     Continuer avec Google
                   </Button>
@@ -403,33 +476,54 @@ export default function RegistrationForm() {
             <TabsContent value="company">
               <form onSubmit={handleCompanySubmit} className="space-y-6">
                 <div className="text-center mb-6">
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                  <Badge
+                    variant="outline"
+                    className="bg-green-50 text-green-700 border-green-200"
+                  >
                     <Building className="h-3 w-3 mr-1" />
                     Compte Entreprise
                   </Badge>
-                  <p className="text-sm text-gray-600 mt-2">Gérez votre flotte et vendez vos billets en ligne</p>
+                  <p className="text-sm text-gray-600 mt-2">
+                    Gérez votre flotte et vendez vos billets en ligne
+                  </p>
                 </div>
 
                 {/* Owner Information */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b pb-2">Informations du responsable</h3>
+                  <h3 className="text-lg font-medium border-b pb-2">
+                    Informations du responsable
+                  </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="ownerFirstName">Prénom du responsable *</Label>
+                      <Label htmlFor="ownerFirstName">
+                        Prénom du responsable *
+                      </Label>
                       <Input
                         id="ownerFirstName"
                         value={companyForm.firstName}
-                        onChange={(e) => setCompanyForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                        onChange={(e) =>
+                          setCompanyForm((prev) => ({
+                            ...prev,
+                            firstName: e.target.value,
+                          }))
+                        }
                         required
                       />
                     </div>
                     <div>
-                      <Label htmlFor="ownerLastName">Nom du responsable *</Label>
+                      <Label htmlFor="ownerLastName">
+                        Nom du responsable *
+                      </Label>
                       <Input
                         id="ownerLastName"
                         value={companyForm.lastName}
-                        onChange={(e) => setCompanyForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                        onChange={(e) =>
+                          setCompanyForm((prev) => ({
+                            ...prev,
+                            lastName: e.target.value,
+                          }))
+                        }
                         required
                       />
                     </div>
@@ -441,7 +535,12 @@ export default function RegistrationForm() {
                       id="ownerEmail"
                       type="email"
                       value={companyForm.email}
-                      onChange={(e) => setCompanyForm((prev) => ({ ...prev, email: e.target.value }))}
+                      onChange={(e) =>
+                        setCompanyForm((prev) => ({
+                          ...prev,
+                          email: e.target.value,
+                        }))
+                      }
                       required
                     />
                   </div>
@@ -449,17 +548,23 @@ export default function RegistrationForm() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label>Pays *</Label>
-                      <Select onValueChange={(value) => handleCountryChange(value, "company")}>
+                      <Select
+                        onValueChange={(value) =>
+                          handleCountryChange(value, "company")
+                        }
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Choisir le pays" />
                         </SelectTrigger>
                         <SelectContent>
-                          {countries.map((country) => (
+                          {AFRICAN_COUNTRIES.map((country) => (
                             <SelectItem key={country.id} value={country.code}>
                               <div className="flex items-center gap-2">
                                 <span>{country.flag}</span>
                                 <span>{country.name}</span>
-                                <span className="text-gray-500">({country.phonePrefix})</span>
+                                <span className="text-gray-500">
+                                  ({country.phonePrefix})
+                                </span>
                               </div>
                             </SelectItem>
                           ))}
@@ -467,16 +572,25 @@ export default function RegistrationForm() {
                       </Select>
                     </div>
                     <div>
-                      <Label htmlFor="ownerPhone">Téléphone du responsable *</Label>
+                      <Label htmlFor="ownerPhone">
+                        Téléphone du responsable *
+                      </Label>
                       <div className="flex">
                         <div className="flex items-center px-3 bg-gray-100 border border-r-0 rounded-l-md">
-                          <span className="text-sm">{selectedCountry?.phonePrefix || "+XXX"}</span>
+                          <span className="text-sm">
+                            {getSelectedCountryPrefix()}
+                          </span>
                         </div>
                         <Input
                           id="ownerPhone"
                           className="rounded-l-none"
                           value={companyForm.phone}
-                          onChange={(e) => setCompanyForm((prev) => ({ ...prev, phone: e.target.value }))}
+                          onChange={(e) =>
+                            setCompanyForm((prev) => ({
+                              ...prev,
+                              phone: e.target.value,
+                            }))
+                          }
                           placeholder="77 123 45 67"
                           required
                         />
@@ -487,36 +601,57 @@ export default function RegistrationForm() {
 
                 {/* Company Information */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b pb-2">Informations de l'entreprise</h3>
+                  <h3 className="text-lg font-medium border-b pb-2">
+                    Informations de l'entreprise
+                  </h3>
 
                   <div>
                     <Label htmlFor="companyName">Nom de l'entreprise *</Label>
                     <Input
                       id="companyName"
                       value={companyForm.companyName}
-                      onChange={(e) => setCompanyForm((prev) => ({ ...prev, companyName: e.target.value }))}
+                      onChange={(e) =>
+                        setCompanyForm((prev) => ({
+                          ...prev,
+                          companyName: e.target.value,
+                        }))
+                      }
                       required
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="companyDescription">Description de l'entreprise</Label>
+                    <Label htmlFor="companyDescription">
+                      Description de l'entreprise
+                    </Label>
                     <Textarea
                       id="companyDescription"
                       value={companyForm.companyDescription}
-                      onChange={(e) => setCompanyForm((prev) => ({ ...prev, companyDescription: e.target.value }))}
+                      onChange={(e) =>
+                        setCompanyForm((prev) => ({
+                          ...prev,
+                          companyDescription: e.target.value,
+                        }))
+                      }
                       placeholder="Décrivez votre entreprise de transport..."
                     />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="companyEmail">Email de l'entreprise *</Label>
+                      <Label htmlFor="companyEmail">
+                        Email de l'entreprise *
+                      </Label>
                       <Input
                         id="companyEmail"
                         type="email"
                         value={companyForm.companyEmail}
-                        onChange={(e) => setCompanyForm((prev) => ({ ...prev, companyEmail: e.target.value }))}
+                        onChange={(e) =>
+                          setCompanyForm((prev) => ({
+                            ...prev,
+                            companyEmail: e.target.value,
+                          }))
+                        }
                         required
                       />
                     </div>
@@ -525,7 +660,12 @@ export default function RegistrationForm() {
                       <Input
                         id="licenseNumber"
                         value={companyForm.licenseNumber}
-                        onChange={(e) => setCompanyForm((prev) => ({ ...prev, licenseNumber: e.target.value }))}
+                        onChange={(e) =>
+                          setCompanyForm((prev) => ({
+                            ...prev,
+                            licenseNumber: e.target.value,
+                          }))
+                        }
                         placeholder="Numéro de licence de transport"
                         required
                       />
@@ -533,11 +673,18 @@ export default function RegistrationForm() {
                   </div>
 
                   <div>
-                    <Label htmlFor="companyAddress">Adresse de l'entreprise *</Label>
+                    <Label htmlFor="companyAddress">
+                      Adresse de l'entreprise *
+                    </Label>
                     <Input
                       id="companyAddress"
                       value={companyForm.companyAddress}
-                      onChange={(e) => setCompanyForm((prev) => ({ ...prev, companyAddress: e.target.value }))}
+                      onChange={(e) =>
+                        setCompanyForm((prev) => ({
+                          ...prev,
+                          companyAddress: e.target.value,
+                        }))
+                      }
                       placeholder="Adresse complète de l'entreprise"
                       required
                     />
@@ -553,7 +700,12 @@ export default function RegistrationForm() {
                         id="companyPassword"
                         type={showPassword ? "text" : "password"}
                         value={companyForm.password}
-                        onChange={(e) => setCompanyForm((prev) => ({ ...prev, password: e.target.value }))}
+                        onChange={(e) =>
+                          setCompanyForm((prev) => ({
+                            ...prev,
+                            password: e.target.value,
+                          }))
+                        }
                         required
                       />
                       <Button
@@ -563,24 +715,37 @@ export default function RegistrationForm() {
                         className="absolute right-0 top-0 h-full px-3"
                         onClick={() => setShowPassword(!showPassword)}
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="companyConfirmPassword">Confirmer le mot de passe *</Label>
+                    <Label htmlFor="companyConfirmPassword">
+                      Confirmer le mot de passe *
+                    </Label>
                     <Input
                       id="companyConfirmPassword"
                       type="password"
                       value={companyForm.confirmPassword}
-                      onChange={(e) => setCompanyForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                      onChange={(e) =>
+                        setCompanyForm((prev) => ({
+                          ...prev,
+                          confirmPassword: e.target.value,
+                        }))
+                      }
                       required
                     />
                   </div>
                 </div>
 
                 <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "Inscription en cours..." : "Créer mon compte entreprise"}
+                  {isLoading
+                    ? "Inscription en cours..."
+                    : "Créer mon compte entreprise"}
                 </Button>
               </form>
             </TabsContent>
@@ -588,5 +753,5 @@ export default function RegistrationForm() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

@@ -44,6 +44,7 @@ model User {
   countryCode   String?
   password      String?
   role          UserRole  @default(CLIENT)
+  status        UserStatus @default(ACTIVE)
   
   // Personal Info
   firstName     String?
@@ -52,6 +53,13 @@ model User {
   city          String?
   commune       String?
   address       String?
+  dateOfBirth   DateTime?
+  gender        Gender?
+  
+  // Preferences
+  language      String?   @default("fr")
+  theme         String?   @default("light")
+  notificationPreferences NotificationPreference[]
   
   // Relations
   accounts      Account[]
@@ -64,6 +72,14 @@ model User {
   reservations  Reservation[]
   tickets       Ticket[]
   notifications Notification[]
+  reviews       Review[]
+  favorites     FavoriteRoute[]
+  
+  // Activity tracking
+  lastLogin     DateTime?
+  loginCount    Int       @default(0)
+  deviceTokens  DeviceToken[]
+  activityLogs  ActivityLog[]
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -87,11 +103,54 @@ enum UserRole {
   CLIENT
 }
 
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+  DEACTIVATED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model NotificationPreference {
+  id        String   @id @default(cuid())
+  type      NotificationType
+  email     Boolean  @default(true)
+  push      Boolean  @default(true)
+  sms       Boolean  @default(false)
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([userId, type])
+}
+
+model DeviceToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  device    String?
+  platform  String?
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Company {
   id          String   @id @default(cuid())
   name        String
   description String?
   logo        String?
+  coverImage  String?
   
   // Contact Info
   email       String   @unique
@@ -101,11 +160,16 @@ model Company {
   country     String
   city        String
   commune     String?
+  website     String?
   
   // Business Info
   licenseNumber String @unique
-  isVerified    Boolean @default(false)
-  isActive      Boolean @default(true)
+  taxId       String?
+  foundedYear Int?
+  size        CompanySize @default(SMALL)
+  isVerified  Boolean @default(false)
+  isActive    Boolean @default(true)
+  status      CompanyStatus @default(PENDING)
   
   // Relations
   owner       User     @relation("CompanyOwner", fields: [ownerId], references: [id])
@@ -118,6 +182,16 @@ model Company {
   trips       Trip[]
   reservations Reservation[]
   tickets     Ticket[]
+  reviews     Review[]
+  
+  // Analytics
+  rating      Float?   @default(0)
+  tripCount   Int      @default(0)
+  customerCount Int     @default(0)
+  
+  // Subscription
+  subscriptionTier SubscriptionTier @default(BASIC)
+  subscriptionExpiry DateTime?
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -125,12 +199,51 @@ model Company {
   @@unique([phone, countryCode])
 }
 
+enum CompanySize {
+  SMALL
+  MEDIUM
+  LARGE
+  ENTERPRISE
+}
+
+enum CompanyStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum SubscriptionTier {
+  BASIC
+  STANDARD
+  PREMIUM
+  ENTERPRISE
+}
+
 model Bus {
   id          String   @id @default(cuid())
   plateNumber String   @unique
   model       String
   capacity    Int
+  year        Int?
   isActive    Boolean  @default(true)
+  status      BusStatus @default(AVAILABLE)
+  
+  // Features
+  hasAC       Boolean  @default(false)
+  hasWifi     Boolean  @default(false)
+  hasToilet   Boolean  @default(false)
+  hasTV       Boolean  @default(false)
+  hasUSB      Boolean  @default(false)
+  
+  // Technical details
+  fuelType    FuelType?
+  lastMaintenance DateTime?
+  nextMaintenance DateTime?
+  mileage     Int?
+  
+  // Images
+  images      BusImage[]
   
   company     Company  @relation(fields: [companyId], references: [id])
   companyId   String
@@ -142,10 +255,39 @@ model Bus {
   updatedAt   DateTime @updatedAt
 }
 
+enum BusStatus {
+  AVAILABLE
+  IN_SERVICE
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum FuelType {
+  DIESEL
+  GASOLINE
+  ELECTRIC
+  HYBRID
+  GAS
+}
+
+model BusImage {
+  id        String   @id @default(cuid())
+  url       String
+  isPrimary Boolean  @default(false)
+  
+  bus       Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
+  busId     String
+  
+  createdAt DateTime @default(now())
+}
+
 model Seat {
   id        String   @id @default(cuid())
   number    String
   isWindow  Boolean  @default(false)
+  type      SeatType @default(STANDARD)
+  position  String?  // e.g., "A1", "B2"
+  deck      Int?     @default(1) // For double-decker buses
   
   bus       Bus      @relation(fields: [busId], references: [id])
   busId     String
@@ -158,15 +300,29 @@ model Seat {
   @@unique([busId, number])
 }
 
+enum SeatType {
+  STANDARD
+  PREMIUM
+  VIP
+  SLEEPER
+}
+
 model Station {
   id        String   @id @default(cuid())
   name      String
   code      String   @unique
   address   String
   city      String
+  commune   String?
   country   String
   latitude  Float?
   longitude Float?
+  
+  // Additional info
+  description String?
+  facilities  String[]
+  images      StationImage[]
+  isActive    Boolean @default(true)
   
   company   Company  @relation(fields: [companyId], references: [id])
   companyId String
@@ -178,12 +334,29 @@ model Station {
   updatedAt DateTime @updatedAt
 }
 
+model StationImage {
+  id        String   @id @default(cuid())
+  url       String
+  isPrimary Boolean  @default(false)
+  
+  station   Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  stationId String
+  
+  createdAt DateTime @default(now())
+}
+
 model Route {
   id          String   @id @default(cuid())
   name        String
   distance    Float
   duration    Int      // in minutes
   price       Float
+  
+  // Additional info
+  description String?
+  mapUrl      String?
+  isPopular   Boolean  @default(false)
+  isActive    Boolean  @default(true)
   
   departure   Station  @relation("DepartureStation", fields: [departureId], references: [id])
   departureId String
@@ -194,11 +367,25 @@ model Route {
   companyId   String
   
   trips       Trip[]
+  favorites   FavoriteRoute[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
   @@unique([departureId, arrivalId, companyId])
+}
+
+model FavoriteRoute {
+  id        String   @id @default(cuid())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  routeId   String
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, routeId])
 }
 
 model Trip {
@@ -207,6 +394,16 @@ model Trip {
   arrivalTime   DateTime
   status        TripStatus @default(SCHEDULED)
   availableSeats Int
+  
+  // Dynamic pricing
+  basePrice     Float
+  currentPrice  Float
+  
+  // Additional info
+  notes         String?
+  driverName    String?
+  driverContact String?
+  trackingCode  String?    @unique
   
   route         Route      @relation(fields: [routeId], references: [id])
   routeId       String
@@ -217,16 +414,33 @@ model Trip {
   
   reservations  Reservation[]
   tickets       Ticket[]
+  statusUpdates TripStatusUpdate[]
   
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+}
+
+model TripStatusUpdate {
+  id          String     @id @default(cuid())
+  status      TripStatus
+  location    String?
+  latitude    Float?
+  longitude   Float?
+  notes       String?
+  
+  trip        Trip       @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  tripId      String
+  
+  createdAt   DateTime   @default(now())
 }
 
 enum TripStatus {
   SCHEDULED
   BOARDING
   DEPARTED
+  IN_TRANSIT
   ARRIVED
+  COMPLETED
   CANCELLED
   DELAYED
 }
@@ -237,6 +451,11 @@ model Reservation {
   status        ReservationStatus @default(PENDING)
   expiresAt     DateTime
   totalAmount   Float
+  
+  // Passenger info
+  passengerName String?
+  passengerPhone String?
+  passengerEmail String?
   
   user          User              @relation(fields: [userId], references: [id])
   userId        String
@@ -258,6 +477,7 @@ enum ReservationStatus {
   CONFIRMED
   EXPIRED
   CANCELLED
+  CHECKED_IN
 }
 
 model Ticket {
@@ -267,6 +487,10 @@ model Ticket {
   status      TicketStatus @default(ACTIVE)
   issuedAt    DateTime     @default(now())
   validatedAt DateTime?
+  
+  // Additional info
+  boardingPass String?
+  notes        String?
   
   reservation Reservation  @relation(fields: [reservationId], references: [id])
   reservationId String     @unique
@@ -291,6 +515,7 @@ enum TicketStatus {
   USED
   CANCELLED
   EXPIRED
+  REFUNDED
 }
 
 model Payment {
@@ -300,6 +525,16 @@ model Payment {
   method        PaymentMethod
   status        PaymentStatus @default(PENDING)
   transactionId String?       @unique
+  
+  // Payment details
+  paymentGateway String?
+  paymentReference String?
+  receiptUrl     String?
+  
+  // Refund info
+  refundAmount   Float?
+  refundReason   String?
+  refundedAt     DateTime?
   
   ticket        Ticket        @relation(fields: [ticketId], references: [id])
   ticketId      String        @unique
@@ -313,6 +548,8 @@ enum PaymentMethod {
   CARD
   MOBILE_MONEY
   BANK_TRANSFER
+  PAYPAL
+  CRYPTO
 }
 
 enum PaymentStatus {
@@ -320,6 +557,7 @@ enum PaymentStatus {
   COMPLETED
   FAILED
   REFUNDED
+  PARTIALLY_REFUNDED
 }
 
 model Notification {
@@ -328,6 +566,11 @@ model Notification {
   message   String
   type      NotificationType
   isRead    Boolean          @default(false)
+  
+  // Additional info
+  actionUrl String?
+  imageUrl  String?
+  priority  NotificationPriority @default(NORMAL)
   
   user      User             @relation(fields: [userId], references: [id])
   userId    String
@@ -341,8 +584,36 @@ enum NotificationType {
   TRIP_REMINDER
   TRIP_CANCELLED
   TRIP_DELAYED
+  TRIP_STATUS_UPDATE
   SEAT_AVAILABLE
+  PRICE_DROP
   SYSTEM_UPDATE
+  ACCOUNT_UPDATE
+  PROMOTION
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // 1-5 stars
+  comment   String?
+  isVerified Boolean @default(false)
+  
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  company   Company  @relation(fields: [companyId], references: [id])
+  companyId String
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([userId, companyId])
 }
 
 model Country {
@@ -351,4 +622,84 @@ model Country {
   code        String @unique
   phonePrefix String @unique
   flag        String?
+  
+  // Additional info
+  continent   String?
+  currency    String?
+  languages   String[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  action    String
+  details   String?
+  ipAddress String?
+  userAgent String?
+  
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  
+  createdAt DateTime @default(now())
+}
+
+model SystemAlert {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      AlertType
+  severity  AlertSeverity
+  isResolved Boolean  @default(false)
+  resolvedAt DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum AlertType {
+  SECURITY
+  PERFORMANCE
+  ERROR
+  SYSTEM
+  PAYMENT
+  DATABASE
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Promotion {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  code        String   @unique
+  discountType DiscountType
+  discountValue Float
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+model Settings {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

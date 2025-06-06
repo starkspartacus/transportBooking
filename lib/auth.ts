@@ -19,53 +19,57 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
         countryCode: { label: "Country Code", type: "text" },
       },
-      async authorize(credentials, req) {
+      async authorize(credentials) {
         if (!credentials?.identifier || !credentials?.password) {
           return null;
         }
 
         const isEmail = credentials.identifier.includes("@");
 
-        let user;
-        if (isEmail) {
-          user = await prisma.user.findUnique({
-            where: { email: credentials.identifier },
-          });
-        } else {
-          user = await prisma.user.findUnique({
-            where: {
-              phone_countryCode: {
+        try {
+          let user;
+          if (isEmail) {
+            user = await prisma.user.findUnique({
+              where: { email: credentials.identifier },
+              include: { company: true },
+            });
+          } else {
+            user = await prisma.user.findFirst({
+              where: {
                 phone: credentials.identifier,
                 countryCode: credentials.countryCode || "+1",
               },
-            },
-          });
-        }
+              include: { company: true },
+            });
+          }
 
-        if (!user || !user.password) {
+          if (!user || !user.password) {
+            return null;
+          }
+
+          const isPasswordValid = await bcrypt.compare(
+            credentials.password,
+            user.password
+          );
+
+          if (!isPasswordValid) {
+            return null;
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            phone: user.phone || undefined,
+            countryCode: user.countryCode || undefined,
+            companyId: user.companyId || undefined,
+            image: user.image || undefined,
+          };
+        } catch (error) {
+          console.error("Auth error:", error);
           return null;
         }
-
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.password
-        );
-
-        if (!isPasswordValid) {
-          return null;
-        }
-
-        // Return a user object that matches the expected User type
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          phone: user.phone || undefined, // Convert null to undefined
-          countryCode: user.countryCode || undefined, // Convert null to undefined
-          companyId: user.companyId || undefined, // Convert null to undefined
-          image: user.image || undefined, // Add image property expected by NextAuth
-        };
       },
     }),
   ],
@@ -96,6 +100,7 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: "/auth/signin",
-    // signUp: "/auth/signup", // Removing this line as it's not supported in NextAuth's PagesOptions
+    error: "/auth/error",
   },
+  secret: process.env.NEXTAUTH_SECRET,
 };
