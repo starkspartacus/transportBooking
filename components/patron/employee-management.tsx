@@ -1,21 +1,11 @@
 "use client";
 
-import type React from "react";
-
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -24,209 +14,129 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Users,
-  UserPlus,
-  Eye,
-  EyeOff,
-  Copy,
-  Check,
-  Trash2,
-  Shield,
-  ShieldCheck,
-} from "lucide-react";
-import { useSession } from "next-auth/react";
-import {
-  AFRICAN_COUNTRIES,
-  getCitiesByCountryCode,
-  getCommunesByCity,
-} from "@/constants/countries";
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Plus, Eye, Edit, Trash2, Users } from "lucide-react";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { useToast } from "@/components/ui/use-toast";
+import { Badge } from "@/components/ui/badge";
 
 interface Employee {
   id: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-  countryCode: string;
-  role: "GESTIONNAIRE" | "CAISSIER";
-  country: string;
-  city: string;
-  commune: string;
-  age: number;
-  isActive: boolean;
+  name: string;
+  email: string;
+  role: string;
+  employeeRole?: string;
+  status?: string;
+  hireDate?: string;
+  lastLogin?: string;
   createdAt: string;
 }
 
+const employeeSchema = z.object({
+  name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
+  email: z.string().email("Email invalide"),
+  role: z.enum(["GESTIONNAIRE", "CAISSIER"]),
+  status: z.enum(["ACTIVE", "SUSPENDED", "INACTIVE"]).optional(),
+});
+
+type EmployeeFormData = z.infer<typeof employeeSchema>;
+
 export default function EmployeeManagement() {
   const { data: session } = useSession();
+  const router = useRouter();
+  const { toast } = useToast();
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [generatedPassword, setGeneratedPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [copiedPassword, setCopiedPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showNewForm, setShowNewForm] = useState(false);
 
-  const [employeeForm, setEmployeeForm] = useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    age: "",
-    role: "CAISSIER" as "GESTIONNAIRE" | "CAISSIER",
-    country: "",
-    city: "",
-    commune: "",
+  const form = useForm<EmployeeFormData>({
+    resolver: zodResolver(employeeSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      role: "GESTIONNAIRE",
+      status: "ACTIVE",
+    },
   });
-
-  const [selectedCountry, setSelectedCountry] = useState<string>("");
-  const [availableCities, setAvailableCities] = useState<string[]>([]);
-  const [availableCommunes, setAvailableCommunes] = useState<string[]>([]);
 
   useEffect(() => {
     fetchEmployees();
   }, []);
 
   const fetchEmployees = async () => {
-    try {
-      const response = await fetch(
-        `/api/company/employees?companyId=${session?.user?.companyId}`
-      );
-      const data = await response.json();
-      setEmployees(data);
-    } catch (error) {
-      console.error("Error fetching employees:", error);
-    }
-  };
-
-  const generatePassword = () => {
-    const chars =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let password = "";
-    for (let i = 0; i < 8; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setGeneratedPassword(password);
-    return password;
-  };
-
-  const copyPassword = async () => {
-    try {
-      await navigator.clipboard.writeText(generatedPassword);
-      setCopiedPassword(true);
-      setTimeout(() => setCopiedPassword(false), 2000);
-    } catch (error) {
-      console.error("Failed to copy password:", error);
-    }
-  };
-
-  const handleCountryChange = (countryCode: string) => {
-    const country = AFRICAN_COUNTRIES.find((c) => c.code === countryCode);
-    if (country) {
-      setSelectedCountry(countryCode);
-      const cities = getCitiesByCountryCode(countryCode);
-      setAvailableCities(cities.map((city) => city.name));
-      setAvailableCommunes([]);
-      setEmployeeForm((prev) => ({
-        ...prev,
-        country: countryCode,
-        city: "",
-        commune: "",
-      }));
-    }
-  };
-
-  const handleCityChange = (city: string) => {
-    const communes = getCommunesByCity(selectedCountry, city);
-    setAvailableCommunes(communes);
-    setEmployeeForm((prev) => ({ ...prev, city, commune: "" }));
-  };
-
-  const getSelectedCountryPrefix = () => {
-    const country = AFRICAN_COUNTRIES.find((c) => c.code === selectedCountry);
-    return country?.phonePrefix || "+XXX";
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!generatedPassword) {
-      alert("Veuillez générer un mot de passe");
-      return;
-    }
-
     setIsLoading(true);
     try {
-      const selectedCountryData = AFRICAN_COUNTRIES.find(
-        (c) => c.code === employeeForm.country
-      );
-
-      const response = await fetch("/api/company/employees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...employeeForm,
-          password: generatedPassword,
-          countryCode: selectedCountryData?.phonePrefix,
-          companyId: session?.user?.companyId,
-        }),
-      });
-
-      const result = await response.json();
-
+      const response = await fetch("/api/company/employees");
       if (response.ok) {
-        alert(
-          `Employé ajouté avec succès!\nMot de passe: ${generatedPassword}\nCommuniquez ce mot de passe à l'employé.`
-        );
-        setIsDialogOpen(false);
-        resetForm();
-        fetchEmployees();
+        const data = await response.json();
+        // S'assurer que data est un tableau
+        setEmployees(Array.isArray(data) ? data : []);
       } else {
-        alert(result.error || "Erreur lors de l'ajout de l'employé");
+        console.error("Error fetching employees:", response.statusText);
+        setEmployees([]);
       }
     } catch (error) {
-      console.error("Employee creation error:", error);
-      alert("Erreur lors de l'ajout de l'employé");
+      console.error("Error fetching employees:", error);
+      setEmployees([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const resetForm = () => {
-    setEmployeeForm({
-      firstName: "",
-      lastName: "",
-      phone: "",
-      age: "",
-      role: "CAISSIER",
-      country: "",
-      city: "",
-      commune: "",
-    });
-    setGeneratedPassword("");
-    setSelectedCountry("");
-    setAvailableCities([]);
-    setAvailableCommunes([]);
-  };
-
-  const toggleEmployeeStatus = async (
-    employeeId: string,
-    currentStatus: boolean
-  ) => {
+  const onSubmit = async (data: EmployeeFormData) => {
     try {
-      const response = await fetch(`/api/company/employees/${employeeId}`, {
-        method: "PATCH",
+      const response = await fetch("/api/company/employees", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !currentStatus }),
+        body: JSON.stringify(data),
       });
 
       if (response.ok) {
+        toast({
+          title: "Employé ajouté",
+          description: "L'employé a été ajouté avec succès",
+        });
         fetchEmployees();
+        setShowNewForm(false);
+        form.reset();
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Erreur",
+          description: error.error || "Erreur lors de l'ajout de l'employé",
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error("Error updating employee status:", error);
+      console.error("Error creating employee:", error);
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de l'ajout de l'employé",
+        variant: "destructive",
+      });
     }
   };
 
-  const deleteEmployee = async (employeeId: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cet employé?")) return;
+  const handleViewEmployee = (employeeId: string) => {
+    router.push(`/patron/employees/${employeeId}`);
+  };
+
+  const handleEditEmployee = (employeeId: string) => {
+    router.push(`/patron/employees/${employeeId}/edit`);
+  };
+
+  const handleDeleteEmployee = async (employeeId: string) => {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cet employé ?")) return;
 
     try {
       const response = await fetch(`/api/company/employees/${employeeId}`, {
@@ -234,505 +144,307 @@ export default function EmployeeManagement() {
       });
 
       if (response.ok) {
+        toast({
+          title: "Employé supprimé",
+          description: "L'employé a été supprimé avec succès",
+        });
         fetchEmployees();
-        alert("Employé supprimé avec succès");
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Erreur",
+          description:
+            error.error || "Erreur lors de la suppression de l'employé",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Error deleting employee:", error);
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la suppression de l'employé",
+        variant: "destructive",
+      });
     }
   };
 
-  const gestionnaires = employees.filter((emp) => emp.role === "GESTIONNAIRE");
-  const caissiers = employees.filter((emp) => emp.role === "CAISSIER");
+  const formatDate = (dateString: string) => {
+    try {
+      return format(new Date(dateString), "dd MMM yyyy", { locale: fr });
+    } catch {
+      return "Date invalide";
+    }
+  };
+
+  // Filtrer les employés avec vérification de sécurité
+  const gestionnaires = Array.isArray(employees)
+    ? employees.filter(
+        (emp) =>
+          emp.role === "GESTIONNAIRE" || emp.employeeRole === "GESTIONNAIRE"
+      )
+    : [];
+
+  const caissiers = Array.isArray(employees)
+    ? employees.filter(
+        (emp) => emp.role === "CAISSIER" || emp.employeeRole === "CAISSIER"
+      )
+    : [];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Gestion des Employés
-          </h1>
-          <p className="text-gray-600">Gérez vos gestionnaires et caissiers</p>
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Gestion des employés ({employees.length})
+          </CardTitle>
+          <Button onClick={() => setShowNewForm(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Ajouter un employé
+          </Button>
         </div>
-
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
-              <UserPlus className="h-4 w-4" />
-              Ajouter un employé
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Ajouter un nouvel employé</DialogTitle>
-            </DialogHeader>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Role Selection */}
-              <div>
-                <Label>Rôle *</Label>
-                <Select
-                  value={employeeForm.role}
-                  onValueChange={(value: "GESTIONNAIRE" | "CAISSIER") =>
-                    setEmployeeForm((prev) => ({ ...prev, role: value }))
-                  }
+      </CardHeader>
+      <CardContent>
+        {showNewForm ? (
+          <Card className="mb-4">
+            <CardContent className="pt-6">
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-4"
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CAISSIER">
-                      <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4" />
-                        Caissier (Droits limités)
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="GESTIONNAIRE">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4" />
-                        Gestionnaire (Droits étendus)
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Personal Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="firstName">Prénom *</Label>
-                  <Input
-                    id="firstName"
-                    value={employeeForm.firstName}
-                    onChange={(e) =>
-                      setEmployeeForm((prev) => ({
-                        ...prev,
-                        firstName: e.target.value,
-                      }))
-                    }
-                    required
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nom *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Nom complet" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
-                <div>
-                  <Label htmlFor="lastName">Nom *</Label>
-                  <Input
-                    id="lastName"
-                    value={employeeForm.lastName}
-                    onChange={(e) =>
-                      setEmployeeForm((prev) => ({
-                        ...prev,
-                        lastName: e.target.value,
-                      }))
-                    }
-                    required
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email *</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="email"
+                            placeholder="example@example.com"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="age">Âge *</Label>
-                <Input
-                  id="age"
-                  type="number"
-                  min="18"
-                  max="65"
-                  value={employeeForm.age}
-                  onChange={(e) =>
-                    setEmployeeForm((prev) => ({
-                      ...prev,
-                      age: e.target.value,
-                    }))
-                  }
-                  required
-                />
-              </div>
-
-              {/* Location */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label>Pays *</Label>
-                  <Select onValueChange={handleCountryChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choisir le pays" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AFRICAN_COUNTRIES.map((country) => (
-                        <SelectItem key={country.id} value={country.code}>
-                          <div className="flex items-center gap-2">
-                            <span>{country.flag}</span>
-                            <span>{country.name}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Ville *</Label>
-                  <Select
-                    value={employeeForm.city}
-                    onValueChange={handleCityChange}
-                    disabled={!employeeForm.country}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choisir la ville" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableCities.map((city) => (
-                        <SelectItem key={city} value={city}>
-                          {city}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Commune</Label>
-                  <Select
-                    value={employeeForm.commune}
-                    onValueChange={(value) =>
-                      setEmployeeForm((prev) => ({ ...prev, commune: value }))
-                    }
-                    disabled={!employeeForm.city}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choisir la commune" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableCommunes.map((commune) => (
-                        <SelectItem key={commune} value={commune}>
-                          {commune}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Phone */}
-              <div>
-                <Label htmlFor="phone">Téléphone *</Label>
-                <div className="flex">
-                  <div className="flex items-center px-3 bg-gray-100 border border-r-0 rounded-l-md">
-                    <span className="text-sm">
-                      {getSelectedCountryPrefix()}
-                    </span>
-                  </div>
-                  <Input
-                    id="phone"
-                    className="rounded-l-none"
-                    value={employeeForm.phone}
-                    onChange={(e) =>
-                      setEmployeeForm((prev) => ({
-                        ...prev,
-                        phone: e.target.value,
-                      }))
-                    }
-                    placeholder="77 123 45 67"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Password Generation */}
-              <div className="space-y-3">
-                <Label>Mot de passe de connexion</Label>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={generatePassword}
-                    className="flex-1"
-                  >
-                    Générer un mot de passe
-                  </Button>
-                  {generatedPassword && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={copyPassword}
-                    >
-                      {copiedPassword ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="role"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Rôle *</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="GESTIONNAIRE">
+                                Gestionnaire
+                              </SelectItem>
+                              <SelectItem value="CAISSIER">Caissier</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
                       )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Statut</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="ACTIVE">Actif</SelectItem>
+                              <SelectItem value="SUSPENDED">
+                                Suspendu
+                              </SelectItem>
+                              <SelectItem value="INACTIVE">Inactif</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowNewForm(false)}
+                    >
+                      Annuler
                     </Button>
-                  )}
-                </div>
+                    <Button
+                      type="submit"
+                      disabled={form.formState.isSubmitting}
+                    >
+                      {form.formState.isSubmitting
+                        ? "Ajout en cours..."
+                        : "Ajouter"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        ) : null}
 
-                {generatedPassword && (
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-sm">
-                        {showPassword ? generatedPassword : "••••••••"}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
+        {isLoading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+            <p className="mt-2">Chargement des employés...</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Statistiques */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{employees.length}</p>
+                    <p className="text-sm text-gray-600">Total employés</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{gestionnaires.length}</p>
+                    <p className="text-sm text-gray-600">Gestionnaires</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{caissiers.length}</p>
+                    <p className="text-sm text-gray-600">Caissiers</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Liste des employés */}
+            {employees.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-600">Aucun employé trouvé</p>
+                <p className="text-sm text-gray-500">
+                  Cliquez sur "Ajouter un employé" pour commencer
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {employees.map((employee) => (
+                  <div
+                    key={employee.id}
+                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="font-medium">{employee.name}</h3>
+                          <Badge variant="outline">
+                            {employee.role ||
+                              employee.employeeRole ||
+                              "Non défini"}
+                          </Badge>
+                          {employee.status && (
+                            <Badge
+                              variant={
+                                employee.status === "ACTIVE"
+                                  ? "default"
+                                  : "secondary"
+                              }
+                            >
+                              {employee.status}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600 mb-1">
+                          {employee.email}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                          {employee.hireDate && (
+                            <span>
+                              Embauché le: {formatDate(employee.hireDate)}
+                            </span>
+                          )}
+                          {employee.createdAt && (
+                            <span>
+                              Créé le: {formatDate(employee.createdAt)}
+                            </span>
+                          )}
+                          {employee.lastLogin && (
+                            <span>
+                              Dernière connexion:{" "}
+                              {formatDate(employee.lastLogin)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewEmployee(employee.id)}
+                        >
                           <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Communiquez ce mot de passe à l'employé pour qu'il puisse
-                      se connecter
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-4 pt-4">
-                <Button
-                  type="submit"
-                  disabled={isLoading || !generatedPassword}
-                  className="flex-1"
-                >
-                  {isLoading ? "Ajout en cours..." : "Ajouter l'employé"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                >
-                  Annuler
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Employés</p>
-                <p className="text-2xl font-bold">{employees.length}</p>
-              </div>
-              <Users className="h-8 w-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Gestionnaires</p>
-                <p className="text-2xl font-bold">{gestionnaires.length}</p>
-              </div>
-              <ShieldCheck className="h-8 w-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Caissiers</p>
-                <p className="text-2xl font-bold">{caissiers.length}</p>
-              </div>
-              <Shield className="h-8 w-8 text-orange-500" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Employee Lists */}
-      <Tabs defaultValue="gestionnaires" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="gestionnaires">
-            Gestionnaires ({gestionnaires.length})
-          </TabsTrigger>
-          <TabsTrigger value="caissiers">
-            Caissiers ({caissiers.length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="gestionnaires">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5" />
-                Gestionnaires
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {gestionnaires.map((employee) => (
-                  <div key={employee.id} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <div>
-                            <h3 className="font-medium">
-                              {employee.firstName} {employee.lastName}
-                            </h3>
-                            <p className="text-sm text-gray-600">
-                              {employee.countryCode} {employee.phone}
-                            </p>
-                          </div>
-                          <Badge
-                            variant={
-                              employee.isActive ? "default" : "secondary"
-                            }
-                          >
-                            {employee.isActive ? "Actif" : "Inactif"}
-                          </Badge>
-                        </div>
-                        <div className="mt-2 text-sm text-gray-600">
-                          <p>
-                            {employee.age} ans • {employee.city},{" "}
-                            {
-                              AFRICAN_COUNTRIES.find(
-                                (c) => c.code === employee.country
-                              )?.name
-                            }
-                          </p>
-                          {employee.commune && (
-                            <p>Commune: {employee.commune}</p>
-                          )}
-                          <p>
-                            Ajouté le{" "}
-                            {new Date(employee.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant={
-                            employee.isActive ? "destructive" : "default"
-                          }
-                          onClick={() =>
-                            toggleEmployeeStatus(employee.id, employee.isActive)
-                          }
-                        >
-                          {employee.isActive ? "Désactiver" : "Activer"}
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => deleteEmployee(employee.id)}
+                          onClick={() => handleEditEmployee(employee.id)}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDeleteEmployee(employee.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
                   </div>
                 ))}
-                {gestionnaires.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <ShieldCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Aucun gestionnaire ajouté</p>
-                    <p className="text-sm">
-                      Cliquez sur "Ajouter un employé" pour commencer
-                    </p>
-                  </div>
-                )}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="caissiers">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Caissiers
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {caissiers.map((employee) => (
-                  <div key={employee.id} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <div>
-                            <h3 className="font-medium">
-                              {employee.firstName} {employee.lastName}
-                            </h3>
-                            <p className="text-sm text-gray-600">
-                              {employee.countryCode} {employee.phone}
-                            </p>
-                          </div>
-                          <Badge
-                            variant={
-                              employee.isActive ? "default" : "secondary"
-                            }
-                          >
-                            {employee.isActive ? "Actif" : "Inactif"}
-                          </Badge>
-                        </div>
-                        <div className="mt-2 text-sm text-gray-600">
-                          <p>
-                            {employee.age} ans • {employee.city},{" "}
-                            {
-                              AFRICAN_COUNTRIES.find(
-                                (c) => c.code === employee.country
-                              )?.name
-                            }
-                          </p>
-                          {employee.commune && (
-                            <p>Commune: {employee.commune}</p>
-                          )}
-                          <p>
-                            Ajouté le{" "}
-                            {new Date(employee.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant={
-                            employee.isActive ? "destructive" : "default"
-                          }
-                          onClick={() =>
-                            toggleEmployeeStatus(employee.id, employee.isActive)
-                          }
-                        >
-                          {employee.isActive ? "Désactiver" : "Activer"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => deleteEmployee(employee.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {caissiers.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Aucun caissier ajouté</p>
-                    <p className="text-sm">
-                      Cliquez sur "Ajouter un employé" pour commencer
-                    </p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
