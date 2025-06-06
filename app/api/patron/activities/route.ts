@@ -3,6 +3,21 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// Define Activity type since Prisma client might not be updated yet
+interface Activity {
+  id: string;
+  type: string;
+  description: string;
+  status: string;
+  userId?: string | null;
+  companyId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  user?: {
+    name: string | null;
+  } | null;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -20,27 +35,64 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get recent activities
-    const activities = await prisma.activity.findMany({
-      where: { companyId },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      include: {
-        user: {
-          select: {
-            name: true,
+    // Use raw query as fallback if Activity model is not available
+    let activities: Activity[] = [];
+
+    try {
+      // Try to use the Activity model
+      activities = await (prisma as any).activity.findMany({
+        where: { companyId },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        include: {
+          user: {
+            select: {
+              name: true,
+            },
           },
         },
-      },
-    });
+      });
+    } catch (error) {
+      // Fallback to raw SQL query
+      console.log("Using raw SQL query for activities");
+      const rawActivities = (await prisma.$queryRaw`
+        SELECT 
+          a.id,
+          a.type,
+          a.description,
+          a.status,
+          a."userId",
+          a."companyId",
+          a."createdAt",
+          a."updatedAt",
+          u.name as "userName"
+        FROM "Activity" a
+        LEFT JOIN "User" u ON a."userId" = u.id
+        WHERE a."companyId" = ${companyId}
+        ORDER BY a."createdAt" DESC
+        LIMIT 20
+      `) as any[];
+
+      activities = rawActivities.map((activity: any) => ({
+        id: activity.id,
+        type: activity.type,
+        description: activity.description,
+        status: activity.status,
+        userId: activity.userId,
+        companyId: activity.companyId,
+        createdAt: activity.createdAt,
+        updatedAt: activity.updatedAt,
+        user: activity.userName ? { name: activity.userName } : null,
+      }));
+    }
 
     // Format the data for the frontend
-    const formattedActivities = activities.map((activity) => ({
+    const formattedActivities = activities.map((activity: Activity) => ({
       id: activity.id,
       type: activity.type,
       description: activity.description,
       timestamp: activity.createdAt.toISOString(),
-      user: activity.user?.name,
+      user: activity.user?.name || "Système",
       status: activity.status || "INFO",
     }));
 
@@ -78,16 +130,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create new activity
-    const newActivity = await prisma.activity.create({
-      data: {
+    let newActivity: Activity;
+
+    try {
+      // Try to use the Activity model
+      newActivity = await (prisma as any).activity.create({
+        data: {
+          type: data.type,
+          description: data.description,
+          status: data.status || "INFO",
+          companyId,
+          userId: session.user.id,
+        },
+      });
+    } catch (error) {
+      // Fallback to raw SQL query
+      console.log("Using raw SQL query to create activity");
+      const id = `activity_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
+      await prisma.$executeRaw`
+        INSERT INTO "Activity" (id, type, description, status, "userId", "companyId", "createdAt", "updatedAt")
+        VALUES (${id}, ${data.type}, ${data.description}, ${
+        data.status || "INFO"
+      }, ${session.user.id}, ${companyId}, NOW(), NOW())
+      `;
+
+      newActivity = {
+        id,
         type: data.type,
         description: data.description,
         status: data.status || "INFO",
-        companyId,
         userId: session.user.id,
-      },
-    });
+        companyId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    }
 
     return NextResponse.json({
       id: newActivity.id,

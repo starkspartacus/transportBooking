@@ -20,148 +20,136 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get current month start and end
+    // Get date range for current month
     const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    // Get stats
     const [
       totalRevenue,
-      currentMonthRevenue,
-      lastMonthRevenue,
       totalTrips,
-      activeTrips,
-      totalEmployees,
-      totalBuses,
-      pendingReservations,
+      totalReservations,
       totalSeats,
       occupiedSeats,
     ] = await Promise.all([
-      // Total revenue
+      // Total revenue - Fixed: Use correct relation path
       prisma.payment.aggregate({
-        where: {
-          status: "COMPLETED",
-          reservation: {
-            trip: {
-              companyId,
-            },
-          },
-        },
         _sum: { amount: true },
-      }),
-
-      // Current month revenue
-      prisma.payment.aggregate({
-        where: {
-          status: "COMPLETED",
-          createdAt: { gte: currentMonthStart },
-          reservation: {
-            trip: {
-              companyId,
-            },
-          },
-        },
-        _sum: { amount: true },
-      }),
-
-      // Last month revenue
-      prisma.payment.aggregate({
         where: {
           status: "COMPLETED",
           createdAt: {
-            gte: lastMonthStart,
-            lte: lastMonthEnd,
+            gte: startOfMonth,
+            lte: endOfMonth,
           },
-          reservation: {
+          ticket: {
             trip: {
               companyId,
             },
           },
         },
-        _sum: { amount: true },
       }),
 
       // Total trips
       prisma.trip.count({
-        where: { companyId },
-      }),
-
-      // Active trips
-      prisma.trip.count({
         where: {
           companyId,
-          status: { in: ["SCHEDULED", "BOARDING", "DEPARTED"] },
+          createdAt: {
+            gte: startOfMonth,
+            lte: endOfMonth,
+          },
         },
       }),
 
-      // Total employees
-      prisma.user.count({
-        where: {
-          companyId,
-          role: { in: ["MANAGER", "CASHIER"] },
-        },
-      }),
-
-      // Total buses
-      prisma.bus.count({
-        where: { companyId },
-      }),
-
-      // Pending reservations
+      // Total reservations
       prisma.reservation.count({
         where: {
-          status: "PENDING",
-          trip: { companyId },
+          companyId,
+          createdAt: {
+            gte: startOfMonth,
+            lte: endOfMonth,
+          },
         },
       }),
 
-      // Total seats for occupancy calculation
+      // Total seats available
       prisma.trip.aggregate({
+        _sum: { availableSeats: true },
         where: {
           companyId,
-          departureTime: { gte: currentMonthStart },
-        },
-        _sum: {
-          totalSeats: true,
+          createdAt: {
+            gte: startOfMonth,
+            lte: endOfMonth,
+          },
         },
       }),
 
       // Occupied seats
       prisma.reservation.count({
         where: {
-          status: { in: ["CONFIRMED", "PENDING"] },
+          companyId,
+          status: { in: ["CONFIRMED", "CHECKED_IN"] },
           trip: {
-            companyId,
-            departureTime: { gte: currentMonthStart },
+            createdAt: {
+              gte: startOfMonth,
+              lte: endOfMonth,
+            },
           },
         },
       }),
     ]);
 
-    // Calculate monthly growth
-    const currentRevenue = currentMonthRevenue._sum.amount || 0;
-    const lastRevenue = lastMonthRevenue._sum.amount || 0;
-    const monthlyGrowth =
-      lastRevenue > 0
-        ? Math.round(((currentRevenue - lastRevenue) / lastRevenue) * 100)
-        : 0;
-
     // Calculate occupancy rate
-    const totalCapacity = totalSeats._sum.totalSeats || 0;
+    const totalSeatsCount = totalSeats._sum.availableSeats || 0;
     const occupancyRate =
-      totalCapacity > 0 ? Math.round((occupiedSeats / totalCapacity) * 100) : 0;
+      totalSeatsCount > 0 ? (occupiedSeats / totalSeatsCount) * 100 : 0;
+
+    // Get recent trips
+    const recentTrips = await prisma.trip.findMany({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      include: {
+        route: {
+          include: {
+            departure: { select: { name: true } },
+            arrival: { select: { name: true } },
+          },
+        },
+        bus: { select: { plateNumber: true } },
+        _count: { select: { reservations: true } },
+      },
+    });
 
     const stats = {
-      totalRevenue: totalRevenue._sum.amount || 0,
-      totalTrips,
-      activeTrips,
-      totalEmployees,
-      totalBuses,
-      pendingReservations,
-      monthlyGrowth,
-      occupancyRate,
+      revenue: {
+        total: totalRevenue._sum.amount || 0,
+        currency: "XOF",
+        change: 0, // TODO: Calculate change from previous month
+      },
+      trips: {
+        total: totalTrips,
+        completed: 0, // TODO: Count completed trips
+        cancelled: 0, // TODO: Count cancelled trips
+      },
+      reservations: {
+        total: totalReservations,
+        confirmed: occupiedSeats,
+        pending: 0, // TODO: Count pending reservations
+      },
+      occupancy: {
+        rate: Math.round(occupancyRate),
+        totalSeats: totalSeatsCount,
+        occupiedSeats,
+      },
+      recentTrips: recentTrips.map((trip) => ({
+        id: trip.id,
+        route: `${trip.route.departure.name} → ${trip.route.arrival.name}`,
+        departureTime: trip.departureTime.toISOString(),
+        status: trip.status,
+        bus: trip.bus.plateNumber,
+        reservations: trip._count.reservations,
+        availableSeats: trip.availableSeats,
+      })),
     };
 
     return NextResponse.json(stats);

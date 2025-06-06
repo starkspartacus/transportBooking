@@ -46,6 +46,10 @@ model User {
   role          UserRole  @default(CLIENT)
   status        UserStatus @default(ACTIVE)
   
+  // Password reset fields
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  
   // Personal Info
   firstName     String?
   lastName      String?
@@ -80,6 +84,7 @@ model User {
   loginCount    Int       @default(0)
   deviceTokens  DeviceToken[]
   activityLogs  ActivityLog[]
+  activities    Activity[]
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -183,6 +188,7 @@ model Company {
   reservations Reservation[]
   tickets     Ticket[]
   reviews     Review[]
+  activities  Activity[]
   
   // Analytics
   rating      Float?   @default(0)
@@ -218,6 +224,42 @@ enum SubscriptionTier {
   STANDARD
   PREMIUM
   ENTERPRISE
+}
+
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  description String
+  status      ActivityStatus @default(INFO)
+  
+  user        User?        @relation(fields: [userId], references: [id])
+  userId      String?
+  company     Company      @relation(fields: [companyId], references: [id])
+  companyId   String
+  
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+enum ActivityType {
+  USER_LOGIN
+  USER_LOGOUT
+  RESERVATION_CREATED
+  RESERVATION_CANCELLED
+  PAYMENT_COMPLETED
+  TRIP_CREATED
+  TRIP_UPDATED
+  BUS_ADDED
+  ROUTE_CREATED
+  EMPLOYEE_ADDED
+  SYSTEM_UPDATE
+}
+
+enum ActivityStatus {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
 }
 
 model Bus {
@@ -394,6 +436,7 @@ model Trip {
   arrivalTime   DateTime
   status        TripStatus @default(SCHEDULED)
   availableSeats Int
+  totalSeats    Int        @default(0)
   
   // Dynamic pricing
   basePrice     Float
