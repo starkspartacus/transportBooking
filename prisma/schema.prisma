@@ -489,49 +489,19 @@ model Bus {
   id          String   @id @default(cuid())
   plateNumber String   @unique
   model       String
-  brand       String
   capacity    Int
-  year        Int
-  color       String?
-  fuelType    FuelType @default(DIESEL)
+  year        Int?
   status      BusStatus @default(ACTIVE)
+  mileage     Int?     @default(0)
 
   // Maintenance and documents
-  lastMaintenance         DateTime @default(now())
-  nextMaintenance         DateTime
-  totalKm                 Int      @default(0)
-  insuranceExpiry         DateTime
-  technicalControlExpiry  DateTime
+  lastMaintenance         DateTime? @default(now())
+  nextMaintenance         DateTime?
+  insuranceExpiry         DateTime?
+  technicalControlExpiry  DateTime?
   registrationExpiry      DateTime?
   purchaseDate            DateTime?
   purchasePrice           Float?
-
-  // Equipment and services
-  features    String[] @default([])
-  amenities   Json?
-  
-  // Operational info
-  driverAssigned String?
-  currentLocation String?
-  gpsEnabled     Boolean @default(false)
-  gpsDeviceId    String?
-  fuelEfficiency Float?  // km per liter
-  
-  // Maintenance history
-  maintenanceHistory Json[] @default([])
-  accidentHistory    Json[] @default([])
-  
-  // Financial tracking
-  maintenanceCosts   Float   @default(0)
-  fuelCosts          Float   @default(0)
-  revenueGenerated   Float   @default(0)
-  
-  // Seating configuration
-  seatMap            Json?
-  hasAccessibility   Boolean @default(false)
-  
-  // Documents
-  documents          BusDocument[]
 
   // Relations
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -545,47 +515,6 @@ model Bus {
   @@index([companyId])
   @@index([status])
   @@index([plateNumber])
-}
-
-model BusDocument {
-  id          String   @id @default(cuid())
-  name        String
-  type        BusDocumentType
-  fileUrl     String
-  fileSize    Int?
-  mimeType    String?
-  isVerified  Boolean  @default(false)
-  verifiedAt  DateTime?
-  verifiedBy  String?
-  expiryDate  DateTime?
-  
-  bus         Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
-  busId       String
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([busId])
-  @@index([type])
-}
-
-enum BusDocumentType {
-  REGISTRATION
-  INSURANCE
-  TECHNICAL_CONTROL
-  PERMIT
-  MAINTENANCE_RECORD
-  OTHER
-}
-
-enum FuelType {
-  DIESEL
-  GASOLINE
-  HYBRID
-  ELECTRIC
-  CNG
-  LPG
-  BIODIESEL
 }
 
 enum BusStatus {
@@ -855,7 +784,7 @@ enum TripStatus {
   SCHEDULED
   BOARDING
   DEPARTED
-  IN_TRANSIT  // Conserver cette valeur existante
+  IN_TRANSIT
   ARRIVED
   CANCELLED
   DELAYED
@@ -1290,24 +1219,4 @@ model ActivityLog {
   @@index([action])
   @@index([createdAt])
   @@index([entityType, entityId])
-}
-
-// Table qui semble exister dans la base de données mais pas dans le schéma
-model TripStatusUpdate {
-  id          String   @id @default(cuid())
-  status      TripStatus_old
-  // Autres champs nécessaires
-  
-  createdAt   DateTime @default(now())
-}
-
-// Enum existant qui ne peut pas être supprimé
-enum TripStatus_old {
-  SCHEDULED
-  BOARDING
-  DEPARTED
-  IN_TRANSIT
-  ARRIVED
-  CANCELLED
-  DELAYED
 }

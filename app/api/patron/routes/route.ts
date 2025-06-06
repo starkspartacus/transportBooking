@@ -15,17 +15,32 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const companyId = searchParams.get("companyId");
 
-    if (!companyId) {
-      return NextResponse.json(
-        { error: "ID de l'entreprise requis" },
-        { status: 400 }
-      );
+    // Si pas de companyId fourni, utiliser l'entreprise active de l'utilisateur
+    let targetCompanyId = companyId;
+
+    if (!targetCompanyId) {
+      // Récupérer la première entreprise du patron
+      const userCompany = await prisma.company.findFirst({
+        where: {
+          ownerId: session.user.id,
+        },
+        select: { id: true },
+      });
+
+      if (!userCompany) {
+        return NextResponse.json(
+          { error: "Aucune entreprise trouvée" },
+          { status: 404 }
+        );
+      }
+
+      targetCompanyId = userCompany.id;
     }
 
     // Vérifier que l'entreprise appartient au patron
     const company = await prisma.company.findFirst({
       where: {
-        id: companyId,
+        id: targetCompanyId,
         ownerId: session.user.id,
       },
     });
@@ -39,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     const routes = await prisma.route.findMany({
       where: {
-        companyId: companyId,
+        companyId: targetCompanyId,
       },
       include: {
         stops: {
@@ -58,10 +73,14 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Transformer les données pour inclure totalTrips
+    // Transformer les données pour inclure totalTrips et duration (pour compatibilité)
     const routesWithStats = routes.map((route) => ({
       ...route,
       totalTrips: route._count.trips,
+      duration: route.estimatedDuration, // Utiliser estimatedDuration comme alias pour duration
+      departure: route.departureLocation, // Alias pour compatibilité
+      arrival: route.arrivalLocation, // Alias pour compatibilité
+      price: route.basePrice, // Utiliser basePrice comme alias pour price
     }));
 
     return NextResponse.json(routesWithStats);
@@ -85,11 +104,11 @@ export async function POST(request: NextRequest) {
     // Validation des données
     const requiredFields = [
       "name",
-      "departureLocation",
-      "arrivalLocation",
+      "departure",
+      "arrival",
       "departureCountry",
       "arrivalCountry",
-      "estimatedDuration",
+      "duration",
       "price",
       "companyId",
     ];
@@ -124,15 +143,17 @@ export async function POST(request: NextRequest) {
       const newRoute = await tx.route.create({
         data: {
           name: data.name,
-          departureLocation: data.departureLocation,
-          arrivalLocation: data.arrivalLocation,
+          departureLocation: data.departure, // Utiliser departure comme departureLocation
+          arrivalLocation: data.arrival, // Utiliser arrival comme arrivalLocation
           departureCountry: data.departureCountry,
           arrivalCountry: data.arrivalCountry,
           distance: data.distance || 0,
-          estimatedDuration: data.estimatedDuration,
-          price: data.price,
+          estimatedDuration: data.duration, // Utiliser duration comme estimatedDuration
+          basePrice: data.price, // Utiliser price comme basePrice
           description: data.description,
-          isInternational: data.isInternational,
+          isInternational:
+            data.isInternational ||
+            data.departureCountry !== data.arrivalCountry,
           status: data.status || "ACTIVE",
           companyId: data.companyId,
         },
@@ -166,7 +187,21 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(route);
+    return NextResponse.json({
+      id: route.id,
+      name: route.name,
+      departure: route.departureLocation, // Alias pour compatibilité
+      arrival: route.arrivalLocation, // Alias pour compatibilité
+      departureCountry: route.departureCountry,
+      arrivalCountry: route.arrivalCountry,
+      distance: route.distance,
+      duration: route.estimatedDuration, // Alias pour compatibilité
+      price: route.basePrice, // Alias pour compatibilité
+      description: route.description,
+      isInternational: route.isInternational,
+      status: route.status,
+      totalTrips: 0,
+    });
   } catch (error) {
     console.error("Error creating route:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

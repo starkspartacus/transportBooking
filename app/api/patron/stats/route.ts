@@ -11,178 +11,151 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    const userId = session.user.id;
-
-    // Récupérer l'entreprise active ou utiliser toutes les entreprises
     const { searchParams } = new URL(request.url);
     const companyId = searchParams.get("companyId");
 
-    let whereClause: any = {};
+    // Si pas de companyId fourni, utiliser l'entreprise active de l'utilisateur
+    let targetCompanyId = companyId;
 
-    if (companyId) {
-      // Vérifier que l'entreprise appartient au patron
-      const company = await prisma.company.findFirst({
+    if (!targetCompanyId) {
+      // Récupérer la première entreprise du patron
+      const userCompany = await prisma.company.findFirst({
         where: {
-          id: companyId,
-          ownerId: userId,
+          ownerId: session.user.id,
         },
+        select: { id: true },
       });
 
-      if (!company) {
+      if (!userCompany) {
         return NextResponse.json(
-          { error: "Entreprise non trouvée" },
+          { error: "Aucune entreprise trouvée" },
           { status: 404 }
         );
       }
 
-      whereClause = { companyId };
-    } else {
-      // Utiliser toutes les entreprises du patron
-      const companies = await prisma.company.findMany({
-        where: { ownerId: userId },
-        select: { id: true },
-      });
-
-      const companyIds = companies.map((company) => company.id);
-      whereClause = { companyId: { in: companyIds } };
+      targetCompanyId = userCompany.id;
     }
 
-    // Get current month start and end
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    // Vérifier que l'entreprise appartient au patron
+    const company = await prisma.company.findFirst({
+      where: {
+        id: targetCompanyId,
+        ownerId: session.user.id,
+      },
+    });
 
-    // Get stats
+    if (!company) {
+      return NextResponse.json(
+        { error: "Entreprise non trouvée" },
+        { status: 404 }
+      );
+    }
+
+    // Récupérer les statistiques en parallèle
     const [
       totalRevenue,
-      currentMonthRevenue,
-      lastMonthRevenue,
+      totalReservations,
       totalTrips,
-      activeTrips,
-      totalEmployees,
       totalBuses,
-      pendingReservations,
+      totalRoutes,
+      totalEmployees,
       totalSeats,
       occupiedSeats,
     ] = await Promise.all([
       // Total revenue
       prisma.payment.aggregate({
         where: {
+          companyId: targetCompanyId,
           status: "COMPLETED",
-          ticket: {
-            ...whereClause,
-          },
         },
         _sum: { amount: true },
       }),
-
-      // Current month revenue
-      prisma.payment.aggregate({
-        where: {
-          status: "COMPLETED",
-          createdAt: { gte: currentMonthStart },
-          ticket: {
-            ...whereClause,
-          },
-        },
-        _sum: { amount: true },
+      // Total reservations
+      prisma.reservation.count({
+        where: { companyId: targetCompanyId },
       }),
-
-      // Last month revenue
-      prisma.payment.aggregate({
-        where: {
-          status: "COMPLETED",
-          createdAt: {
-            gte: lastMonthStart,
-            lte: lastMonthEnd,
-          },
-          ticket: {
-            ...whereClause,
-          },
-        },
-        _sum: { amount: true },
-      }),
-
       // Total trips
       prisma.trip.count({
-        where: whereClause,
+        where: { companyId: targetCompanyId },
       }),
-
-      // Active trips
-      prisma.trip.count({
-        where: {
-          ...whereClause,
-          status: { in: ["SCHEDULED", "BOARDING", "DEPARTED"] },
-        },
-      }),
-
-      // Total employees
-      prisma.user.count({
-        where: {
-          ...whereClause,
-          role: { in: ["GESTIONNAIRE", "CAISSIER"] },
-        },
-      }),
-
       // Total buses
       prisma.bus.count({
-        where: whereClause,
+        where: { companyId: targetCompanyId },
       }),
-
-      // Pending reservations
-      prisma.reservation.count({
-        where: {
-          status: "PENDING",
-          ...whereClause,
-        },
+      // Total routes
+      prisma.route.count({
+        where: { companyId: targetCompanyId },
       }),
-
-      // Total seats for occupancy calculation
+      // Total employees
+      prisma.user.count({
+        where: { companyId: targetCompanyId },
+      }),
+      // Total seats available
       prisma.trip.aggregate({
-        where: {
-          ...whereClause,
-          departureTime: { gte: currentMonthStart },
-        },
-        _sum: {
-          totalSeats: true,
-        },
+        where: { companyId: targetCompanyId },
+        _sum: { availableSeats: true },
       }),
+      // Occupied seats (reservations)
+      prisma.reservation.aggregate({
+        where: {
+          companyId: targetCompanyId,
+          status: { in: ["CONFIRMED", "COMPLETED"] },
+        },
+        _sum: { passengerCount: true },
+      }),
+    ]);
 
-      // Occupied seats
+    // Calculer les statistiques récentes (30 derniers jours)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const [recentRevenue, recentReservations, recentTrips] = await Promise.all([
+      prisma.payment.aggregate({
+        where: {
+          companyId: targetCompanyId,
+          status: "COMPLETED",
+          createdAt: { gte: thirtyDaysAgo },
+        },
+        _sum: { amount: true },
+      }),
       prisma.reservation.count({
         where: {
-          status: { in: ["CONFIRMED", "PENDING"] },
-          trip: {
-            ...whereClause,
-            departureTime: { gte: currentMonthStart },
-          },
+          companyId: targetCompanyId,
+          createdAt: { gte: thirtyDaysAgo },
+        },
+      }),
+      prisma.trip.count({
+        where: {
+          companyId: targetCompanyId,
+          createdAt: { gte: thirtyDaysAgo },
         },
       }),
     ]);
 
-    // Calculate monthly growth
-    const currentRevenue = currentMonthRevenue._sum.amount || 0;
-    const lastRevenue = lastMonthRevenue._sum.amount || 0;
-    const monthlyGrowth =
-      lastRevenue > 0
-        ? Math.round(((currentRevenue - lastRevenue) / lastRevenue) * 100)
-        : 0;
-
-    // Calculate occupancy rate
-    const totalCapacity = totalSeats._sum.totalSeats || 0;
+    // Calculer le taux d'occupation
+    const totalAvailableSeats = totalSeats._sum.availableSeats || 0;
+    const totalOccupiedSeats = occupiedSeats._sum.passengerCount || 0;
     const occupancyRate =
-      totalCapacity > 0 ? Math.round((occupiedSeats / totalCapacity) * 100) : 0;
+      totalAvailableSeats > 0
+        ? (totalOccupiedSeats / totalAvailableSeats) * 100
+        : 0;
 
     const stats = {
       totalRevenue: totalRevenue._sum.amount || 0,
-      totalTrips,
-      activeTrips,
-      totalEmployees,
-      totalBuses,
-      pendingReservations,
-      monthlyGrowth,
-      occupancyRate,
+      totalReservations: totalReservations,
+      totalTrips: totalTrips,
+      totalBuses: totalBuses,
+      totalRoutes: totalRoutes,
+      totalEmployees: totalEmployees,
+      occupancyRate: Math.round(occupancyRate * 100) / 100,
+      recentStats: {
+        revenue: recentRevenue._sum.amount || 0,
+        reservations: recentReservations,
+        trips: recentTrips,
+      },
+      // Données pour les graphiques
+      monthlyRevenue: [], // À implémenter si nécessaire
+      weeklyReservations: [], // À implémenter si nécessaire
     };
 
     return NextResponse.json(stats);

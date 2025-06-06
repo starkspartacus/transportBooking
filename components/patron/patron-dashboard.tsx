@@ -23,10 +23,15 @@ import {
   Activity,
   Clock,
   CheckCircle,
+  Building,
+  Archive,
+  Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useRouter } from "next/navigation";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useToast } from "@/components/ui/use-toast";
 
 interface CompanyStats {
   totalRevenue: number;
@@ -70,6 +75,7 @@ interface Route {
   price: number;
   status: string;
   totalTrips: number;
+  basePrice?: number;
 }
 
 interface RecentActivity {
@@ -81,6 +87,20 @@ interface RecentActivity {
   status: string;
 }
 
+interface Company {
+  id: string;
+  name: string;
+  description?: string;
+  logo?: string;
+  isVerified: boolean;
+  isActive: boolean;
+  createdAt: string;
+  totalEmployees?: number;
+  totalBuses?: number;
+  totalRevenue?: number;
+  canDelete: boolean;
+}
+
 export default function PatronDashboard() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -89,40 +109,90 @@ export default function PatronDashboard() {
   const [buses, setBuses] = useState<BusType[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [activities, setActivities] = useState<RecentActivity[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeCompany, setActiveCompany] = useState<Company | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
+  useEffect(() => {
+    // Récupérer les détails de la compagnie active
+    if (session?.user?.companyId && companies.length > 0) {
+      const company = companies.find((c) => c.id === session.user.companyId);
+      if (company) {
+        setActiveCompany(company);
+      } else {
+        // Si l'ID de la compagnie n'est pas trouvé dans la liste, récupérer les détails
+        fetchCompanyDetails(session.user.companyId);
+      }
+    }
+  }, [session?.user?.companyId, companies]);
+
+  const fetchCompanyDetails = async (companyId: string) => {
+    try {
+      const response = await fetch(`/api/patron/companies/${companyId}`);
+      if (response.ok) {
+        const companyData = await response.json();
+        setActiveCompany(companyData);
+      }
+    } catch (error) {
+      console.error("Error fetching company details:", error);
+    }
+  };
+
   const fetchDashboardData = async () => {
     setIsLoading(true);
     try {
-      const [statsRes, employeesRes, busesRes, routesRes, activitiesRes] =
-        await Promise.all([
-          fetch("/api/patron/stats"),
-          fetch("/api/patron/employees"),
-          fetch("/api/patron/buses"),
-          fetch("/api/patron/routes"),
-          fetch("/api/patron/activities"),
-        ]);
+      const [
+        statsRes,
+        employeesRes,
+        busesRes,
+        routesRes,
+        activitiesRes,
+        companiesRes,
+      ] = await Promise.all([
+        fetch("/api/patron/stats"),
+        fetch("/api/patron/employees"),
+        fetch("/api/patron/buses"),
+        fetch("/api/patron/routes"),
+        fetch("/api/patron/activities"),
+        fetch("/api/patron/companies"),
+      ]);
 
-      const [statsData, employeesData, busesData, routesData, activitiesData] =
-        await Promise.all([
-          statsRes.json(),
-          employeesRes.json(),
-          busesRes.json(),
-          routesRes.json(),
-          activitiesRes.json(),
-        ]);
+      const [
+        statsData,
+        employeesData,
+        busesData,
+        routesData,
+        activitiesData,
+        companiesData,
+      ] = await Promise.all([
+        statsRes.json(),
+        employeesRes.json(),
+        busesRes.json(),
+        routesRes.json(),
+        activitiesRes.json(),
+        companiesRes.json(),
+      ]);
 
       setStats(statsData);
-      setEmployees(employeesData);
-      setBuses(busesData);
-      setRoutes(routesData);
-      setActivities(activitiesData);
+      setEmployees(Array.isArray(employeesData) ? employeesData : []);
+      setBuses(Array.isArray(busesData) ? busesData : []);
+      setRoutes(Array.isArray(routesData) ? routesData : []);
+      setActivities(Array.isArray(activitiesData) ? activitiesData : []);
+      setCompanies(Array.isArray(companiesData) ? companiesData : []);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
+      // Initialiser avec des tableaux vides en cas d'erreur
+      setEmployees([]);
+      setBuses([]);
+      setRoutes([]);
+      setActivities([]);
+      setCompanies([]);
+      setStats(null);
     } finally {
       setIsLoading(false);
     }
@@ -188,6 +258,67 @@ export default function PatronDashboard() {
     return format(new Date(dateString), "dd MMM yyyy", { locale: fr });
   };
 
+  const handleDeleteCompany = async (companyId: string) => {
+    if (
+      !confirm(
+        "Êtes-vous sûr de vouloir supprimer cette entreprise ? Cette action est irréversible."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/patron/companies/${companyId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setCompanies(companies.filter((c) => c.id !== companyId));
+        toast({
+          title: "Entreprise supprimée",
+          description: "L'entreprise a été supprimée avec succès",
+        });
+      }
+    } catch (error) {
+      console.error("Error deleting company:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer l'entreprise",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleArchiveCompany = async (companyId: string) => {
+    if (!confirm("Êtes-vous sûr de vouloir archiver cette entreprise ?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/patron/companies/${companyId}/archive`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (response.ok) {
+        fetchDashboardData(); // Refresh data
+        toast({
+          title: "Entreprise archivée",
+          description: "L'entreprise a été archivée avec succès",
+        });
+      }
+    } catch (error) {
+      console.error("Error archiving company:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'archiver l'entreprise",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -199,6 +330,9 @@ export default function PatronDashboard() {
     );
   }
 
+  // Obtenir le nom de la compagnie active
+  const companyName = activeCompany?.name || "Votre entreprise";
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile Header */}
@@ -208,9 +342,7 @@ export default function PatronDashboard() {
             <h1 className="text-lg font-bold text-gray-900">
               Tableau de bord Patron
             </h1>
-            <p className="text-sm text-gray-600">
-              {session?.user?.company?.name}
-            </p>
+            <p className="text-sm text-gray-600">{companyName}</p>
           </div>
           <NotificationBell />
         </div>
@@ -220,13 +352,28 @@ export default function PatronDashboard() {
         {/* Desktop Header */}
         <div className="hidden lg:block bg-white rounded-lg shadow-sm p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Tableau de bord Patron
-              </h1>
-              <p className="text-gray-600">
-                Gestion de {session?.user?.company?.name}
-              </p>
+            <div className="flex items-center gap-3">
+              {activeCompany?.logo ? (
+                <Avatar className="h-10 w-10">
+                  <AvatarImage
+                    src={activeCompany.logo || "/placeholder.svg"}
+                    alt={companyName}
+                  />
+                  <AvatarFallback>
+                    {companyName.substring(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              ) : (
+                <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Building className="h-5 w-5 text-blue-600" />
+                </div>
+              )}
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Tableau de bord Patron
+                </h1>
+                <p className="text-gray-600">Gestion de {companyName}</p>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <NotificationBell />
@@ -327,12 +474,13 @@ export default function PatronDashboard() {
 
         {/* Main Content */}
         <Tabs defaultValue="overview" className="space-y-4 lg:space-y-6">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
+          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="employees">Employés</TabsTrigger>
             <TabsTrigger value="fleet">Flotte</TabsTrigger>
             <TabsTrigger value="routes">Itinéraires</TabsTrigger>
             <TabsTrigger value="analytics">Analyses</TabsTrigger>
+            <TabsTrigger value="companies">Entreprises</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -348,30 +496,39 @@ export default function PatronDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {activities.slice(0, 8).map((activity) => (
-                      <div key={activity.id} className="flex items-start gap-3">
-                        {getActivityIcon(activity.type)}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">
-                            {activity.description}
-                          </p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <p className="text-xs text-gray-500">
-                              {format(
-                                new Date(activity.timestamp),
-                                "dd MMM HH:mm",
-                                { locale: fr }
-                              )}
+                    {Array.isArray(activities) && activities.length > 0 ? (
+                      activities.slice(0, 8).map((activity) => (
+                        <div
+                          key={activity.id}
+                          className="flex items-start gap-3"
+                        >
+                          {getActivityIcon(activity.type)}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900">
+                              {activity.description}
                             </p>
-                            {activity.user && (
+                            <div className="flex items-center gap-2 mt-1">
                               <p className="text-xs text-gray-500">
-                                par {activity.user}
+                                {format(
+                                  new Date(activity.timestamp),
+                                  "dd MMM HH:mm",
+                                  { locale: fr }
+                                )}
                               </p>
-                            )}
+                              {activity.user && (
+                                <p className="text-xs text-gray-500">
+                                  par {activity.user}
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-4 text-gray-500">
+                        <p>Aucune activité récente</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -477,58 +634,72 @@ export default function PatronDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {employees.map((employee) => (
-                    <div
-                      key={employee.id}
-                      className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-medium">{employee.name}</h3>
-                            {getStatusBadge(employee.status, "employee")}
-                          </div>
-                          <p className="text-sm text-gray-600 mb-1">
-                            {employee.email}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                            <span>Rôle: {employee.role}</span>
-                            <span>
-                              Embauché le: {formatDate(employee.hireDate)}
-                            </span>
-                            {employee.lastLogin && (
+                  {Array.isArray(employees) && employees.length > 0 ? (
+                    employees.map((employee) => (
+                      <div
+                        key={employee.id}
+                        className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="font-medium">{employee.name}</h3>
+                              {getStatusBadge(employee.status, "employee")}
+                            </div>
+                            <p className="text-sm text-gray-600 mb-1">
+                              {employee.email}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                              <span>Rôle: {employee.role}</span>
                               <span>
-                                Dernière connexion:{" "}
-                                {formatDate(employee.lastLogin)}
+                                Embauché le: {formatDate(employee.hireDate)}
                               </span>
-                            )}
+                              {employee.lastLogin && (
+                                <span>
+                                  Dernière connexion:{" "}
+                                  {formatDate(employee.lastLogin)}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              router.push(`/patron/employees/${employee.id}`)
-                            }
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              router.push(
-                                `/patron/employees/${employee.id}/edit`
-                              )
-                            }
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                router.push(`/patron/employees/${employee.id}`)
+                              }
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                router.push(
+                                  `/patron/employees/${employee.id}/edit`
+                                )
+                              }
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Aucun employé enregistré</p>
+                      <Button
+                        className="mt-4"
+                        onClick={() => router.push("/patron/employees/new")}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Ajouter votre premier employé
+                      </Button>
                     </div>
-                  ))}
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -551,57 +722,76 @@ export default function PatronDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {buses.map((bus) => (
-                    <div
-                      key={bus.id}
-                      className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-medium">{bus.plateNumber}</h3>
-                            {getStatusBadge(bus.status, "bus")}
+                  {Array.isArray(buses) && buses.length > 0 ? (
+                    buses.map((bus) => (
+                      <div
+                        key={bus.id}
+                        className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="font-medium">{bus.plateNumber}</h3>
+                              {getStatusBadge(bus.status, "bus")}
+                            </div>
+                            <p className="text-sm text-gray-600 mb-1">
+                              {bus.model} - {bus.capacity} places
+                            </p>
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                              <span>
+                                Kilométrage:{" "}
+                                {bus.totalKm?.toLocaleString() || 0} km
+                              </span>
+                              <span>
+                                Dernière maintenance:{" "}
+                                {bus.lastMaintenance
+                                  ? formatDate(bus.lastMaintenance)
+                                  : "N/A"}
+                              </span>
+                              <span>
+                                Prochaine maintenance:{" "}
+                                {bus.nextMaintenance
+                                  ? formatDate(bus.nextMaintenance)
+                                  : "N/A"}
+                              </span>
+                            </div>
                           </div>
-                          <p className="text-sm text-gray-600 mb-1">
-                            {bus.model} - {bus.capacity} places
-                          </p>
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                            <span>
-                              Kilométrage: {bus.totalKm.toLocaleString()} km
-                            </span>
-                            <span>
-                              Dernière maintenance:{" "}
-                              {formatDate(bus.lastMaintenance)}
-                            </span>
-                            <span>
-                              Prochaine maintenance:{" "}
-                              {formatDate(bus.nextMaintenance)}
-                            </span>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                router.push(`/patron/buses/${bus.id}`)
+                              }
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                router.push(`/patron/buses/${bus.id}/edit`)
+                              }
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
                           </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              router.push(`/patron/buses/${bus.id}`)
-                            }
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              router.push(`/patron/buses/${bus.id}/edit`)
-                            }
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
                         </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <Bus className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Aucun bus enregistré</p>
+                      <Button
+                        className="mt-4"
+                        onClick={() => router.push("/patron/buses/new")}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Ajouter votre premier bus
+                      </Button>
                     </div>
-                  ))}
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -624,50 +814,69 @@ export default function PatronDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {routes.map((route) => (
-                    <div
-                      key={route.id}
-                      className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-medium">{route.name}</h3>
-                            {getStatusBadge(route.status, "route")}
+                  {Array.isArray(routes) && routes.length > 0 ? (
+                    routes.map((route) => (
+                      <div
+                        key={route.id}
+                        className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="font-medium">{route.name}</h3>
+                              {getStatusBadge(route.status, "route")}
+                            </div>
+                            <p className="text-sm text-gray-600 mb-1">
+                              {route.departure} → {route.arrival}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                              <span>Distance: {route.distance} km</span>
+                              <span>Durée: {route.estimatedDuration} min</span>
+                              <span>
+                                Prix:{" "}
+                                {formatCurrency(
+                                  route.basePrice || route.price || 0
+                                )}
+                              </span>
+                              <span>Voyages: {route.totalTrips || 0}</span>
+                            </div>
                           </div>
-                          <p className="text-sm text-gray-600 mb-1">
-                            {route.departure} → {route.arrival}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                            <span>Distance: {route.distance} km</span>
-                            <span>Durée: {route.estimatedDuration} min</span>
-                            <span>Prix: {formatCurrency(route.price)}</span>
-                            <span>Voyages: {route.totalTrips}</span>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                router.push(`/patron/routes/${route.id}`)
+                              }
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                router.push(`/patron/routes/${route.id}/edit`)
+                              }
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
                           </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              router.push(`/patron/routes/${route.id}`)
-                            }
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              router.push(`/patron/routes/${route.id}/edit`)
-                            }
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
                         </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <MapPin className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Aucun itinéraire créé</p>
+                      <Button
+                        className="mt-4"
+                        onClick={() => router.push("/patron/routes/new")}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Créer votre premier itinéraire
+                      </Button>
                     </div>
-                  ))}
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -716,6 +925,144 @@ export default function PatronDashboard() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* Companies Tab */}
+          <TabsContent value="companies">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <CardTitle className="flex items-center gap-2">
+                    <Building className="h-5 w-5" />
+                    Gestion des entreprises
+                  </CardTitle>
+                  <Button onClick={() => router.push("/patron/companies/new")}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Créer une entreprise
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {Array.isArray(companies) && companies.length > 0 ? (
+                    companies.map((company) => (
+                      <div
+                        key={company.id}
+                        className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Avatar className="h-8 w-8">
+                                {company.logo ? (
+                                  <AvatarImage
+                                    src={company.logo || "/placeholder.svg"}
+                                    alt={company.name}
+                                  />
+                                ) : (
+                                  <AvatarFallback>
+                                    {company.name.substring(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                )}
+                              </Avatar>
+                              <h3 className="font-medium">{company.name}</h3>
+                              {company.isVerified ? (
+                                <Badge className="bg-green-50 text-green-700 border-green-200">
+                                  Vérifiée
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="bg-yellow-50 text-yellow-700 border-yellow-200"
+                                >
+                                  En attente
+                                </Badge>
+                              )}
+                              {company.isActive && (
+                                <Badge className="bg-blue-50 text-blue-700 border-blue-200">
+                                  Active
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-600 mb-1">
+                              {company.description}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                              <span>
+                                Créée le: {formatDate(company.createdAt)}
+                              </span>
+                              <span>
+                                Employés: {company.totalEmployees || 0}
+                              </span>
+                              <span>Bus: {company.totalBuses || 0}</span>
+                              <span>
+                                Revenus:{" "}
+                                {formatCurrency(company.totalRevenue || 0)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                router.push(`/patron/companies/${company.id}`)
+                              }
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                router.push(
+                                  `/patron/companies/${company.id}/edit`
+                                )
+                              }
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            {company.canDelete ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 hover:text-red-700"
+                                onClick={() => handleDeleteCompany(company.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-yellow-600 hover:text-yellow-700"
+                                onClick={() => handleArchiveCompany(company.id)}
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <Building className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Aucune entreprise créée</p>
+                      <p className="text-sm mb-4">
+                        Créez votre première entreprise pour commencer
+                      </p>
+                      <Button
+                        onClick={() => router.push("/patron/companies/new")}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Créer ma première entreprise
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
