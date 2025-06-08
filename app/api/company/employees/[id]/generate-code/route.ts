@@ -24,6 +24,8 @@ export async function POST(
     // Awaiter les params avant d'accéder à id
     const { id: employeeId } = await params;
 
+    console.log("Generating code for employee:", employeeId);
+
     // Vérifier que l'employé existe
     const employee = await prisma.user.findUnique({
       where: { id: employeeId },
@@ -39,15 +41,29 @@ export async function POST(
       );
     }
 
+    console.log(
+      "Employee found:",
+      employee.name,
+      "Company:",
+      employee.companyId
+    );
+
     // Vérifier que l'employé appartient à une entreprise du patron
-    const patronCompanies = await prisma.company.findMany({
-      where: { ownerId: session.user.id },
-      select: { id: true },
+    if (!employee.companyId) {
+      return NextResponse.json(
+        { error: "L'employé n'est associé à aucune entreprise" },
+        { status: 400 }
+      );
+    }
+
+    const company = await prisma.company.findFirst({
+      where: {
+        id: employee.companyId,
+        ownerId: session.user.id,
+      },
     });
 
-    const companyIds = patronCompanies.map((company) => company.id);
-
-    if (!employee.companyId || !companyIds.includes(employee.companyId)) {
+    if (!company) {
       return NextResponse.json(
         { error: "Cet employé n'appartient pas à l'une de vos entreprises" },
         { status: 403 }
@@ -59,22 +75,31 @@ export async function POST(
       employeeId,
       employee.companyId
     );
+    console.log("Generated code:", code);
 
     // Stocker le code dans la table Activity
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 jours
 
     // Enregistrer l'activité avec le code - inclure l'ID de l'employé dans la description
-    await prisma.activity.create({
+    const activity = await prisma.activity.create({
       data: {
-        type: "COMPANY_UPDATED", // Utiliser un type existant du schéma
+        type: "EMPLOYEE_ADDED", // Utiliser un type plus approprié
         description: `Code d'authentification généré: ${code} pour employé ${
           employee.id
         } (${employee.name}) - expire le ${expiresAt.toLocaleDateString()}`,
         status: "SUCCESS",
         userId: employee.id, // Associer à l'employé, pas au patron
         companyId: employee.companyId,
+        metadata: {
+          code: code,
+          employeeId: employee.id,
+          expiresAt: expiresAt.toISOString(),
+          generatedBy: session.user.id,
+        },
       },
     });
+
+    console.log("Activity created:", activity.id);
 
     return NextResponse.json({
       success: true,
@@ -91,7 +116,10 @@ export async function POST(
   } catch (error) {
     console.error("Erreur lors de la génération du code:", error);
     return NextResponse.json(
-      { error: "Erreur lors de la génération du code" },
+      {
+        error: "Erreur lors de la génération du code",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
       { status: 500 }
     );
   }

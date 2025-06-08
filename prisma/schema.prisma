@@ -67,6 +67,15 @@ model User {
   idType        IdentificationType?
   idExpiryDate  DateTime?
 
+  // Employee Info
+  department    EmployeeDepartment?
+  position      EmployeePosition?
+  hireDate      DateTime?
+  salary        Float?
+  emergencyContact String?
+  emergencyPhone   String?
+  employeeNotes    String?
+
   // Preferences
   language      String?   @default("fr")
   theme         String?   @default("light")
@@ -208,6 +217,63 @@ enum EmployeeRole {
   CUSTOMER_SERVICE
   MAINTENANCE
   ADMIN
+}
+
+enum EmployeeDepartment {
+  TRANSPORT
+  OPERATIONS
+  MAINTENANCE
+  COMMERCIAL
+  FINANCE
+  RESSOURCES_HUMAINES
+  LOGISTIQUE
+  SECURITE
+  INFORMATIQUE
+  DIRECTION
+  MARKETING
+  SERVICE_CLIENT
+}
+
+enum EmployeePosition {
+  CHAUFFEUR
+  CHAUFFEUR_SENIOR
+  SUPERVISEUR_TRANSPORT
+  DIRECTEUR_TRANSPORT
+  AGENT_OPERATIONS
+  COORDINATEUR_OPERATIONS
+  CHEF_OPERATIONS
+  DIRECTEUR_OPERATIONS
+  MECANICIEN
+  TECHNICIEN_MAINTENANCE
+  CHEF_ATELIER
+  DIRECTEUR_MAINTENANCE
+  AGENT_COMMERCIAL
+  RESPONSABLE_COMMERCIAL
+  DIRECTEUR_COMMERCIAL
+  COMPTABLE
+  CONTROLEUR_GESTION
+  DIRECTEUR_FINANCIER
+  ASSISTANT_RH
+  RESPONSABLE_RH
+  DIRECTEUR_RH
+  AGENT_LOGISTIQUE
+  RESPONSABLE_LOGISTIQUE
+  DIRECTEUR_LOGISTIQUE
+  AGENT_SECURITE
+  RESPONSABLE_SECURITE
+  TECHNICIEN_IT
+  DEVELOPPEUR
+  RESPONSABLE_IT
+  DIRECTEUR_IT
+  ASSISTANT_DIRECTION
+  DIRECTEUR_GENERAL
+  PDG
+  CHARGE_MARKETING
+  RESPONSABLE_MARKETING
+  DIRECTEUR_MARKETING
+  AGENT_SERVICE_CLIENT
+  SUPERVISEUR_SERVICE_CLIENT
+  RESPONSABLE_SERVICE_CLIENT
 }
 
 model NotificationPreference {
@@ -719,6 +785,7 @@ model Trip {
   status        TripStatus  @default(SCHEDULED)
   
   // Enhanced trip information
+  tripType      TripType    @default(STANDARD)
   boardingTime  DateTime?
   actualDepartureTime DateTime?
   actualArrivalTime   DateTime?
@@ -734,7 +801,8 @@ model Trip {
   weatherConditions String?
   roadConditions    String?
   notes            String?
-  cancellationReason String?
+  cancellationReason CancellationReason?
+  services         String[] @default([])
   
   // Pricing and promotions
   discountPercentage Float? @default(0)
@@ -790,6 +858,25 @@ enum TripStatus {
   DELAYED
   COMPLETED
   MAINTENANCE
+}
+
+enum TripType {
+  STANDARD
+  EXPRESS
+  VIP
+  ECONOMIQUE
+  NUIT
+}
+
+enum CancellationReason {
+  TECHNICAL_ISSUE
+  WEATHER_CONDITIONS
+  DRIVER_UNAVAILABLE
+  INSUFFICIENT_PASSENGERS
+  ROAD_CONDITIONS
+  SECURITY_CONCERNS
+  ADMINISTRATIVE_ISSUE
+  OTHER
 }
 
 model Promotion {

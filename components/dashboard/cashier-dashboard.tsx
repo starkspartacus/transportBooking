@@ -1,112 +1,135 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useSocket } from "@/components/ui/socket-provider"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, CreditCard, QrCode, Clock, Printer, Banknote, Smartphone } from "lucide-react"
-import { useSession } from "next-auth/react"
+import { useState, useEffect } from "react";
+import { useSocket } from "@/components/ui/socket-provider";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Search,
+  CreditCard,
+  QrCode,
+  Clock,
+  Printer,
+  Banknote,
+  Smartphone,
+} from "lucide-react";
+import { useSession } from "next-auth/react";
 
 interface Reservation {
-  id: string
-  reservationCode: string
-  status: string
-  totalAmount: number
+  id: string;
+  reservationCode: string;
+  status: string;
+  totalAmount: number;
   user: {
-    name: string
-    phone: string
-  }
+    name: string;
+    phone: string;
+  };
   trip: {
     route: {
-      departure: { name: string }
-      arrival: { name: string }
-    }
-    departureTime: string
-  }
+      departure: { name: string };
+      arrival: { name: string };
+    };
+    departureTime: string;
+  };
   seat: {
-    number: string
-  }
+    number: string;
+  };
 }
 
 export default function CashierDashboard() {
-  const { data: session } = useSession()
-  const { socket } = useSocket()
-  const [reservations, setReservations] = useState<Reservation[]>([])
-  const [searchCode, setSearchCode] = useState("")
-  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null)
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "MOBILE_MONEY">("CASH")
-  const [isProcessing, setIsProcessing] = useState(false)
+  const { data: session } = useSession();
+  const { socket } = useSocket();
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [searchCode, setSearchCode] = useState("");
+  const [selectedReservation, setSelectedReservation] =
+    useState<Reservation | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<
+    "CASH" | "CARD" | "MOBILE_MONEY"
+  >("CASH");
+  const [isProcessing, setIsProcessing] = useState(false);
   const [dailyStats, setDailyStats] = useState({
     totalSales: 0,
     totalAmount: 0,
     cashSales: 0,
     cardSales: 0,
     mobileSales: 0,
-  })
+  });
 
   useEffect(() => {
-    fetchPendingReservations()
-    fetchDailyStats()
-  }, [])
+    fetchPendingReservations();
+    fetchDailyStats();
+  }, []);
 
   useEffect(() => {
     if (socket && session?.user?.companyId) {
-      socket.emit("join-company", session.user.companyId)
+      socket.emit("join-company", session.user.companyId);
 
       socket.on("new-reservation", (data) => {
-        setReservations((prev) => [data, ...prev])
-      })
+        setReservations((prev) => [data, ...prev]);
+      });
 
       return () => {
-        socket.off("new-reservation")
-      }
+        socket.off("new-reservation");
+      };
     }
-  }, [socket, session])
+  }, [socket, session]);
 
   const fetchPendingReservations = async () => {
     try {
-      const response = await fetch(`/api/reservations?status=PENDING&companyId=${session?.user?.companyId}`)
-      const data = await response.json()
-      setReservations(data)
+      const response = await fetch(
+        `/api/reservations?status=PENDING&companyId=${session?.user?.companyId}`
+      );
+      const data = await response.json();
+      setReservations(data);
     } catch (error) {
-      console.error("Error fetching reservations:", error)
+      console.error("Error fetching reservations:", error);
     }
-  }
+  };
 
   const fetchDailyStats = async () => {
     try {
-      const response = await fetch(`/api/cashier/stats?companyId=${session?.user?.companyId}`)
-      const data = await response.json()
-      setDailyStats(data)
+      const response = await fetch(
+        `/api/cashier/stats?companyId=${session?.user?.companyId}`
+      );
+      const data = await response.json();
+      setDailyStats(data);
     } catch (error) {
-      console.error("Error fetching stats:", error)
+      console.error("Error fetching stats:", error);
     }
-  }
+  };
 
   const searchReservation = async () => {
-    if (!searchCode) return
+    if (!searchCode) return;
 
     try {
-      const response = await fetch(`/api/reservations/search?code=${searchCode}`)
-      const data = await response.json()
+      const response = await fetch(
+        `/api/reservations/search?code=${searchCode}`
+      );
+      const data = await response.json();
 
       if (data) {
-        setSelectedReservation(data)
+        setSelectedReservation(data);
       } else {
-        alert("Réservation non trouvée")
+        alert("Réservation non trouvée");
       }
     } catch (error) {
-      console.error("Error searching reservation:", error)
+      console.error("Error searching reservation:", error);
     }
-  }
+  };
 
   const processPayment = async (reservationId: string) => {
-    setIsProcessing(true)
+    setIsProcessing(true);
     try {
       const response = await fetch("/api/cashier/process-payment", {
         method: "POST",
@@ -116,9 +139,9 @@ export default function CashierDashboard() {
           paymentMethod,
           cashierId: session?.user?.id,
         }),
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (response.ok) {
         // Emit socket event
@@ -126,25 +149,25 @@ export default function CashierDashboard() {
           socket.emit("payment-completed", {
             ...result,
             companyId: session?.user?.companyId,
-          })
+          });
         }
 
         // Update local state
-        setReservations((prev) => prev.filter((r) => r.id !== reservationId))
-        setSelectedReservation(null)
-        fetchDailyStats()
+        setReservations((prev) => prev.filter((r) => r.id !== reservationId));
+        setSelectedReservation(null);
+        fetchDailyStats();
 
-        alert("Paiement traité avec succès!")
+        alert("Paiement traité avec succès!");
       } else {
-        alert(result.error || "Erreur lors du traitement")
+        alert(result.error || "Erreur lors du traitement");
       }
     } catch (error) {
-      console.error("Payment error:", error)
-      alert("Erreur lors du traitement du paiement")
+      console.error("Payment error:", error);
+      alert("Erreur lors du traitement du paiement");
     } finally {
-      setIsProcessing(false)
+      setIsProcessing(false);
     }
-  }
+  };
 
   const printTicket = (reservation: Reservation) => {
     // Simulation d'impression
@@ -159,11 +182,11 @@ export default function CashierDashboard() {
       Siège: ${reservation.seat.number}
       Montant: ${reservation.totalAmount} FCFA
       ==================
-    `
+    `;
 
-    console.log("Impression:", printContent)
-    alert("Billet imprimé!")
-  }
+    console.log("Impression:", printContent);
+    alert("Billet imprimé!");
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -172,7 +195,9 @@ export default function CashierDashboard() {
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Dashboard Caissier</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Dashboard Caissier
+              </h1>
               <p className="text-gray-600">Bienvenue, {session?.user?.name}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -201,7 +226,11 @@ export default function CashierDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm opacity-80">Montant total</p>
-                  <p className="text-2xl font-bold">{dailyStats.totalAmount.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">
+                    {dailyStats.totalAmount !== undefined
+                      ? dailyStats.totalAmount.toLocaleString()
+                      : "N/A"}
+                  </p>
                 </div>
                 <Banknote className="h-8 w-8 opacity-80" />
               </div>
@@ -271,7 +300,9 @@ export default function CashierDashboard() {
                       placeholder="Entrez le code de réservation"
                       value={searchCode}
                       onChange={(e) => setSearchCode(e.target.value)}
-                      onKeyPress={(e) => e.key === "Enter" && searchReservation()}
+                      onKeyPress={(e) =>
+                        e.key === "Enter" && searchReservation()
+                      }
                     />
                   </div>
                   <Button onClick={searchReservation} className="mt-6">
@@ -284,32 +315,50 @@ export default function CashierDashboard() {
                   <div className="bg-gray-50 p-4 rounded-lg space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <h3 className="font-medium mb-2">Informations du voyage</h3>
+                        <h3 className="font-medium mb-2">
+                          Informations du voyage
+                        </h3>
                         <p>
-                          <strong>De:</strong> {selectedReservation.trip.route.departure.name}
+                          <strong>De:</strong>{" "}
+                          {selectedReservation.trip.route.departure.name}
                         </p>
                         <p>
-                          <strong>À:</strong> {selectedReservation.trip.route.arrival.name}
+                          <strong>À:</strong>{" "}
+                          {selectedReservation.trip.route.arrival.name}
                         </p>
                         <p>
-                          <strong>Départ:</strong> {new Date(selectedReservation.trip.departureTime).toLocaleString()}
+                          <strong>Départ:</strong>{" "}
+                          {new Date(
+                            selectedReservation.trip.departureTime
+                          ).toLocaleString()}
                         </p>
                         <p>
-                          <strong>Siège:</strong> {selectedReservation.seat.number}
+                          <strong>Siège:</strong>{" "}
+                          {selectedReservation.seat.number}
                         </p>
                       </div>
                       <div>
-                        <h3 className="font-medium mb-2">Informations du passager</h3>
+                        <h3 className="font-medium mb-2">
+                          Informations du passager
+                        </h3>
                         <p>
                           <strong>Nom:</strong> {selectedReservation.user.name}
                         </p>
                         <p>
-                          <strong>Téléphone:</strong> {selectedReservation.user.phone}
+                          <strong>Téléphone:</strong>{" "}
+                          {selectedReservation.user.phone}
                         </p>
                         <p>
-                          <strong>Montant:</strong> {selectedReservation.totalAmount} FCFA
+                          <strong>Montant:</strong>{" "}
+                          {selectedReservation.totalAmount} FCFA
                         </p>
-                        <Badge variant={selectedReservation.status === "PENDING" ? "destructive" : "default"}>
+                        <Badge
+                          variant={
+                            selectedReservation.status === "PENDING"
+                              ? "destructive"
+                              : "default"
+                          }
+                        >
                           {selectedReservation.status}
                         </Badge>
                       </div>
@@ -319,27 +368,43 @@ export default function CashierDashboard() {
                       <div className="space-y-4">
                         <div>
                           <Label>Mode de paiement</Label>
-                          <Select value={paymentMethod} onValueChange={(value: any) => setPaymentMethod(value)}>
+                          <Select
+                            value={paymentMethod}
+                            onValueChange={(value: any) =>
+                              setPaymentMethod(value)
+                            }
+                          >
                             <SelectTrigger>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="CASH">Espèces</SelectItem>
-                              <SelectItem value="CARD">Carte bancaire</SelectItem>
-                              <SelectItem value="MOBILE_MONEY">Mobile Money</SelectItem>
+                              <SelectItem value="CARD">
+                                Carte bancaire
+                              </SelectItem>
+                              <SelectItem value="MOBILE_MONEY">
+                                Mobile Money
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
                         <div className="flex gap-4">
                           <Button
-                            onClick={() => processPayment(selectedReservation.id)}
+                            onClick={() =>
+                              processPayment(selectedReservation.id)
+                            }
                             disabled={isProcessing}
                             className="flex-1"
                           >
-                            {isProcessing ? "Traitement..." : "Confirmer le paiement"}
+                            {isProcessing
+                              ? "Traitement..."
+                              : "Confirmer le paiement"}
                           </Button>
-                          <Button variant="outline" onClick={() => printTicket(selectedReservation)}>
+                          <Button
+                            variant="outline"
+                            onClick={() => printTicket(selectedReservation)}
+                          >
                             <Printer className="h-4 w-4 mr-2" />
                             Imprimer
                           </Button>
@@ -364,11 +429,16 @@ export default function CashierDashboard() {
               <CardContent>
                 <div className="space-y-4">
                   {reservations.map((reservation) => (
-                    <div key={reservation.id} className="border rounded-lg p-4 space-y-3">
+                    <div
+                      key={reservation.id}
+                      className="border rounded-lg p-4 space-y-3"
+                    >
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-medium">{reservation.user.name}</p>
-                          <p className="text-sm text-gray-600">Code: {reservation.reservationCode}</p>
+                          <p className="text-sm text-gray-600">
+                            Code: {reservation.reservationCode}
+                          </p>
                         </div>
                         <Badge variant="destructive">En attente</Badge>
                       </div>
@@ -377,7 +447,8 @@ export default function CashierDashboard() {
                         <div>
                           <p className="text-gray-600">Trajet</p>
                           <p>
-                            {reservation.trip.route.departure.name} → {reservation.trip.route.arrival.name}
+                            {reservation.trip.route.departure.name} →{" "}
+                            {reservation.trip.route.arrival.name}
                           </p>
                         </div>
                         <div>
@@ -386,15 +457,24 @@ export default function CashierDashboard() {
                         </div>
                         <div>
                           <p className="text-gray-600">Montant</p>
-                          <p className="font-medium">{reservation.totalAmount} FCFA</p>
+                          <p className="font-medium">
+                            {reservation.totalAmount} FCFA
+                          </p>
                         </div>
                       </div>
 
                       <div className="flex gap-2">
-                        <Button size="sm" onClick={() => setSelectedReservation(reservation)}>
+                        <Button
+                          size="sm"
+                          onClick={() => setSelectedReservation(reservation)}
+                        >
                           Traiter le paiement
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => printTicket(reservation)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => printTicket(reservation)}
+                        >
                           <Printer className="h-3 w-3 mr-1" />
                           Imprimer
                         </Button>
@@ -425,7 +505,9 @@ export default function CashierDashboard() {
               <CardContent>
                 <div className="text-center py-8">
                   <QrCode className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                  <p className="text-gray-600 mb-4">Scanner le QR Code du billet</p>
+                  <p className="text-gray-600 mb-4">
+                    Scanner le QR Code du billet
+                  </p>
                   <Button>Activer le scanner</Button>
                 </div>
               </CardContent>
@@ -434,5 +516,5 @@ export default function CashierDashboard() {
         </Tabs>
       </div>
     </div>
-  )
+  );
 }

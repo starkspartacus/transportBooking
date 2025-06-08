@@ -15,21 +15,28 @@ export class EmployeeAuthService {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
 
-    // Vérifier l'unicité du code en cherchant dans la description
+    console.log("Generated base code:", code);
+
+    // Vérifier l'unicité du code en cherchant dans la description des activités
     const existingCode = await prisma.activity.findFirst({
       where: {
         description: {
           contains: code,
         },
         companyId: companyId,
+        createdAt: {
+          gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Derniers 30 jours
+        },
       },
     });
 
     // Si le code existe déjà, en générer un nouveau
     if (existingCode) {
+      console.log("Code already exists, generating new one");
       return this.generateEmployeeCode(employeeId, companyId);
     }
 
+    console.log("Final unique code:", code);
     return code;
   }
 

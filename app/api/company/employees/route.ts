@@ -17,8 +17,7 @@ export async function GET(request: NextRequest) {
     // Si pas de companyId fourni, utiliser celui de l'utilisateur
     if (!companyId) {
       if (session.user.role === "PATRON") {
-        companyId =
-          session.user.activeCompanyId || session.user.companyId || null;
+        companyId = session.user.companyId || null;
       } else {
         companyId = session.user.companyId || null;
       }
@@ -142,8 +141,17 @@ export async function POST(request: NextRequest) {
     let targetCompanyId: string | null = companyId || null;
     if (!targetCompanyId) {
       if (session.user.role === "PATRON") {
-        targetCompanyId =
-          session.user.activeCompanyId || session.user.companyId || null;
+        // Pour un patron, utiliser son companyId ou récupérer la première entreprise qu'il possède
+        if (session.user.companyId) {
+          targetCompanyId = session.user.companyId;
+        } else {
+          // Récupérer la première entreprise du patron
+          const userCompany = await prisma.company.findFirst({
+            where: { ownerId: session.user.id },
+            select: { id: true },
+          });
+          targetCompanyId = userCompany?.id || null;
+        }
       } else {
         targetCompanyId = session.user.companyId || null;
       }
@@ -151,9 +159,28 @@ export async function POST(request: NextRequest) {
 
     if (!targetCompanyId) {
       return NextResponse.json(
-        { error: "ID de l'entreprise requis" },
+        { error: "Aucune entreprise trouvée pour cet utilisateur" },
         { status: 400 }
       );
+    }
+
+    console.log("Using companyId:", targetCompanyId);
+
+    // Vérifier que l'utilisateur a accès à cette entreprise
+    if (session.user.role === "PATRON") {
+      const company = await prisma.company.findFirst({
+        where: {
+          id: targetCompanyId,
+          ownerId: session.user.id,
+        },
+      });
+
+      if (!company) {
+        return NextResponse.json(
+          { error: "Entreprise non trouvée ou accès refusé" },
+          { status: 403 }
+        );
+      }
     }
 
     // Validation des champs requis
@@ -210,6 +237,13 @@ export async function POST(request: NextRequest) {
     const defaultPassword = password || Math.random().toString(36).slice(-8);
     const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
+    // Valider le statut
+    const validStatuses = ["ACTIVE", "SUSPENDED"] as const;
+    const employeeStatus =
+      status && validStatuses.includes(status as any)
+        ? (status as "ACTIVE" | "SUSPENDED")
+        : "ACTIVE";
+
     // Créer l'employé avec toutes les informations
     const employee = await prisma.user.create({
       data: {
@@ -221,7 +255,7 @@ export async function POST(request: NextRequest) {
         countryCode,
         password: hashedPassword,
         role: role as "GESTIONNAIRE" | "CAISSIER",
-        status: (status as UserStatus | "SUSPENDED" | "INACTIVE") || "ACTIVE",
+        status: employeeStatus,
         image: image || null,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         gender: gender as "MALE" | "FEMALE" | "OTHER" | null,

@@ -1,11 +1,13 @@
 "use client";
 
+import type React from "react";
+
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -14,57 +16,35 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
 import {
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Calendar,
+  Plus,
+  Search,
+  Filter,
   Eye,
   Edit,
   Trash2,
-  Users,
-  UserPlus,
-  Phone,
-  Mail,
-  MapPin,
-  Calendar,
-  Shield,
   Key,
-  Download,
-  Upload,
-  Camera,
-  QrCode,
+  Clock,
+  Copy,
+  Users,
+  Shield,
 } from "lucide-react";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
-import { useToast } from "@/components/ui/use-toast";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Textarea } from "@/components/ui/textarea";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { CascadingSelect } from "@/components/ui/cascading-select";
-import { PhoneInput } from "@/components/ui/phone-input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
+import { NATIONALITIES, DEPARTMENTS, POSITIONS } from "@/constants/employee";
+import { AFRICAN_COUNTRIES } from "@/constants/countries";
 
 interface Employee {
   id: string;
@@ -75,206 +55,174 @@ interface Employee {
   phone?: string;
   countryCode?: string;
   role: string;
-  employeeRole?: string;
-  status?: string;
-  image?: string;
-  dateOfBirth?: string;
-  gender?: string;
+  status: string;
   nationality?: string;
-  idNumber?: string;
-  idType?: string;
-  address?: string;
-  country?: string;
-  city?: string;
-  commune?: string;
-  emergencyContact?: string;
-  emergencyPhone?: string;
-  hireDate?: string;
-  salary?: number;
   department?: string;
   position?: string;
-  notes?: string;
-  lastLogin?: string;
+  salary?: number;
+  hireDate?: string;
   createdAt: string;
+  companyId?: string;
 }
 
-interface GeneratedCode {
+interface EmployeeCode {
+  employeeId: string;
   code: string;
   expiresAt: string;
-  employee: {
-    id: string;
-    name: string;
-    phone?: string;
-    countryCode?: string;
-  };
+  generatedAt: string;
 }
 
-const employeeSchema = z.object({
-  // Informations de base
-  firstName: z.string().min(2, "Le prénom doit contenir au moins 2 caractères"),
-  lastName: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
-  email: z.string().email("Email invalide"),
-  phone: z.string().min(8, "Numéro de téléphone requis"),
-  countryCode: z.string().min(1, "Indicatif pays requis"),
+// Define a type for the department keys
+type DepartmentKey = keyof typeof POSITIONS;
 
-  // Rôle et statut
-  role: z.enum(["GESTIONNAIRE", "CAISSIER"]),
-  status: z.enum(["ACTIVE", "SUSPENDED", "INACTIVE"]).optional(),
+// Update the EmployeeFormData type
+interface EmployeeFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  countryCode: string;
+  role: "GESTIONNAIRE" | "CAISSIER";
+  status: "ACTIVE" | "SUSPENDED";
+  nationality: string;
+  department: string;
+  position: string;
+  salary: string;
+  hireDate: string;
+  emergencyContact: string;
+  emergencyPhone: string;
+  notes: string;
+}
 
-  // Informations personnelles
-  dateOfBirth: z.date().optional(),
-  gender: z.enum(["MALE", "FEMALE", "OTHER"]).optional(),
-  nationality: z.string().optional(),
-  idType: z
-    .enum(["PASSPORT", "NATIONAL_ID", "DRIVERS_LICENSE", "OTHER"])
-    .optional(),
-  idNumber: z.string().optional(),
+const initialFormData: EmployeeFormData = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  countryCode: "+225",
+  role: "CAISSIER",
+  status: "ACTIVE",
+  nationality: "CI", // Default to Côte d'Ivoire
+  department: "operations", // Default department
+  position: "",
+  salary: "",
+  hireDate: "",
+  emergencyContact: "",
+  emergencyPhone: "",
+  notes: "",
+};
 
-  // Localisation
-  country: z.string().optional(),
-  city: z.string().optional(),
-  commune: z.string().optional(),
-  address: z.string().optional(),
-
-  // Contact d'urgence
-  emergencyContact: z.string().optional(),
-  emergencyPhone: z.string().optional(),
-
-  // Informations professionnelles
-  hireDate: z.date().optional(),
-  salary: z.number().min(0).optional(),
-  department: z.string().optional(),
-  position: z.string().optional(),
-  notes: z.string().optional(),
-});
-
-type EmployeeFormData = z.infer<typeof employeeSchema>;
-
-export default function EmployeeManagement() {
-  const { data: session } = useSession();
-  const router = useRouter();
+export default function EmployeeManagement({
+  companyId,
+}: {
+  companyId?: string;
+}) {
   const { toast } = useToast();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employeeCodes, setEmployeeCodes] = useState<EmployeeCode[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showNewForm, setShowNewForm] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
-    null
-  );
-  const [showCodeDialog, setShowCodeDialog] = useState(false);
-  const [generatedCode, setGeneratedCode] = useState<GeneratedCode | null>(
-    null
-  );
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-
-  const form = useForm<EmployeeFormData>({
-    resolver: zodResolver(employeeSchema),
-    defaultValues: {
-      firstName: "",
-      lastName: "",
-      email: "",
-      phone: "",
-      countryCode: "",
-      role: "GESTIONNAIRE",
-      status: "ACTIVE",
-      gender: "MALE",
-      idType: "NATIONAL_ID",
-      department: "",
-      position: "",
-      notes: "",
-    },
-  });
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState<EmployeeFormData>(initialFormData);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [availablePositions, setAvailablePositions] = useState<string[]>([]);
+  const [generatingCode, setGeneratingCode] = useState<string | null>(null);
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+    // Décompte toutes les minutes
+    const interval = setInterval(() => {
+      setEmployeeCodes((prev) =>
+        prev.filter((code) => new Date(code.expiresAt) > new Date())
+      );
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [companyId]);
+
+  useEffect(() => {
+    if (formData.department && formData.department !== "none") {
+      const departmentPositions =
+        POSITIONS[formData.department as DepartmentKey];
+      setAvailablePositions(departmentPositions?.map((pos) => pos.name) || []);
+      setFormData((prev) => ({ ...prev, position: "" }));
+    } else {
+      setAvailablePositions([]);
+    }
+  }, [formData.department]);
 
   const fetchEmployees = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/company/employees");
-      if (response.ok) {
+      const url = companyId
+        ? `/api/company/employees?companyId=${companyId}`
+        : "/api/company/employees";
+      const response = await fetch(url);
+      const contentType = response.headers.get("content-type");
+      if (
+        response.ok &&
+        contentType &&
+        contentType.includes("application/json")
+      ) {
         const data = await response.json();
-        setEmployees(Array.isArray(data) ? data : []);
+        setEmployees(data);
       } else {
-        console.error("Error fetching employees:", response.statusText);
-        setEmployees([]);
+        const errorText = await response.text();
+        console.error("Non-JSON response received:", errorText);
+        toast({
+          title: "Erreur",
+          description: "Erreur lors de la récupération des employés",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Error fetching employees:", error);
-      setEmployees([]);
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la récupération des employés",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleImageUpload = async (file: File) => {
-    if (!file) return;
-
-    setUploadingImage(true);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      // Créer une preview locale
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-
-      // Ici vous pouvez ajouter la logique d'upload vers votre service de stockage
-      // Pour l'instant, on simule juste l'upload
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      toast({
-        title: "Photo uploadée",
-        description: "La photo de profil a été uploadée avec succès",
-      });
-    } catch (error) {
-      console.error("Error uploading image:", error);
-      toast({
-        title: "Erreur",
-        description: "Erreur lors de l'upload de la photo",
-        variant: "destructive",
-      });
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const onSubmit = async (data: EmployeeFormData) => {
-    try {
-      const formattedData = {
-        ...data,
-        name: `${data.firstName} ${data.lastName}`,
-        dateOfBirth: data.dateOfBirth?.toISOString(),
-        hireDate: data.hireDate?.toISOString(),
-        image: imagePreview,
+      const payload = {
+        ...formData,
+        salary: formData.salary
+          ? Number.parseFloat(formData.salary)
+          : undefined,
+        companyId,
+        // Ne pas envoyer department et position s'ils sont vides ou "none"
+        department:
+          formData.department === "none" ? undefined : formData.department,
+        position: !formData.position ? undefined : formData.position,
       };
 
       const response = await fetch("/api/company/employees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formattedData),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
-        const newEmployee = await response.json();
         toast({
-          title: "Employé ajouté",
-          description: "L'employé a été ajouté avec succès",
+          title: "Succès",
+          description: "Employé créé avec succès",
         });
+        setIsDialogOpen(false);
+        setFormData(initialFormData);
         fetchEmployees();
-        setShowNewForm(false);
-        form.reset();
-        setImagePreview(null);
-
-        // Proposer de générer un code d'accès
-        setSelectedEmployee(newEmployee);
-        setShowCodeDialog(true);
       } else {
-        const error = await response.json();
+        const errorData = await response.json();
         toast({
           title: "Erreur",
-          description: error.error || "Erreur lors de l'ajout de l'employé",
+          description:
+            errorData.error || "Erreur lors de la création de l'employé",
           variant: "destructive",
         });
       }
@@ -282,13 +230,14 @@ export default function EmployeeManagement() {
       console.error("Error creating employee:", error);
       toast({
         title: "Erreur",
-        description: "Erreur lors de l'ajout de l'employé",
+        description: "Erreur lors de la création de l'employé",
         variant: "destructive",
       });
     }
   };
 
   const generateAccessCode = async (employeeId: string) => {
+    setGeneratingCode(employeeId);
     try {
       const response = await fetch(
         `/api/company/employees/${employeeId}/generate-code`,
@@ -299,16 +248,31 @@ export default function EmployeeManagement() {
 
       if (response.ok) {
         const data = await response.json();
-        setGeneratedCode(data);
+
+        // Ajouter le code à la liste des codes générés
+        const newCode: EmployeeCode = {
+          employeeId,
+          code: data.code,
+          expiresAt: data.expiresAt,
+          generatedAt: new Date().toISOString(),
+        };
+
+        setEmployeeCodes((prev) => {
+          // Supprimer l'ancien code s'il existe
+          const filtered = prev.filter((c) => c.employeeId !== employeeId);
+          return [...filtered, newCode];
+        });
+
         toast({
           title: "Code généré",
-          description: "Code d'accès généré avec succès",
+          description: `Code d'accès généré: ${data.code}`,
         });
       } else {
-        const error = await response.json();
+        const errorData = await response.json();
         toast({
           title: "Erreur",
-          description: error.error || "Erreur lors de la génération du code",
+          description:
+            errorData.error || "Erreur lors de la génération du code",
           variant: "destructive",
         });
       }
@@ -319,975 +283,755 @@ export default function EmployeeManagement() {
         description: "Erreur lors de la génération du code",
         variant: "destructive",
       });
+    } finally {
+      setGeneratingCode(null);
     }
   };
 
-  const handleViewEmployee = (employeeId: string) => {
-    router.push(`/patron/employees/${employeeId}`);
-  };
-
-  const handleEditEmployee = (employeeId: string) => {
-    router.push(`/patron/employees/${employeeId}/edit`);
-  };
-
-  const handleDeleteEmployee = async (employeeId: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cet employé ?")) return;
-
+  const copyToClipboard = async (text: string) => {
     try {
-      const response = await fetch(`/api/company/employees/${employeeId}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        toast({
-          title: "Employé supprimé",
-          description: "L'employé a été supprimé avec succès",
-        });
-        fetchEmployees();
-      } else {
-        const error = await response.json();
-        toast({
-          title: "Erreur",
-          description:
-            error.error || "Erreur lors de la suppression de l'employé",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("Error deleting employee:", error);
+      await navigator.clipboard.writeText(text);
       toast({
-        title: "Erreur",
-        description: "Erreur lors de la suppression de l'employé",
-        variant: "destructive",
+        title: "Copié",
+        description: "Code copié dans le presse-papiers",
       });
+    } catch (error) {
+      console.error("Error copying to clipboard:", error);
     }
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      return format(new Date(dateString), "dd MMM yyyy", { locale: fr });
-    } catch {
-      return "Date invalide";
-    }
+  const getTimeRemaining = (expiresAt: string) => {
+    const now = new Date();
+    const expiry = new Date(expiresAt);
+    const diff = expiry.getTime() - now.getTime();
+
+    if (diff <= 0) return null;
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (days > 0) return `${days}j ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
   };
 
-  const getStatusBadge = (status?: string) => {
-    switch (status) {
-      case "ACTIVE":
-        return (
-          <Badge className="bg-green-100 text-green-800 border-green-200">
-            Actif
-          </Badge>
-        );
-      case "SUSPENDED":
-        return (
-          <Badge className="bg-red-100 text-red-800 border-red-200">
-            Suspendu
-          </Badge>
-        );
-      case "INACTIVE":
-        return (
-          <Badge className="bg-gray-100 text-gray-800 border-gray-200">
-            Inactif
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">Non défini</Badge>;
-    }
+  const getEmployeeCode = (employeeId: string) => {
+    return employeeCodes.find((code) => code.employeeId === employeeId);
   };
 
-  const getRoleBadge = (role: string) => {
-    switch (role) {
-      case "GESTIONNAIRE":
-        return (
-          <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-            <Shield className="h-3 w-3 mr-1" />
-            Gestionnaire
-          </Badge>
-        );
-      case "CAISSIER":
-        return (
-          <Badge className="bg-purple-100 text-purple-800 border-purple-200">
-            <Users className="h-3 w-3 mr-1" />
-            Caissier
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{role}</Badge>;
-    }
+  const getDepartmentName = (departmentId?: string) => {
+    if (!departmentId) return "Non défini";
+    const department = DEPARTMENTS.find((d) => d.id === departmentId);
+    return department?.name || departmentId;
   };
 
+  const getNationalityName = (nationalityCode?: string) => {
+    if (!nationalityCode) return "Non définie";
+    const nationality = NATIONALITIES.find((n) => n.code === nationalityCode);
+    return nationality?.name || nationalityCode;
+  };
+
+  const filteredEmployees = employees.filter((employee) => {
+    const matchesSearch =
+      employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (employee.phone && employee.phone.includes(searchTerm));
+
+    const matchesDepartment =
+      departmentFilter === "all" || employee.department === departmentFilter;
+    const matchesStatus =
+      statusFilter === "all" || employee.status === statusFilter;
+
+    return matchesSearch && matchesDepartment && matchesStatus;
+  });
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setDepartmentFilter("all");
+    setStatusFilter("all");
+  };
+
+  // Statistiques
+  const totalEmployees = employees.length;
+  const activeEmployees = employees.filter(
+    (emp) => emp.status === "ACTIVE"
+  ).length;
   const gestionnaires = employees.filter(
-    (emp) => emp.role === "GESTIONNAIRE" || emp.employeeRole === "GESTIONNAIRE"
-  );
-  const caissiers = employees.filter(
-    (emp) => emp.role === "CAISSIER" || emp.employeeRole === "CAISSIER"
-  );
+    (emp) => emp.role === "GESTIONNAIRE"
+  ).length;
+  const caissiers = employees.filter((emp) => emp.role === "CAISSIER").length;
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <>
-      <Card className="shadow-lg border-0">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+    <div className="space-y-6">
+      {/* Header avec statistiques */}
+      <Card className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white border-0 shadow-2xl">
+        <CardHeader>
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <CardTitle className="flex items-center gap-3 text-xl">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Users className="h-6 w-6 text-blue-600" />
+            <CardTitle className="flex items-center gap-3 text-2xl font-bold">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                <Users className="h-8 w-8" />
               </div>
-              Gestion des employés ({employees.length})
+              <div>
+                <h1 className="text-2xl font-bold">Gestion des employés</h1>
+                <p className="text-blue-100 text-sm font-normal">
+                  Gérez votre équipe en toute simplicité
+                </p>
+              </div>
             </CardTitle>
-            <Button
-              onClick={() => setShowNewForm(true)}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md"
-            >
-              <UserPlus className="h-4 w-4 mr-2" />
-              Ajouter un employé
-            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  className="bg-white text-blue-600 hover:bg-blue-50 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                  size="lg"
+                >
+                  <Plus className="h-5 w-5 mr-2" />
+                  Ajouter un employé
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Ajouter un nouvel employé</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Informations personnelles */}
+                  <div className="space-y-4">
+                    <h3 className="font-medium text-lg">
+                      Informations personnelles
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="firstName">Prénom *</Label>
+                        <Input
+                          id="firstName"
+                          value={formData.firstName}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              firstName: e.target.value,
+                            }))
+                          }
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="lastName">Nom *</Label>
+                        <Input
+                          id="lastName"
+                          value={formData.lastName}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              lastName: e.target.value,
+                            }))
+                          }
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              email: e.target.value,
+                            }))
+                          }
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="phone">Téléphone</Label>
+                        <div className="flex gap-2">
+                          <Select
+                            value={formData.countryCode}
+                            onValueChange={(value) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                countryCode: value,
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="w-24">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {AFRICAN_COUNTRIES.map((country) => (
+                                <SelectItem
+                                  key={country.code}
+                                  value={country.code}
+                                >
+                                  {country.flag} {country.code}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            id="phone"
+                            value={formData.phone}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                phone: e.target.value,
+                              }))
+                            }
+                            placeholder="0123456789"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="nationality">Nationalité</Label>
+                        <Select
+                          value={formData.nationality}
+                          onValueChange={(value) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              nationality: value,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner une nationalité" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {NATIONALITIES.map((nationality) => (
+                              <SelectItem
+                                key={nationality.code}
+                                value={nationality.code}
+                              >
+                                {nationality.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Informations professionnelles */}
+                  <div className="space-y-4">
+                    <h3 className="font-medium text-lg">
+                      Informations professionnelles
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="role">Rôle *</Label>
+                        <Select
+                          value={formData.role}
+                          onValueChange={(value: "GESTIONNAIRE" | "CAISSIER") =>
+                            setFormData((prev) => ({ ...prev, role: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="CAISSIER">
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4" />
+                                Caissier
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="GESTIONNAIRE">
+                              <div className="flex items-center gap-2">
+                                <Shield className="h-4 w-4" />
+                                Gestionnaire
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="status">Statut</Label>
+                        <Select
+                          value={formData.status}
+                          onValueChange={(value: "ACTIVE" | "SUSPENDED") =>
+                            setFormData((prev) => ({ ...prev, status: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ACTIVE">🟢 Actif</SelectItem>
+                            <SelectItem value="SUSPENDED">
+                              🔴 Suspendu
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="department">Département</Label>
+                        <Select
+                          value={formData.department}
+                          onValueChange={(value) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              department: value,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un département" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">
+                              Aucun département
+                            </SelectItem>
+                            {DEPARTMENTS.map((dept) => (
+                              <SelectItem key={dept.id} value={dept.id}>
+                                {dept.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="position">Poste</Label>
+                        <Select
+                          value={formData.position}
+                          onValueChange={(value) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              position: value,
+                            }))
+                          }
+                          disabled={
+                            !formData.department ||
+                            formData.department === "none"
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un poste" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">
+                              Aucun poste spécifique
+                            </SelectItem>
+                            {availablePositions.map((position) => (
+                              <SelectItem key={position} value={position}>
+                                {position}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="salary">Salaire (FCFA)</Label>
+                        <Input
+                          id="salary"
+                          type="number"
+                          value={formData.salary}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              salary: e.target.value,
+                            }))
+                          }
+                          placeholder="500000"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="hireDate">Date d'embauche</Label>
+                        <Input
+                          id="hireDate"
+                          type="date"
+                          value={formData.hireDate}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              hireDate: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Contact d'urgence */}
+                  <div className="space-y-4">
+                    <h3 className="font-medium text-lg">Contact d'urgence</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="emergencyContact">Nom du contact</Label>
+                        <Input
+                          id="emergencyContact"
+                          value={formData.emergencyContact}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              emergencyContact: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="emergencyPhone">
+                          Téléphone d'urgence
+                        </Label>
+                        <Input
+                          id="emergencyPhone"
+                          value={formData.emergencyPhone}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              emergencyPhone: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="notes">Notes</Label>
+                    <Input
+                      id="notes"
+                      value={formData.notes}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          notes: e.target.value,
+                        }))
+                      }
+                      placeholder="Notes additionnelles..."
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsDialogOpen(false)}
+                    >
+                      Annuler
+                    </Button>
+                    <Button type="submit">Créer l'employé</Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardHeader>
-        <CardContent className="p-6">
-          {showNewForm ? (
-            <Card className="mb-6 border-2 border-dashed border-blue-200 bg-blue-50/30">
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <UserPlus className="h-5 w-5 text-blue-600" />
-                  Nouvel employé
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Form {...form}>
-                  <form
-                    onSubmit={form.handleSubmit(onSubmit)}
-                    className="space-y-6"
-                  >
-                    {/* Photo de profil */}
-                    <div className="flex flex-col items-center gap-4 p-6 bg-gray-50 rounded-lg">
-                      <div className="relative">
-                        <Avatar className="h-24 w-24 border-4 border-white shadow-lg">
-                          <AvatarImage src={imagePreview || ""} />
-                          <AvatarFallback className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white text-lg">
-                            <Camera className="h-8 w-8" />
-                          </AvatarFallback>
-                        </Avatar>
-                        <label className="absolute -bottom-2 -right-2 p-2 bg-blue-600 text-white rounded-full cursor-pointer hover:bg-blue-700 transition-colors shadow-lg">
-                          <Upload className="h-4 w-4" />
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleImageUpload(file);
-                            }}
-                          />
-                        </label>
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        Photo de profil (optionnelle)
-                      </p>
-                    </div>
+      </Card>
 
-                    {/* Informations personnelles */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-800">
-                          <Users className="h-5 w-5 text-blue-600" />
-                          Informations personnelles
-                        </h3>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="firstName"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Prénom *</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Prénom" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="lastName"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Nom *</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="Nom de famille"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        <FormField
-                          control={form.control}
-                          name="dateOfBirth"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-col">
-                              <FormLabel>Date de naissance</FormLabel>
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <FormControl>
-                                    <Button
-                                      variant="outline"
-                                      className={cn(
-                                        "w-full pl-3 text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                      )}
-                                    >
-                                      {field.value ? (
-                                        format(field.value, "dd/MM/yyyy")
-                                      ) : (
-                                        <span>Sélectionner une date</span>
-                                      )}
-                                      <Calendar className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                  </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  className="w-auto p-0"
-                                  align="start"
-                                >
-                                  <CalendarComponent
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    disabled={(date) =>
-                                      date > new Date() ||
-                                      date < new Date("1900-01-01")
-                                    }
-                                    initialFocus
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="gender"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Genre</FormLabel>
-                                <Select
-                                  onValueChange={field.onChange}
-                                  value={field.value || "MALE"}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Sélectionner le genre" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="MALE">
-                                      Masculin
-                                    </SelectItem>
-                                    <SelectItem value="FEMALE">
-                                      Féminin
-                                    </SelectItem>
-                                    <SelectItem value="OTHER">Autre</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="nationality"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Nationalité</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Nationalité" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="idType"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Type de pièce d'identité</FormLabel>
-                                <Select
-                                  onValueChange={field.onChange}
-                                  value={field.value || "NATIONAL_ID"}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Type de pièce" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="NATIONAL_ID">
-                                      Carte d'identité
-                                    </SelectItem>
-                                    <SelectItem value="PASSPORT">
-                                      Passeport
-                                    </SelectItem>
-                                    <SelectItem value="DRIVERS_LICENSE">
-                                      Permis de conduire
-                                    </SelectItem>
-                                    <SelectItem value="OTHER">Autre</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="idNumber"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Numéro de pièce</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Numéro" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-800">
-                          <Mail className="h-5 w-5 text-green-600" />
-                          Contact & Localisation
-                        </h3>
-
-                        <FormField
-                          control={form.control}
-                          name="email"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Email *</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="email"
-                                  placeholder="email@example.com"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <PhoneInput
-                          countryCodeValue={form.watch("countryCode") || ""}
-                          phoneValue={form.watch("phone") || ""}
-                          onCountryCodeChange={(value) =>
-                            form.setValue("countryCode", value)
-                          }
-                          onPhoneChange={(value) =>
-                            form.setValue("phone", value)
-                          }
-                        />
-
-                        <CascadingSelect
-                          countryValue={form.watch("country") || ""}
-                          cityValue={form.watch("city") || ""}
-                          communeValue={form.watch("commune") || ""}
-                          onCountryChange={(value) =>
-                            form.setValue("country", value)
-                          }
-                          onCityChange={(value) => form.setValue("city", value)}
-                          onCommuneChange={(value) =>
-                            form.setValue("commune", value)
-                          }
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="address"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Adresse complète</FormLabel>
-                              <FormControl>
-                                <Textarea
-                                  placeholder="Adresse détaillée"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <Separator />
-
-                        <h4 className="flex items-center gap-2 font-medium text-gray-700">
-                          <Phone className="h-4 w-4 text-red-500" />
-                          Contact d'urgence
-                        </h4>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="emergencyContact"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Nom du contact</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Nom complet" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="emergencyPhone"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Téléphone d'urgence</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="Numéro de téléphone"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Informations professionnelles */}
-                    <div className="space-y-4 p-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
-                      <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-800">
-                        <Shield className="h-5 w-5 text-purple-600" />
-                        Informations professionnelles
-                      </h3>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="role"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Rôle *</FormLabel>
-                              <Select
-                                onValueChange={field.onChange}
-                                value={field.value || "GESTIONNAIRE"}
-                              >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Sélectionner le rôle" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="GESTIONNAIRE">
-                                    <div className="flex items-center gap-2">
-                                      <Shield className="h-4 w-4" />
-                                      Gestionnaire
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="CAISSIER">
-                                    <div className="flex items-center gap-2">
-                                      <Users className="h-4 w-4" />
-                                      Caissier
-                                    </div>
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="status"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Statut</FormLabel>
-                              <Select
-                                onValueChange={field.onChange}
-                                value={field.value || "ACTIVE"}
-                              >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Sélectionner le statut" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="ACTIVE">Actif</SelectItem>
-                                  <SelectItem value="SUSPENDED">
-                                    Suspendu
-                                  </SelectItem>
-                                  <SelectItem value="INACTIVE">
-                                    Inactif
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="hireDate"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-col">
-                              <FormLabel>Date d'embauche</FormLabel>
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <FormControl>
-                                    <Button
-                                      variant="outline"
-                                      className={cn(
-                                        "w-full pl-3 text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                      )}
-                                    >
-                                      {field.value ? (
-                                        format(field.value, "dd/MM/yyyy")
-                                      ) : (
-                                        <span>Date d'embauche</span>
-                                      )}
-                                      <Calendar className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                  </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  className="w-auto p-0"
-                                  align="start"
-                                >
-                                  <CalendarComponent
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    disabled={(date) => date > new Date()}
-                                    initialFocus
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="department"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Département</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="Ex: Transport, Administration"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="position"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Poste</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="Ex: Chef d'équipe, Agent"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="salary"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Salaire (XOF)</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  placeholder="Salaire mensuel"
-                                  {...field}
-                                  onChange={(e) =>
-                                    field.onChange(
-                                      e.target.value
-                                        ? Number(e.target.value)
-                                        : undefined
-                                    )
-                                  }
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <FormField
-                        control={form.control}
-                        name="notes"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Notes additionnelles</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Informations complémentaires, compétences particulières, etc."
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-4">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setShowNewForm(false);
-                          form.reset();
-                          setImagePreview(null);
-                        }}
-                      >
-                        Annuler
-                      </Button>
-                      <Button
-                        type="submit"
-                        disabled={form.formState.isSubmitting}
-                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
-                      >
-                        {form.formState.isSubmitting
-                          ? "Ajout en cours..."
-                          : "Ajouter l'employé"}
-                      </Button>
-                    </div>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Chargement des employés...</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Statistiques améliorées */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-3xl font-bold text-blue-700">
-                          {employees.length}
-                        </p>
-                        <p className="text-sm text-blue-600">Total employés</p>
-                      </div>
-                      <Users className="h-8 w-8 text-blue-500" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-3xl font-bold text-purple-700">
-                          {gestionnaires.length}
-                        </p>
-                        <p className="text-sm text-purple-600">Gestionnaires</p>
-                      </div>
-                      <Shield className="h-8 w-8 text-purple-500" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-3xl font-bold text-green-700">
-                          {caissiers.length}
-                        </p>
-                        <p className="text-sm text-green-600">Caissiers</p>
-                      </div>
-                      <Users className="h-8 w-8 text-green-500" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-3xl font-bold text-orange-700">
-                          {
-                            employees.filter((emp) => emp.status === "ACTIVE")
-                              .length
-                          }
-                        </p>
-                        <p className="text-sm text-orange-600">Actifs</p>
-                      </div>
-                      <div className="h-8 w-8 bg-green-500 rounded-full flex items-center justify-center">
-                        <div className="h-3 w-3 bg-white rounded-full"></div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+      {/* Statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-bold text-blue-700">
+                  {totalEmployees}
+                </p>
+                <p className="text-sm text-blue-600">Total employés</p>
               </div>
-
-              {/* Liste des employés améliorée */}
-              {employees.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="p-6 bg-gray-50 rounded-full w-24 h-24 mx-auto mb-4 flex items-center justify-center">
-                    <Users className="h-12 w-12 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Aucun employé trouvé
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Commencez par ajouter votre premier employé
-                  </p>
-                  <Button
-                    onClick={() => setShowNewForm(true)}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Ajouter un employé
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {employees.map((employee) => (
-                    <Card
-                      key={employee.id}
-                      className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500"
-                    >
-                      <CardContent className="p-6">
-                        <div className="flex items-start gap-4">
-                          <Avatar className="h-16 w-16 border-2 border-gray-200">
-                            <AvatarImage
-                              src={employee.image || "/placeholder.svg"}
-                            />
-                            <AvatarFallback className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white font-semibold">
-                              {employee.name
-                                ?.split(" ")
-                                .map((n) => n[0])
-                                .join("")
-                                .toUpperCase() || "EM"}
-                            </AvatarFallback>
-                          </Avatar>
-
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold text-lg text-gray-900 truncate">
-                                {employee.name}
-                              </h3>
-                              {getRoleBadge(
-                                employee.role ||
-                                  employee.employeeRole ||
-                                  "Non défini"
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 mb-2">
-                              {getStatusBadge(employee.status)}
-                              {employee.department && (
-                                <Badge variant="outline" className="text-xs">
-                                  {employee.department}
-                                </Badge>
-                              )}
-                            </div>
-
-                            <div className="space-y-1 text-sm text-gray-600">
-                              <div className="flex items-center gap-2">
-                                <Mail className="h-4 w-4" />
-                                <span className="truncate">
-                                  {employee.email}
-                                </span>
-                              </div>
-                              {employee.phone && (
-                                <div className="flex items-center gap-2">
-                                  <Phone className="h-4 w-4" />
-                                  <span>
-                                    {employee.countryCode} {employee.phone}
-                                  </span>
-                                </div>
-                              )}
-                              {(employee.city || employee.country) && (
-                                <div className="flex items-center gap-2">
-                                  <MapPin className="h-4 w-4" />
-                                  <span>
-                                    {employee.city}, {employee.country}
-                                  </span>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4" />
-                                <span>
-                                  Créé le {formatDate(employee.createdAt)}
-                                </span>
-                              </div>
-                              {employee.lastLogin && (
-                                <div className="flex items-center gap-2">
-                                  <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                                  <span>
-                                    Dernière connexion:{" "}
-                                    {formatDate(employee.lastLogin)}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-between items-center mt-4 pt-4 border-t">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedEmployee(employee);
-                              generateAccessCode(employee.id);
-                            }}
-                            className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                          >
-                            <Key className="h-4 w-4 mr-1" />
-                            Code d'accès
-                          </Button>
-
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleViewEmployee(employee.id)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleEditEmployee(employee.id)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteEmployee(employee.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
+              <Users className="h-8 w-8 text-blue-500" />
             </div>
-          )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-bold text-green-700">
+                  {activeEmployees}
+                </p>
+                <p className="text-sm text-green-600">Actifs</p>
+              </div>
+              <div className="h-8 w-8 bg-green-500 rounded-full flex items-center justify-center">
+                <div className="h-3 w-3 bg-white rounded-full"></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-bold text-purple-700">
+                  {gestionnaires}
+                </p>
+                <p className="text-sm text-purple-600">Gestionnaires</p>
+              </div>
+              <Shield className="h-8 w-8 text-purple-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-bold text-orange-700">
+                  {caissiers}
+                </p>
+                <p className="text-sm text-orange-600">Caissiers</p>
+              </div>
+              <Users className="h-8 w-8 text-orange-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filtres */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Rechercher par nom, email ou téléphone..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <Select
+              value={departmentFilter}
+              onValueChange={setDepartmentFilter}
+            >
+              <SelectTrigger className="w-48">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Département" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les départements</SelectItem>
+                {DEPARTMENTS.map((dept) => (
+                  <SelectItem key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-32">
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous</SelectItem>
+                <SelectItem value="ACTIVE">Actif</SelectItem>
+                <SelectItem value="SUSPENDED">Suspendu</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={resetFilters}>
+              Réinitialiser
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Dialog pour le code d'accès */}
-      <Dialog open={showCodeDialog} onOpenChange={setShowCodeDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <QrCode className="h-5 w-5 text-blue-600" />
-              Code d'accès généré
-            </DialogTitle>
-            <DialogDescription>
-              Code d'accès temporaire pour {selectedEmployee?.name}
-            </DialogDescription>
-          </DialogHeader>
+      {/* Liste des employés */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredEmployees.map((employee) => {
+          const employeeCode = getEmployeeCode(employee.id);
+          const timeRemaining = employeeCode
+            ? getTimeRemaining(employeeCode.expiresAt)
+            : null;
 
-          {generatedCode && (
-            <div className="space-y-4">
-              <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg text-center">
-                <div className="text-3xl font-mono font-bold text-blue-700 mb-2 tracking-wider">
-                  {generatedCode.code}
+          return (
+            <Card
+              key={employee.id}
+              className="hover:shadow-lg transition-shadow border-l-4 border-l-blue-500"
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12">
+                      <AvatarFallback className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white font-semibold">
+                        {employee.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <CardTitle className="text-lg">{employee.name}</CardTitle>
+                      <Badge
+                        variant={
+                          employee.role === "GESTIONNAIRE"
+                            ? "default"
+                            : "secondary"
+                        }
+                        className={
+                          employee.role === "GESTIONNAIRE"
+                            ? "bg-blue-100 text-blue-800 border-blue-200"
+                            : "bg-purple-100 text-purple-800 border-purple-200"
+                        }
+                      >
+                        {employee.role === "GESTIONNAIRE" ? (
+                          <Shield className="h-3 w-3 mr-1" />
+                        ) : (
+                          <Users className="h-3 w-3 mr-1" />
+                        )}
+                        {employee.role === "GESTIONNAIRE"
+                          ? "Gestionnaire"
+                          : "Caissier"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <Badge
+                    variant={
+                      employee.status === "ACTIVE" ? "default" : "destructive"
+                    }
+                    className={
+                      employee.status === "ACTIVE"
+                        ? "bg-green-100 text-green-800 border-green-200"
+                        : "bg-red-100 text-red-800 border-red-200"
+                    }
+                  >
+                    {employee.status === "ACTIVE" ? "Actif" : "Suspendu"}
+                  </Badge>
                 </div>
-                <p className="text-sm text-blue-600">
-                  Expire le{" "}
-                  {format(
-                    new Date(generatedCode.expiresAt),
-                    "dd/MM/yyyy à HH:mm",
-                    { locale: fr }
+              </CardHeader>
+
+              <CardContent className="space-y-3">
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-gray-500" />
+                    <span className="truncate">{employee.email}</span>
+                  </div>
+                  {employee.phone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-gray-500" />
+                      <span>
+                        {employee.countryCode} {employee.phone}
+                      </span>
+                    </div>
                   )}
-                </p>
-              </div>
+                  {employee.nationality && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-gray-500" />
+                      <span>{getNationalityName(employee.nationality)}</span>
+                    </div>
+                  )}
+                  {employee.department && (
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-gray-500" />
+                      <span>{getDepartmentName(employee.department)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-gray-500" />
+                    <span>
+                      Créé le{" "}
+                      {new Date(employee.createdAt).toLocaleDateString("fr-FR")}
+                    </span>
+                  </div>
+                </div>
 
-              <div className="space-y-2 text-sm text-gray-600">
-                <p>
-                  <strong>Instructions:</strong>
-                </p>
-                <ul className="list-disc list-inside space-y-1 ml-2">
-                  <li>Partagez ce code avec l'employé</li>
-                  <li>
-                    L'employé doit utiliser son numéro de téléphone et ce code
-                    pour se connecter
-                  </li>
-                  <li>Le code expire automatiquement après 30 jours</li>
-                  <li>Un nouveau code peut être généré à tout moment</li>
-                </ul>
-              </div>
+                {/* Code d'accès */}
+                {employeeCode && timeRemaining ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Key className="h-4 w-4 text-blue-600" />
+                        <span className="text-sm font-medium text-blue-800">
+                          Code d'accès
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => copyToClipboard(employeeCode.code)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="font-mono text-lg font-bold text-blue-900 bg-white px-2 py-1 rounded border">
+                      {employeeCode.code}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <Clock className="h-3 w-3 text-orange-500" />
+                      <span className="text-orange-600">
+                        Expire dans {timeRemaining}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => generateAccessCode(employee.id)}
+                    disabled={generatingCode === employee.id}
+                    className="w-full"
+                  >
+                    <Key className="h-4 w-4 mr-2" />
+                    {generatingCode === employee.id
+                      ? "Génération..."
+                      : "Code d'accès"}
+                  </Button>
+                )}
+
+                <Separator />
+
+                <div className="flex justify-between">
+                  <Button variant="ghost" size="sm">
+                    <Eye className="h-4 w-4 mr-2" />
+                    Voir
+                  </Button>
+                  <Button variant="ghost" size="sm">
+                    <Edit className="h-4 w-4 mr-2" />
+                    Modifier
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {filteredEmployees.length === 0 && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center py-8">
+              <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Aucun employé trouvé
+              </h3>
+              <p className="text-gray-600">
+                {searchTerm ||
+                departmentFilter !== "all" ||
+                statusFilter !== "all"
+                  ? "Aucun employé ne correspond aux critères de recherche."
+                  : "Commencez par ajouter votre premier employé."}
+              </p>
             </div>
-          )}
-
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setShowCodeDialog(false)}>
-              Fermer
-            </Button>
-            {generatedCode && (
-              <Button
-                onClick={() => {
-                  navigator.clipboard.writeText(generatedCode.code);
-                  toast({
-                    title: "Code copié",
-                    description: "Le code a été copié dans le presse-papiers",
-                  });
-                }}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Copier le code
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

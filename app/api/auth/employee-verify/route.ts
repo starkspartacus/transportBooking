@@ -6,6 +6,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { phone, countryCode, code, role } = body;
 
+    console.log("Verifying employee code:", { phone, countryCode, code, role });
+
     // Validation des données
     if (!phone || !countryCode || !code) {
       return NextResponse.json(
@@ -28,11 +30,19 @@ export async function POST(request: NextRequest) {
     });
 
     if (!employee || !employee.companyId) {
+      console.log("Employee not found or inactive");
       return NextResponse.json(
         { error: "Employé non trouvé ou inactif" },
         { status: 404 }
       );
     }
+
+    console.log(
+      "Employee found:",
+      employee.name,
+      "Company:",
+      employee.companyId
+    );
 
     // Chercher le code dans les activités récentes (derniers 30 jours)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -54,14 +64,18 @@ export async function POST(request: NextRequest) {
     });
 
     if (!codeActivity) {
+      console.log("Code not found in activities");
       return NextResponse.json(
         { error: "Code invalide ou expiré" },
         { status: 401 }
       );
     }
 
+    console.log("Code activity found:", codeActivity.id);
+
     // Vérifier que l'activité contient bien le code de l'employé
     if (!codeActivity.description.includes(employee.id)) {
+      console.log("Code does not match employee ID");
       return NextResponse.json(
         { error: "Code non valide pour cet employé" },
         { status: 401 }
@@ -71,13 +85,15 @@ export async function POST(request: NextRequest) {
     // Enregistrer la tentative de connexion
     await prisma.activity.create({
       data: {
-        type: "COMPANY_UPDATED",
+        type: "USER_LOGIN",
         description: `Vérification code réussie: ${employee.name} (${employee.phone}) - Code: ${code}`,
         status: "SUCCESS",
         userId: employee.id,
         companyId: employee.companyId,
       },
     });
+
+    console.log("Code verification successful");
 
     return NextResponse.json({
       success: true,
@@ -93,7 +109,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Erreur lors de la vérification du code:", error);
     return NextResponse.json(
-      { error: "Erreur interne du serveur" },
+      {
+        error: "Erreur interne du serveur",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
       { status: 500 }
     );
   }
