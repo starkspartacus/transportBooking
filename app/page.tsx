@@ -1,8 +1,8 @@
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { MapPin, Clock, Users, Shield, Zap } from "lucide-react"
-import Link from "next/link"
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { MapPin, Clock, Users, Shield, Zap } from "lucide-react";
+import Link from "next/link";
 
 export default function HomePage() {
   return (
@@ -24,8 +24,11 @@ export default function HomePage() {
                 <Button variant="outline">Se connecter</Button>
               </Link>
               <Link href="/auth/signup">
-                <Button className="bg-gradient-to-r from-blue-600 to-green-600">S'inscrire</Button>
+                <Button className="bg-gradient-to-r from-blue-600 to-green-600">
+                  S'inscrire
+                </Button>
               </Link>
+              
             </div>
           </div>
         </div>
@@ -38,12 +41,16 @@ export default function HomePage() {
             Voyagez en toute simplicité
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-            Réservez vos billets de transport en ligne, payez à la gare ou directement sur la plateforme. Une expérience
-            de voyage moderne et sécurisée.
+            Réservez vos billets de transport en ligne, payez à la gare ou
+            directement sur la plateforme. Une expérience de voyage moderne et
+            sécurisée.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/search">
-              <Button size="lg" className="bg-gradient-to-r from-blue-600 to-green-600 text-lg px-8 py-4">
+              <Button
+                size="lg"
+                className="bg-gradient-to-r from-blue-600 to-green-600 text-lg px-8 py-4"
+              >
                 Rechercher un voyage
               </Button>
             </Link>
@@ -59,7 +66,9 @@ export default function HomePage() {
       {/* Features */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">Pourquoi choisir TransportApp ?</h2>
+          <h2 className="text-3xl font-bold text-center mb-12">
+            Pourquoi choisir TransportApp ?
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <Card className="text-center border-0 shadow-lg">
               <CardHeader>
@@ -70,7 +79,8 @@ export default function HomePage() {
               </CardHeader>
               <CardContent>
                 <p className="text-gray-600">
-                  Réservez vos billets en quelques clics et recevez votre QR code immédiatement.
+                  Réservez vos billets en quelques clics et recevez votre QR
+                  code immédiatement.
                 </p>
               </CardContent>
             </Card>
@@ -84,7 +94,8 @@ export default function HomePage() {
               </CardHeader>
               <CardContent>
                 <p className="text-gray-600">
-                  Payez en ligne ou à la gare. Vos données sont protégées par un cryptage de niveau bancaire.
+                  Payez en ligne ou à la gare. Vos données sont protégées par un
+                  cryptage de niveau bancaire.
                 </p>
               </CardContent>
             </Card>
@@ -98,7 +109,8 @@ export default function HomePage() {
               </CardHeader>
               <CardContent>
                 <p className="text-gray-600">
-                  Notre équipe est disponible 24h/24 pour vous accompagner dans vos voyages.
+                  Notre équipe est disponible 24h/24 pour vous accompagner dans
+                  vos voyages.
                 </p>
               </CardContent>
             </Card>
@@ -109,13 +121,39 @@ export default function HomePage() {
       {/* Popular Routes */}
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">Destinations populaires</h2>
+          <h2 className="text-3xl font-bold text-center mb-12">
+            Destinations populaires
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { from: "Dakar", to: "Thiès", price: "2500", duration: "1h30", company: "Transport Express" },
-              { from: "Abidjan", to: "Bouaké", price: "3500", duration: "3h45", company: "Côte Transport" },
-              { from: "Lomé", to: "Kara", price: "4000", duration: "5h20", company: "Togo Bus" },
-              { from: "Cotonou", to: "Parakou", price: "5500", duration: "4h15", company: "Bénin Express" },
+              {
+                from: "Dakar",
+                to: "Thiès",
+                price: "2500",
+                duration: "1h30",
+                company: "Transport Express",
+              },
+              {
+                from: "Abidjan",
+                to: "Bouaké",
+                price: "3500",
+                duration: "3h45",
+                company: "Côte Transport",
+              },
+              {
+                from: "Lomé",
+                to: "Kara",
+                price: "4000",
+                duration: "5h20",
+                company: "Togo Bus",
+              },
+              {
+                from: "Cotonou",
+                to: "Parakou",
+                price: "5500",
+                duration: "4h15",
+                company: "Bénin Express",
+              },
               {
                 from: "Ouagadougou",
                 to: "Bobo-Dioulasso",
@@ -123,9 +161,18 @@ export default function HomePage() {
                 duration: "4h30",
                 company: "Burkina Transport",
               },
-              { from: "Bamako", to: "Ségou", price: "2800", duration: "2h45", company: "Mali Express" },
+              {
+                from: "Bamako",
+                to: "Ségou",
+                price: "2800",
+                duration: "2h45",
+                company: "Mali Express",
+              },
             ].map((route, index) => (
-              <Card key={index} className="hover:shadow-lg transition-shadow cursor-pointer">
+              <Card
+                key={index}
+                className="hover:shadow-lg transition-shadow cursor-pointer"
+              >
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
@@ -155,7 +202,8 @@ export default function HomePage() {
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-4xl font-bold mb-6">Prêt à voyager ?</h2>
           <p className="text-xl mb-8 opacity-90">
-            Rejoignez des milliers de voyageurs qui font confiance à TransportApp
+            Rejoignez des milliers de voyageurs qui font confiance à
+            TransportApp
           </p>
           <Link href="/search">
             <Button size="lg" variant="secondary" className="text-lg px-8 py-4">
@@ -176,7 +224,10 @@ export default function HomePage() {
                 </div>
                 <span className="text-xl font-bold">TransportApp</span>
               </div>
-              <p className="text-gray-400">La plateforme de référence pour vos voyages en Afrique de l'Ouest.</p>
+              <p className="text-gray-400">
+                La plateforme de référence pour vos voyages en Afrique de
+                l'Ouest.
+              </p>
             </div>
             <div>
               <h3 className="font-semibold mb-4">Voyageurs</h3>
@@ -233,5 +284,5 @@ export default function HomePage() {
         </div>
       </footer>
     </div>
-  )
+  );
 }

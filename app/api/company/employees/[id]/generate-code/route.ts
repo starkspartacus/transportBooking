@@ -6,7 +6,7 @@ import { EmployeeAuthService } from "@/lib/employee-auth";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -21,7 +21,8 @@ export async function POST(
       return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
     }
 
-    const employeeId = params.id;
+    // Awaiter les params avant d'accéder à id
+    const { id: employeeId } = await params;
 
     // Vérifier que l'employé existe
     const employee = await prisma.user.findUnique({

@@ -6,21 +6,21 @@ export default withAuth(
     const token = req.nextauth.token;
     const { pathname } = req.nextUrl;
 
-    // Admin routes
+    // Routes admin
     if (pathname.startsWith("/admin")) {
       if (token?.role !== "ADMIN") {
         return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
     }
 
-    // Patron routes
+    // Routes patron
     if (pathname.startsWith("/patron")) {
       if (!["ADMIN", "PATRON"].includes(token?.role as string)) {
         return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
     }
 
-    // Gestionnaire routes
+    // Routes gestionnaire
     if (pathname.startsWith("/gestionnaire")) {
       if (
         !["ADMIN", "PATRON", "GESTIONNAIRE"].includes(token?.role as string)
@@ -29,7 +29,7 @@ export default withAuth(
       }
     }
 
-    // Caissier routes
+    // Routes caissier
     if (pathname.startsWith("/caissier")) {
       if (
         !["ADMIN", "PATRON", "GESTIONNAIRE", "CAISSIER"].includes(
@@ -40,14 +40,14 @@ export default withAuth(
       }
     }
 
-    // Client routes
+    // Routes client
     if (pathname.startsWith("/client")) {
       if (token?.role !== "CLIENT") {
         return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
     }
 
-    // API routes protection
+    // Protection des routes API
     if (pathname.startsWith("/api/admin")) {
       if (token?.role !== "ADMIN") {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -77,7 +77,7 @@ export default withAuth(
       authorized: ({ token, req }) => {
         const { pathname } = req.nextUrl;
 
-        // Public routes
+        // Routes publiques
         if (
           pathname === "/" ||
           pathname.startsWith("/auth") ||
@@ -90,7 +90,7 @@ export default withAuth(
           return true;
         }
 
-        // Protected routes require authentication
+        // Les routes protégées nécessitent une authentification
         return !!token;
       },
     },

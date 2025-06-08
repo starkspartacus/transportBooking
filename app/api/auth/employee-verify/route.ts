@@ -1,74 +1,100 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { verify } from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // Récupérer le token du header Authorization
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "");
+    const body = await request.json();
+    const { phone, countryCode, code, role } = body;
 
-    if (!token) {
+    // Validation des données
+    if (!phone || !countryCode || !code) {
       return NextResponse.json(
-        { authenticated: false, error: "Non authentifié" },
-        { status: 401 }
+        { error: "Téléphone, code pays et code d'authentification requis" },
+        { status: 400 }
       );
     }
 
-    // Vérifier le token
-    const decoded = verify(
-      token,
-      process.env.NEXTAUTH_SECRET || "employee-auth-secret"
-    ) as {
-      id: string;
-      email: string;
-      name: string;
-      role: string;
-      companyId: string;
-    };
-
-    // Vérifier que l'utilisateur existe toujours
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
+    // Chercher l'employé par téléphone et rôle
+    const employee = await prisma.user.findFirst({
+      where: {
+        phone: phone,
+        countryCode: countryCode,
+        role: role || { in: ["GESTIONNAIRE", "CAISSIER"] },
+        status: "ACTIVE",
+      },
       include: {
         employeeAt: true,
       },
     });
 
-    if (!user) {
+    if (!employee || !employee.companyId) {
       return NextResponse.json(
-        { authenticated: false, error: "Utilisateur non trouvé" },
+        { error: "Employé non trouvé ou inactif" },
+        { status: 404 }
+      );
+    }
+
+    // Chercher le code dans les activités récentes (derniers 30 jours)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const codeActivity = await prisma.activity.findFirst({
+      where: {
+        description: {
+          contains: code,
+        },
+        companyId: employee.companyId,
+        createdAt: {
+          gte: thirtyDaysAgo,
+        },
+        userId: employee.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (!codeActivity) {
+      return NextResponse.json(
+        { error: "Code invalide ou expiré" },
         { status: 401 }
       );
     }
 
-    // Vérifier que l'utilisateur est toujours un employé actif
-    if (
-      !["GESTIONNAIRE", "CAISSIER"].includes(user.role) ||
-      user.status !== "ACTIVE" ||
-      !user.companyId
-    ) {
+    // Vérifier que l'activité contient bien le code de l'employé
+    if (!codeActivity.description.includes(employee.id)) {
       return NextResponse.json(
-        { authenticated: false, error: "Accès non autorisé" },
-        { status: 403 }
+        { error: "Code non valide pour cet employé" },
+        { status: 401 }
       );
     }
 
+    // Enregistrer la tentative de connexion
+    await prisma.activity.create({
+      data: {
+        type: "COMPANY_UPDATED",
+        description: `Vérification code réussie: ${employee.name} (${employee.phone}) - Code: ${code}`,
+        status: "SUCCESS",
+        userId: employee.id,
+        companyId: employee.companyId,
+      },
+    });
+
     return NextResponse.json({
-      authenticated: true,
+      success: true,
       user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        companyId: user.companyId,
-        company: user.employeeAt,
+        id: employee.id,
+        name: employee.name,
+        email: employee.email,
+        role: employee.role,
+        companyId: employee.companyId,
+        company: employee.employeeAt,
       },
     });
   } catch (error) {
+    console.error("Erreur lors de la vérification du code:", error);
     return NextResponse.json(
-      { authenticated: false, error: "Token invalide" },
-      { status: 401 }
+      { error: "Erreur interne du serveur" },
+      { status: 500 }
     );
   }
 }

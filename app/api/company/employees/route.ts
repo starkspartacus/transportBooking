@@ -64,6 +64,14 @@ export async function GET(request: NextRequest) {
         phone: true,
         countryCode: true,
         role: true,
+        status: true,
+        image: true,
+        dateOfBirth: true,
+        gender: true,
+        nationality: true,
+        idNumber: true,
+        idType: true,
+        address: true,
         country: true,
         city: true,
         commune: true,
@@ -94,22 +102,37 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
-      name,
-      email,
-      role,
       firstName,
       lastName,
+      email,
+      role,
       phone,
+      countryCode,
+      companyId,
+      dateOfBirth,
+      gender,
+      nationality,
+      idType,
+      idNumber,
+      address,
       country,
       city,
       commune,
+      emergencyContact,
+      emergencyPhone,
+      hireDate,
+      salary,
+      department,
+      position,
+      notes,
+      status,
+      image,
       password,
-      countryCode,
-      companyId,
     } = body;
 
     console.log("Creating employee with data:", {
-      name,
+      firstName,
+      lastName,
       email,
       role,
       companyId,
@@ -134,12 +157,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Validation des champs requis
-    if (!name && !firstName && !lastName) {
-      return NextResponse.json({ error: "Nom requis" }, { status: 400 });
+    if (!firstName || !lastName) {
+      return NextResponse.json(
+        { error: "Prénom et nom requis" },
+        { status: 400 }
+      );
     }
 
     if (!email) {
       return NextResponse.json({ error: "Email requis" }, { status: 400 });
+    }
+
+    if (!phone || !countryCode) {
+      return NextResponse.json(
+        { error: "Numéro de téléphone requis" },
+        { status: 400 }
+      );
     }
 
     if (!role || !["GESTIONNAIRE", "CAISSIER"].includes(role)) {
@@ -158,38 +191,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Vérifier que le téléphone n'existe pas déjà (si fourni)
-    if (phone && countryCode) {
-      const existingPhone = await prisma.user.findFirst({
-        where: {
-          phone,
-          countryCode,
-        },
-      });
+    // Vérifier que le téléphone n'existe pas déjà
+    const existingPhone = await prisma.user.findFirst({
+      where: {
+        phone,
+        countryCode,
+      },
+    });
 
-      if (existingPhone) {
-        return NextResponse.json(
-          { error: "Ce numéro de téléphone est déjà utilisé" },
-          { status: 409 }
-        );
-      }
+    if (existingPhone) {
+      return NextResponse.json(
+        { error: "Ce numéro de téléphone est déjà utilisé" },
+        { status: 409 }
+      );
     }
 
     // Générer un mot de passe par défaut si non fourni
     const defaultPassword = password || Math.random().toString(36).slice(-8);
     const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
-    // Créer l'employé
+    // Créer l'employé avec toutes les informations
     const employee = await prisma.user.create({
       data: {
-        name: name || `${firstName || ""} ${lastName || ""}`.trim(),
-        firstName: firstName || name?.split(" ")[0] || "",
-        lastName: lastName || name?.split(" ").slice(1).join(" ") || "",
+        name: `${firstName} ${lastName}`,
+        firstName,
+        lastName,
         email,
-        phone: phone || null,
-        countryCode: countryCode || null,
+        phone,
+        countryCode,
         password: hashedPassword,
         role: role as "GESTIONNAIRE" | "CAISSIER",
+        status: (status as UserStatus | "SUSPENDED" | "INACTIVE") || "ACTIVE",
+        image: image || null,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+        gender: gender as "MALE" | "FEMALE" | "OTHER" | null,
+        nationality: nationality || null,
+        idType: idType as
+          | "PASSPORT"
+          | "NATIONAL_ID"
+          | "DRIVERS_LICENSE"
+          | "OTHER"
+          | null,
+        idNumber: idNumber || null,
+        address: address || null,
         country: country || null,
         city: city || null,
         commune: commune || null,
@@ -204,10 +248,36 @@ export async function POST(request: NextRequest) {
         phone: true,
         countryCode: true,
         role: true,
+        status: true,
+        image: true,
+        dateOfBirth: true,
+        gender: true,
+        nationality: true,
+        idNumber: true,
+        idType: true,
+        address: true,
         country: true,
         city: true,
         commune: true,
         createdAt: true,
+      },
+    });
+
+    // Enregistrer l'activité de création d'employé
+    await prisma.activity.create({
+      data: {
+        type: "EMPLOYEE_ADDED",
+        description: `Nouvel employé ajouté: ${employee.name} (${employee.role})`,
+        status: "SUCCESS",
+        userId: session.user.id,
+        companyId: targetCompanyId,
+        metadata: {
+          employeeId: employee.id,
+          employeeName: employee.name,
+          employeeRole: employee.role,
+          department: department || null,
+          position: position || null,
+        },
       },
     });
 
