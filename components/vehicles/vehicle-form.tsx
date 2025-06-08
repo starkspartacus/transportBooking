@@ -45,7 +45,7 @@ const vehicleSchema = z.object({
 type VehicleFormData = z.infer<typeof vehicleSchema>;
 
 interface VehicleFormProps {
-  onSubmit: (data: VehicleFormData) => void;
+  onSubmit: (data: VehicleFormData) => Promise<boolean>;
   initialData?: Partial<VehicleFormData>;
   isLoading?: boolean;
 }
@@ -56,6 +56,8 @@ export function VehicleForm({
   isLoading = false,
 }: VehicleFormProps) {
   const { toast } = useToast();
+
+  // États stables pour éviter les re-renders
   const [customBrands, setCustomBrands] = React.useState<
     Array<{ id: string; name: string; models: string[] }>
   >([]);
@@ -82,69 +84,149 @@ export function VehicleForm({
   });
 
   const selectedBrand = form.watch("brand");
-  const allBrands = [...VEHICLE_BRANDS, ...customBrands];
-  const currentBrand = allBrands.find((brand) => brand.id === selectedBrand);
-  const availableModels = currentBrand
-    ? currentBrand.models.map((model) => ({
-        id: model.toLowerCase().replace(/\s+/g, "_"),
-        name: model,
-      }))
-    : [];
-  const allModels = [...availableModels, ...customModels];
-  const allColors = [...VEHICLE_COLORS, ...customColors];
 
-  const handleAddCustomBrand = (brandName: string) => {
-    const newBrand = {
-      id: brandName.toLowerCase().replace(/\s+/g, "_"),
-      name: brandName,
-      models: [],
-    };
-    setCustomBrands((prev) => [...prev, newBrand]);
-    form.setValue("brand", newBrand.id);
-    toast({
-      title: "Marque ajoutée",
-      description: `La marque "${brandName}" a été ajoutée avec succès.`,
-    });
-  };
+  // Mémorisation des options pour éviter les re-calculs
+  const allBrands = React.useMemo(
+    () =>
+      [...VEHICLE_BRANDS, ...customBrands].map((brand) => ({
+        id: brand.id,
+        name: brand.name,
+      })),
+    [customBrands]
+  );
 
-  const handleAddCustomModel = (modelName: string) => {
-    const newModel = {
-      id: modelName.toLowerCase().replace(/\s+/g, "_"),
-      name: modelName,
-    };
-    setCustomModels((prev) => [...prev, newModel]);
-    form.setValue("model", newModel.id);
-    toast({
-      title: "Modèle ajouté",
-      description: `Le modèle "${modelName}" a été ajouté avec succès.`,
-    });
-  };
+  const allModels = React.useMemo(() => {
+    const currentBrand = [...VEHICLE_BRANDS, ...customBrands].find(
+      (brand) => brand.id === selectedBrand
+    );
+    const availableModels = currentBrand
+      ? currentBrand.models.map((model) => ({
+          id: model.toLowerCase().replace(/\s+/g, "_"),
+          name: model,
+        }))
+      : [];
+    return [...availableModels, ...customModels];
+  }, [selectedBrand, customBrands, customModels]);
 
-  const handleAddCustomColor = (colorName: string) => {
-    // Générer une couleur aléatoire pour la nouvelle couleur
-    const randomColor = `#${Math.floor(Math.random() * 16777215)
-      .toString(16)
-      .padStart(6, "0")}`;
-    const newColor = {
-      id: colorName.toLowerCase().replace(/\s+/g, "_"),
-      name: colorName,
-      hex: randomColor,
-      textColor: "#FFFFFF",
-    };
-    setCustomColors((prev) => [...prev, newColor]);
-    form.setValue("color", newColor.id);
-    toast({
-      title: "Couleur ajoutée",
-      description: `La couleur "${colorName}" a été ajoutée avec succès.`,
-    });
-  };
+  const allColors = React.useMemo(
+    () => [...VEHICLE_COLORS, ...customColors],
+    [customColors]
+  );
 
-  // Reset model when brand changes
+  const vehicleTypeOptions = React.useMemo(
+    () =>
+      VEHICLE_TYPES.map((type) => ({
+        id: type.id,
+        name: `${type.icon} ${type.name} (${type.capacity})`,
+      })),
+    []
+  );
+
+  const fuelTypeOptions = React.useMemo(
+    () =>
+      FUEL_TYPES.map((fuel) => ({
+        id: fuel.id,
+        name: `${fuel.icon} ${fuel.name}`,
+      })),
+    []
+  );
+
+  const yearOptions = React.useMemo(() => VEHICLE_YEARS, []);
+
+  // Callbacks stables
+  const handleAddCustomBrand = React.useCallback(
+    (brandName: string) => {
+      const newBrand = {
+        id: brandName.toLowerCase().replace(/\s+/g, "_"),
+        name: brandName,
+        models: [],
+      };
+      setCustomBrands((prev) => [...prev, newBrand]);
+      form.setValue("brand", newBrand.id);
+      toast({
+        title: "Marque ajoutée",
+        description: `La marque "${brandName}" a été ajoutée avec succès.`,
+      });
+    },
+    [form, toast]
+  );
+
+  const handleAddCustomModel = React.useCallback(
+    (modelName: string) => {
+      const newModel = {
+        id: modelName.toLowerCase().replace(/\s+/g, "_"),
+        name: modelName,
+      };
+      setCustomModels((prev) => [...prev, newModel]);
+      form.setValue("model", newModel.id);
+      toast({
+        title: "Modèle ajouté",
+        description: `Le modèle "${modelName}" a été ajouté avec succès.`,
+      });
+    },
+    [form, toast]
+  );
+
+  const handleAddCustomColor = React.useCallback(
+    (colorName: string) => {
+      const randomColor = `#${Math.floor(Math.random() * 16777215)
+        .toString(16)
+        .padStart(6, "0")}`;
+      const newColor = {
+        id: colorName.toLowerCase().replace(/\s+/g, "_"),
+        name: colorName,
+        hex: randomColor,
+        textColor: "#FFFFFF",
+      };
+      setCustomColors((prev) => [...prev, newColor]);
+      form.setValue("color", newColor.id);
+      toast({
+        title: "Couleur ajoutée",
+        description: `La couleur "${colorName}" a été ajoutée avec succès.`,
+      });
+    },
+    [form, toast]
+  );
+
+  // Reset model when brand changes - avec condition pour éviter la boucle
   React.useEffect(() => {
-    if (selectedBrand) {
-      form.setValue("model", "");
+    const currentModel = form.getValues("model");
+    if (selectedBrand && currentModel) {
+      const currentBrand = [...VEHICLE_BRANDS, ...customBrands].find(
+        (brand) => brand.id === selectedBrand
+      );
+      const modelExists = currentBrand?.models.some(
+        (model) => model.toLowerCase().replace(/\s+/g, "_") === currentModel
+      );
+      if (!modelExists) {
+        form.setValue("model", "");
+      }
     }
-  }, [selectedBrand, form]);
+  }, [selectedBrand, form, customBrands]);
+
+  const handleFormSubmit = React.useCallback(
+    async (data: VehicleFormData) => {
+      try {
+        const success = await onSubmit(data);
+        if (success) {
+          toast({
+            title: "Véhicule enregistré",
+            description:
+              "Les informations du véhicule ont été enregistrées avec succès.",
+          });
+        }
+      } catch (error) {
+        console.error("Error submitting form:", error);
+        toast({
+          title: "Erreur",
+          description:
+            "Une erreur est survenue lors de l'enregistrement du véhicule.",
+          variant: "destructive",
+        });
+      }
+    },
+    [onSubmit, toast]
+  );
 
   return (
     <Card>
@@ -156,7 +238,10 @@ export function VehicleForm({
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form
+            onSubmit={form.handleSubmit(handleFormSubmit)}
+            className="space-y-6"
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Marque */}
               <FormField
@@ -167,10 +252,7 @@ export function VehicleForm({
                     <FormLabel>Marque *</FormLabel>
                     <FormControl>
                       <CustomSelect
-                        options={allBrands.map((brand) => ({
-                          id: brand.id,
-                          name: brand.name,
-                        }))}
+                        options={allBrands}
                         value={field.value}
                         onValueChange={field.onChange}
                         onAddCustom={handleAddCustomBrand}
@@ -226,7 +308,7 @@ export function VehicleForm({
                     <FormLabel>Année *</FormLabel>
                     <FormControl>
                       <CustomSelect
-                        options={VEHICLE_YEARS}
+                        options={yearOptions}
                         value={field.value}
                         onValueChange={field.onChange}
                         placeholder="Sélectionner l'année"
@@ -286,10 +368,7 @@ export function VehicleForm({
                     <FormLabel>Type de véhicule *</FormLabel>
                     <FormControl>
                       <CustomSelect
-                        options={VEHICLE_TYPES.map((type) => ({
-                          id: type.id,
-                          name: `${type.icon} ${type.name} (${type.capacity})`,
-                        }))}
+                        options={vehicleTypeOptions}
                         value={field.value}
                         onValueChange={field.onChange}
                         placeholder="Sélectionner le type"
@@ -310,10 +389,7 @@ export function VehicleForm({
                     <FormLabel>Type de carburant *</FormLabel>
                     <FormControl>
                       <CustomSelect
-                        options={FUEL_TYPES.map((fuel) => ({
-                          id: fuel.id,
-                          name: `${fuel.icon} ${fuel.name}`,
-                        }))}
+                        options={fuelTypeOptions}
                         value={field.value}
                         onValueChange={field.onChange}
                         placeholder="Sélectionner le carburant"

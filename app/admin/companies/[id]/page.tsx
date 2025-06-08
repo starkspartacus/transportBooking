@@ -11,11 +11,11 @@ export const metadata = {
   description: "Voir et gérer les détails d'une entreprise de transport",
 };
 
-export default async function AdminCompanyDetailsPage({
-  params,
-}: {
+interface PageProps {
   params: { id: string };
-}) {
+}
+
+export default async function AdminCompanyDetailsPage({ params }: PageProps) {
   const session = await getServerSession(authOptions);
 
   if (!session || session.user.role !== "ADMIN") {

@@ -87,15 +87,20 @@ export async function POST(
     });
 
     // Créer une alerte système
-    await prisma.systemAlert.create({
+    await prisma.notification.create({
       data: {
-        type: "COMPANY_REJECTION",
         title: "Entreprise rejetée",
-        description: `L'entreprise ${company.name} a été rejetée par ${
+        message: `L'entreprise ${company.name} a été rejetée par ${
           session.user.name || session.user.email
         }`,
-        severity: "MEDIUM",
-        resolved: true,
+        type: "COMPANY_NEWS",
+        priority: "HIGH",
+        userId: company.owner.id,
+        relatedEntityType: "COMPANY",
+        relatedEntityId: company.id,
+        metadata: {
+          reason,
+        },
       },
     });
 

@@ -53,8 +53,31 @@ export async function POST(req: NextRequest) {
         email,
         password: hashedPassword,
         role: "ADMIN",
+        status: "ACTIVE",
       },
     });
+
+    // Créer une entreprise système pour les activités admin si elle n'existe pas
+    let systemCompany = await prisma.company.findFirst({
+      where: { name: "SYSTEM_ADMIN" },
+    });
+
+    if (!systemCompany) {
+      systemCompany = await prisma.company.create({
+        data: {
+          name: "SYSTEM_ADMIN",
+          email: "system@admin.com",
+          phone: "0000000000",
+          countryCode: "+1",
+          address: "System Address",
+          country: "System",
+          city: "System",
+          licenseNumber: "SYSTEM_LICENSE",
+          status: "APPROVED",
+          ownerId: newAdmin.id,
+        },
+      });
+    }
 
     // Enregistrer l'activité
     await prisma.activity.create({
@@ -62,20 +85,31 @@ export async function POST(req: NextRequest) {
         type: "SYSTEM_UPDATE",
         description: `Nouvel administrateur créé: ${name} (${email})`,
         status: "SUCCESS",
-        companyId: "system", // ID système pour les activités admin
+        companyId: systemCompany.id,
+        userId: newAdmin.id,
       },
     });
 
-    // Créer une alerte système
-    await prisma.systemAlert.create({
-      data: {
-        type: "SYSTEM_UPDATE",
-        title: "Nouvel administrateur",
-        description: `Un nouvel administrateur a été créé: ${name} (${email})`,
-        severity: "HIGH",
-        resolved: false,
+    // Créer une notification pour les autres admins
+    const existingAdmins = await prisma.user.findMany({
+      where: {
+        role: "ADMIN",
+        id: { not: newAdmin.id },
       },
     });
+
+    // Créer des notifications pour tous les admins existants
+    for (const admin of existingAdmins) {
+      await prisma.notification.create({
+        data: {
+          title: "Nouvel administrateur",
+          message: `Un nouvel administrateur a été créé: ${name} (${email})`,
+          type: "SYSTEM_UPDATE",
+          priority: "HIGH",
+          userId: admin.id,
+        },
+      });
+    }
 
     // Exclure le mot de passe de la réponse
     const { password: _, ...adminWithoutPassword } = newAdmin;
@@ -84,6 +118,7 @@ export async function POST(req: NextRequest) {
       {
         message: "Administrateur créé avec succès",
         user: adminWithoutPassword,
+        redirect: "/admin",
       },
       { status: 201 }
     );

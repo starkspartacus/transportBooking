@@ -80,15 +80,17 @@ export async function POST(
     });
 
     // Créer une alerte système
-    await prisma.systemAlert.create({
+    await prisma.notification.create({
       data: {
-        type: "COMPANY_APPROVAL",
         title: "Entreprise approuvée",
-        description: `L'entreprise ${company.name} a été approuvée par ${
+        message: `L'entreprise ${company.name} a été approuvée par ${
           session.user.name || session.user.email
         }`,
-        severity: "LOW",
-        resolved: true,
+        type: "COMPANY_NEWS",
+        priority: "HIGH",
+        userId: company.owner.id,
+        relatedEntityType: "COMPANY",
+        relatedEntityId: company.id,
       },
     });
 

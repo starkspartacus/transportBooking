@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -86,26 +86,54 @@ export default function EmployeeEditForm({
     },
   });
 
-  useEffect(() => {
-    fetchEmployeeDetails();
-  }, [employeeId]);
+  // Mémoriser les valeurs du formulaire pour éviter les re-renders
+  const formValues = form.getValues();
+  const [watchedValues, setWatchedValues] = useState({
+    countryCode: formValues.countryCode || "",
+    phone: formValues.phone || "",
+    country: formValues.country || "",
+    city: formValues.city || "",
+    commune: formValues.commune || "",
+  });
 
-  const fetchEmployeeDetails = async () => {
+  // Mettre à jour les valeurs surveillées seulement quand nécessaire
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      setWatchedValues({
+        countryCode: value.countryCode || "",
+        phone: value.phone || "",
+        country: value.country || "",
+        city: value.city || "",
+        commune: value.commune || "",
+      });
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  const fetchEmployeeDetails = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const response = await fetch(`/api/company/employees/${employeeId}`);
       if (response.ok) {
         const data = await response.json();
-        form.reset({
+        const employeeData = {
           name: data.name || "",
           email: data.email || "",
           phone: data.phone || "",
           countryCode: data.countryCode || "",
-          role: data.role || "CAISSIER",
+          role: (data.role || "CAISSIER") as "GESTIONNAIRE" | "CAISSIER",
           country: data.country || "",
           city: data.city || "",
           commune: data.commune || "",
+        };
+        form.reset(employeeData);
+        setWatchedValues({
+          countryCode: employeeData.countryCode,
+          phone: employeeData.phone,
+          country: employeeData.country,
+          city: employeeData.city,
+          commune: employeeData.commune,
         });
       } else {
         const errorData = await response.json();
@@ -120,41 +148,92 @@ export default function EmployeeEditForm({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [employeeId, form]);
 
-  const onSubmit = async (data: EmployeeFormData) => {
-    try {
-      const response = await fetch(`/api/company/employees/${employeeId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+  useEffect(() => {
+    fetchEmployeeDetails();
+  }, [fetchEmployeeDetails]);
 
-      if (response.ok) {
-        toast({
-          title: "Employé mis à jour",
-          description:
-            "Les informations de l'employé ont été mises à jour avec succès",
+  const onSubmit = useCallback(
+    async (data: EmployeeFormData) => {
+      try {
+        const response = await fetch(`/api/company/employees/${employeeId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
         });
-        router.push(`/patron/employees/${employeeId}`);
-      } else {
-        const errorData = await response.json();
+
+        if (response.ok) {
+          toast({
+            title: "Employé mis à jour",
+            description:
+              "Les informations de l'employé ont été mises à jour avec succès",
+          });
+          router.push(`/patron/employees/${employeeId}`);
+        } else {
+          const errorData = await response.json();
+          toast({
+            title: "Erreur",
+            description:
+              errorData.error || "Erreur lors de la mise à jour de l'employé",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error("Error updating employee:", error);
         toast({
           title: "Erreur",
-          description:
-            errorData.error || "Erreur lors de la mise à jour de l'employé",
+          description: "Erreur lors de la mise à jour de l'employé",
           variant: "destructive",
         });
       }
-    } catch (error) {
-      console.error("Error updating employee:", error);
-      toast({
-        title: "Erreur",
-        description: "Erreur lors de la mise à jour de l'employé",
-        variant: "destructive",
-      });
-    }
-  };
+    },
+    [employeeId, toast, router]
+  );
+
+  // Callbacks stables pour éviter les re-renders
+  const handleCountryCodeChange = useCallback(
+    (value: string) => {
+      form.setValue("countryCode", value);
+    },
+    [form]
+  );
+
+  const handlePhoneChange = useCallback(
+    (value: string) => {
+      form.setValue("phone", value);
+    },
+    [form]
+  );
+
+  const handleCountryChange = useCallback(
+    (value: string) => {
+      form.setValue("country", value);
+    },
+    [form]
+  );
+
+  const handleCityChange = useCallback(
+    (value: string) => {
+      form.setValue("city", value);
+    },
+    [form]
+  );
+
+  const handleCommuneChange = useCallback(
+    (value: string) => {
+      form.setValue("commune", value);
+    },
+    [form]
+  );
+
+  const handleBackToDetails = useCallback(() => {
+    router.push(`/patron/employees/${employeeId}`);
+  }, [router, employeeId]);
+
+  const handleBackToList = useCallback(() => {
+    router.push("/patron/employees");
+  }, [router]);
 
   if (isLoading) {
     return (
@@ -178,7 +257,7 @@ export default function EmployeeEditForm({
             <Button
               variant="outline"
               className="mt-4"
-              onClick={() => router.push("/patron/employees")}
+              onClick={handleBackToList}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Retour à la liste des employés
@@ -192,10 +271,7 @@ export default function EmployeeEditForm({
   return (
     <>
       <div className="flex items-center justify-between">
-        <Button
-          variant="outline"
-          onClick={() => router.push(`/patron/employees/${employeeId}`)}
-        >
+        <Button variant="outline" onClick={handleBackToDetails}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Retour aux détails
         </Button>
@@ -249,7 +325,7 @@ export default function EmployeeEditForm({
                       <FormLabel>Rôle *</FormLabel>
                       <Select
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -268,34 +344,32 @@ export default function EmployeeEditForm({
                   )}
                 />
 
-                {/* Composant téléphone dynamique */}
+                {/* Composant téléphone avec valeurs mémorisées */}
                 <div>
                   <PhoneInput
-                    countryCodeValue={form.watch("countryCode") || ""}
-                    phoneValue={form.watch("phone") || ""}
-                    onCountryCodeChange={(value) =>
-                      form.setValue("countryCode", value)
-                    }
-                    onPhoneChange={(value) => form.setValue("phone", value)}
+                    countryCodeValue={watchedValues.countryCode}
+                    phoneValue={watchedValues.phone}
+                    onCountryCodeChange={handleCountryCodeChange}
+                    onPhoneChange={handlePhoneChange}
                   />
                 </div>
               </div>
 
-              {/* Composant de sélection en cascade pour pays, ville, commune */}
+              {/* Composant de sélection en cascade avec valeurs mémorisées */}
               <CascadingSelect
-                countryValue={form.watch("country") || ""}
-                cityValue={form.watch("city") || ""}
-                communeValue={form.watch("commune") || ""}
-                onCountryChange={(value) => form.setValue("country", value)}
-                onCityChange={(value) => form.setValue("city", value)}
-                onCommuneChange={(value) => form.setValue("commune", value)}
+                countryValue={watchedValues.country}
+                cityValue={watchedValues.city}
+                communeValue={watchedValues.commune}
+                onCountryChange={handleCountryChange}
+                onCityChange={handleCityChange}
+                onCommuneChange={handleCommuneChange}
               />
 
               <CardFooter className="flex justify-between px-0">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => router.push(`/patron/employees/${employeeId}`)}
+                  onClick={handleBackToDetails}
                 >
                   Annuler
                 </Button>

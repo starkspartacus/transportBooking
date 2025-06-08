@@ -44,23 +44,50 @@ export function CustomSelect({
   const [showCustomInput, setShowCustomInput] = React.useState(false);
   const [customValue, setCustomValue] = React.useState("");
 
-  const selectedOption = options.find((option) => option.id === value);
-
-  const filteredOptions = options.filter((option) =>
-    option.name.toLowerCase().includes(search.toLowerCase())
+  // Mémorisation pour éviter les re-calculs
+  const selectedOption = React.useMemo(
+    () => options.find((option) => option.id === value),
+    [options, value]
   );
 
-  const handleAddCustom = () => {
+  const filteredOptions = React.useMemo(
+    () =>
+      options.filter((option) =>
+        option.name.toLowerCase().includes(search.toLowerCase())
+      ),
+    [options, search]
+  );
+
+  // Callbacks stables
+  const handleAddCustom = React.useCallback(() => {
     if (customValue.trim() && onAddCustom) {
       onAddCustom(customValue.trim());
       setCustomValue("");
       setShowCustomInput(false);
       setOpen(false);
     }
-  };
+  }, [customValue, onAddCustom]);
+
+  const handleOptionSelect = React.useCallback(
+    (optionId: string) => {
+      onValueChange(optionId);
+      setOpen(false);
+      setSearch("");
+    },
+    [onValueChange]
+  );
+
+  const handleOpenChange = React.useCallback((newOpen: boolean) => {
+    setOpen(newOpen);
+    if (!newOpen) {
+      setSearch("");
+      setShowCustomInput(false);
+      setCustomValue("");
+    }
+  }, []);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -89,11 +116,7 @@ export function CustomSelect({
                 "flex items-center px-3 py-2 cursor-pointer hover:bg-accent",
                 value === option.id && "bg-accent"
               )}
-              onClick={() => {
-                onValueChange(option.id);
-                setOpen(false);
-                setSearch("");
-              }}
+              onClick={() => handleOptionSelect(option.id)}
             >
               <Check
                 className={cn(
