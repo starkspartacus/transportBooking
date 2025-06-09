@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { CompanyStatus } from "@prisma/client";
 
 // GET - Récupérer toutes les entreprises du patron
 export async function GET(request: NextRequest) {
@@ -62,6 +63,13 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id;
     const data = await request.json();
 
+    console.log("Creating company with data:", {
+      userId,
+      name: data.name,
+      email: data.email,
+      operatingCountries: data.operatingCountries,
+    });
+
     // Validation des données
     const requiredFields = [
       "name",
@@ -76,11 +84,29 @@ export async function POST(request: NextRequest) {
 
     for (const field of requiredFields) {
       if (!data[field]) {
+        console.error(`Missing required field: ${field}`);
         return NextResponse.json(
           { error: `Le champ ${field} est requis` },
           { status: 400 }
         );
       }
+    }
+
+    // Validation des tableaux
+    if (!Array.isArray(data.operatingCountries)) {
+      data.operatingCountries = [];
+    }
+
+    if (!Array.isArray(data.services)) {
+      data.services = [];
+    }
+
+    if (!Array.isArray(data.vehicleTypes)) {
+      data.vehicleTypes = [];
+    }
+
+    if (!Array.isArray(data.primaryRoutes)) {
+      data.primaryRoutes = [];
     }
 
     // Vérifier si l'email est déjà utilisé
@@ -107,35 +133,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Vérifier que l'ID utilisateur est valide
+    if (!userId) {
+      return NextResponse.json(
+        { error: "ID utilisateur non valide" },
+        { status: 400 }
+      );
+    }
+
     // Créer l'entreprise
     const company = await prisma.company.create({
       data: {
         name: data.name,
-        description: data.description,
+        description: data.description || "",
         email: data.email,
         phone: data.phone,
         countryCode: data.countryCode,
         address: data.address,
         country: data.country,
         city: data.city,
-        commune: data.commune,
-        website: data.website,
+        commune: data.commune || "",
+        website: data.website || "",
         licenseNumber: data.licenseNumber,
-        taxId: data.taxId,
+        taxId: data.taxId || "",
         foundedYear: data.foundedYear
-          ? Number.parseInt(data.foundedYear)
+          ? Number.parseInt(data.foundedYear.toString())
           : undefined,
         size: data.size || "SMALL",
-        isVerified: false, // Nécessite vérification par admin
+        isVerified: false,
         isActive: true,
-        status: "PENDING",
+        status: "PENDING" as CompanyStatus,
+        operatingCountries: data.operatingCountries,
+        services: data.services,
+        vehicleTypes: data.vehicleTypes,
+        primaryRoutes: data.primaryRoutes,
         owner: {
           connect: { id: userId },
         },
-        operatingCountries: data.operatingCountries || [],
-        services: data.services || [],
-        vehicleTypes: data.vehicleTypes || [],
-        primaryRoutes: data.primaryRoutes || [],
       },
     });
 
@@ -168,6 +202,12 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error creating company:", error);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "Erreur serveur",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+      { status: 500 }
+    );
   }
 }

@@ -15,12 +15,14 @@ export const authOptions: NextAuthOptions = {
         countryCode: { label: "Country Code", type: "text" },
         code: { label: "Access Code", type: "text" },
         role: { label: "Role", type: "text" },
+        country: { label: "Country", type: "text" },
+        ipAddress: { label: "IP Address", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials) return null;
 
         try {
-          // Connexion avec code d'accès (pour employés)
+          // Connexion avec code d'accès (pour employés - pas de vérification pays)
           if (credentials.phone && credentials.code && credentials.role) {
             const employee = await prisma.user.findFirst({
               where: {
@@ -74,17 +76,41 @@ export const authOptions: NextAuthOptions = {
             };
           }
 
-          // Connexion classique avec email/password
-          if (credentials.email && credentials.password) {
-            const user = await prisma.user.findUnique({
-              where: { email: credentials.email },
-              include: {
-                ownedCompanies: true,
-                employeeAt: true,
-              },
-            });
+          // Connexion classique avec vérification du pays (sauf pour caissiers)
+          if (credentials.password && credentials.country) {
+            let user = null;
 
-            if (!user || user.status !== "ACTIVE") return null;
+            // Connexion par email
+            if (credentials.email) {
+              user = await prisma.user.findFirst({
+                where: {
+                  email: credentials.email,
+                  country: credentials.country, // Vérification du pays
+                  status: "ACTIVE",
+                },
+                include: {
+                  ownedCompanies: true,
+                  employeeAt: true,
+                },
+              });
+            }
+            // Connexion par téléphone
+            else if (credentials.phone && credentials.countryCode) {
+              user = await prisma.user.findFirst({
+                where: {
+                  phone: credentials.phone,
+                  countryCode: credentials.countryCode,
+                  country: credentials.country, // Vérification du pays
+                  status: "ACTIVE",
+                },
+                include: {
+                  ownedCompanies: true,
+                  employeeAt: true,
+                },
+              });
+            }
+
+            if (!user) return null;
 
             const isPasswordValid = await bcrypt.compare(
               credentials.password,
@@ -92,6 +118,24 @@ export const authOptions: NextAuthOptions = {
             );
 
             if (!isPasswordValid) return null;
+
+            // Enregistrer la tentative de connexion réussie
+            await prisma.activity.create({
+              data: {
+                type: "USER_LOGIN",
+                description: `Connexion sécurisée réussie depuis ${
+                  credentials.country
+                }: ${user.name || "Utilisateur"} (${user.role})`,
+                status: "SUCCESS",
+                userId: user.id,
+                companyId: user.companyId || "system",
+                metadata: {
+                  loginMethod: credentials.email ? "email" : "phone",
+                  country: credentials.country,
+                  ipAddress: credentials.ipAddress || "unknown",
+                },
+              },
+            });
 
             return {
               id: user.id,
@@ -107,6 +151,31 @@ export const authOptions: NextAuthOptions = {
           return null;
         } catch (error) {
           console.error("Auth error:", error);
+
+          // Enregistrer la tentative de connexion échouée
+          if (credentials.email || credentials.phone) {
+            try {
+              await prisma.activity.create({
+                data: {
+                  type: "USER_LOGIN",
+                  description: `Tentative de connexion échouée depuis ${
+                    credentials.country || "unknown"
+                  }: ${credentials.email || credentials.phone}`,
+                  status: "ERROR",
+                  companyId: "system",
+                  metadata: {
+                    error:
+                      error instanceof Error ? error.message : "Unknown error",
+                    country: credentials.country,
+                    loginMethod: credentials.email ? "email" : "phone",
+                  },
+                },
+              });
+            } catch (logError) {
+              console.error("Failed to log failed login attempt:", logError);
+            }
+          }
+
           return null;
         }
       },

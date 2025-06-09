@@ -143,11 +143,15 @@ export function CompanySelector() {
                       />
                     ) : (
                       <AvatarFallback>
-                        {activeCompany.name.substring(0, 2).toUpperCase()}
+                        {activeCompany?.name
+                          ? activeCompany.name.substring(0, 2).toUpperCase()
+                          : "??"}
                       </AvatarFallback>
                     )}
                   </Avatar>
-                  <span className="truncate">{activeCompany.name}</span>
+                  <span className="truncate">
+                    {activeCompany?.name || "Entreprise"}
+                  </span>
                   {!activeCompany.isVerified && (
                     <Badge variant="outline" className="ml-1 text-xs">
                       En attente
@@ -182,7 +186,9 @@ export function CompanySelector() {
                         />
                       ) : (
                         <AvatarFallback>
-                          {company.name.substring(0, 2).toUpperCase()}
+                          {company?.name
+                            ? company.name.substring(0, 2).toUpperCase()
+                            : "??"}
                         </AvatarFallback>
                       )}
                     </Avatar>

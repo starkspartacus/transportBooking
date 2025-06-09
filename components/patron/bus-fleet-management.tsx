@@ -1069,91 +1069,104 @@ export default function BusFleetManagement() {
             </div>
           ) : (
             <div className="space-y-4">
-              {buses.map((bus, index) => (
-                <div
-                  key={bus.id}
-                  className="border-2 border-gray-100 rounded-xl p-6 hover:shadow-lg hover:border-blue-200 transition-all duration-300 transform hover:scale-[1.02] animate-in slide-in-from-left-4"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-blue-100 rounded-lg">
-                          <BusIcon className="h-5 w-5 text-blue-600" />
+              {Array.isArray(buses) && buses.length > 0 ? (
+                buses.map((bus, index) => (
+                  <div
+                    key={bus.id}
+                    className="border-2 border-gray-100 rounded-xl p-6 hover:shadow-lg hover:border-blue-200 transition-all duration-300 transform hover:scale-[1.02] animate-in slide-in-from-left-4"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="p-2 bg-blue-100 rounded-lg">
+                            <BusIcon className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <h3 className="font-bold text-lg text-gray-800">
+                            {bus.plateNumber}
+                          </h3>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "px-3 py-1 font-medium",
+                              bus.status === "ACTIVE" &&
+                                "bg-green-50 text-green-700 border-green-200",
+                              bus.status === "MAINTENANCE" &&
+                                "bg-yellow-50 text-yellow-700 border-yellow-200",
+                              bus.status === "OUT_OF_SERVICE" &&
+                                "bg-red-50 text-red-700 border-red-200"
+                            )}
+                          >
+                            {bus.status === "ACTIVE" && "🟢"}
+                            {bus.status === "MAINTENANCE" && "🟡"}
+                            {bus.status === "OUT_OF_SERVICE" && "🔴"}{" "}
+                            {bus.status}
+                          </Badge>
                         </div>
-                        <h3 className="font-bold text-lg text-gray-800">
-                          {bus.plateNumber}
-                        </h3>
-                        <Badge
+                        <p className="text-gray-600 mb-3 font-medium">
+                          {bus.model}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-6 text-sm text-gray-500">
+                          <span className="flex items-center gap-2">
+                            <Armchair className="h-4 w-4 text-indigo-500" />
+                            Capacité: {bus.capacity} places
+                          </span>
+                          <span className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-green-500" />
+                            Dernière maintenance:{" "}
+                            {formatDate(bus.lastMaintenance)}
+                          </span>
+                          <span className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-purple-500" />
+                            Prochaine maintenance:{" "}
+                            {formatDate(bus.nextMaintenance)}
+                          </span>
+                          <span className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-full bg-gradient-to-r from-green-400 to-blue-400"></div>
+                            Kilométrage: {bus.totalKm} km
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <Button
+                          size="sm"
                           variant="outline"
-                          className={cn(
-                            "px-3 py-1 font-medium",
-                            bus.status === "ACTIVE" &&
-                              "bg-green-50 text-green-700 border-green-200",
-                            bus.status === "MAINTENANCE" &&
-                              "bg-yellow-50 text-yellow-700 border-yellow-200",
-                            bus.status === "OUT_OF_SERVICE" &&
-                              "bg-red-50 text-red-700 border-red-200"
-                          )}
+                          onClick={() => handleViewBus(bus.id)}
+                          className="border-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all duration-300 hover:scale-105"
                         >
-                          {bus.status === "ACTIVE" && "🟢"}
-                          {bus.status === "MAINTENANCE" && "🟡"}
-                          {bus.status === "OUT_OF_SERVICE" && "🔴"} {bus.status}
-                        </Badge>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditBus(bus.id)}
+                          className="border-2 border-green-200 text-green-600 hover:bg-green-50 hover:border-green-300 transition-all duration-300 hover:scale-105"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteBus(bus.id)}
+                          className="border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 transition-all duration-300 hover:scale-105"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <p className="text-gray-600 mb-3 font-medium">
-                        {bus.model}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-6 text-sm text-gray-500">
-                        <span className="flex items-center gap-2">
-                          <Armchair className="h-4 w-4 text-indigo-500" />
-                          Capacité: {bus.capacity} places
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-green-500" />
-                          Dernière maintenance:{" "}
-                          {formatDate(bus.lastMaintenance)}
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-purple-500" />
-                          Prochaine maintenance:{" "}
-                          {formatDate(bus.nextMaintenance)}
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <div className="w-4 h-4 rounded-full bg-gradient-to-r from-green-400 to-blue-400"></div>
-                          Kilométrage: {bus.totalKm} km
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleViewBus(bus.id)}
-                        className="border-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all duration-300 hover:scale-105"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEditBus(bus.id)}
-                        className="border-2 border-green-200 text-green-600 hover:bg-green-50 hover:border-green-300 transition-all duration-300 hover:scale-105"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDeleteBus(bus.id)}
-                        className="border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 transition-all duration-300 hover:scale-105"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
+                ))
+              ) : (
+                <div className="text-center py-12">
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <BusIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">Aucun bus trouvé</p>
+                    <p className="text-sm text-gray-500">
+                      Commencez par ajouter votre premier véhicule
+                    </p>
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </CardContent>

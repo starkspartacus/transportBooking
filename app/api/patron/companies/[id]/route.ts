@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 // GET - Récupérer les détails d'une entreprise
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -16,7 +16,7 @@ export async function GET(
     }
 
     const userId = session.user.id;
-    const { id: companyId } = await params;
+    const companyId = params.id;
 
     console.log("Fetching company details for:", { userId, companyId });
 
@@ -204,7 +204,7 @@ export async function GET(
 // PATCH - Mettre à jour une entreprise
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -214,7 +214,7 @@ export async function PATCH(
     }
 
     const userId = session.user.id;
-    const { id: companyId } = await params;
+    const companyId = params.id;
     const data = await request.json();
 
     // Vérifier que l'entreprise appartient au patron
@@ -301,7 +301,7 @@ export async function PATCH(
 // DELETE - Supprimer une entreprise
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -311,7 +311,7 @@ export async function DELETE(
     }
 
     const userId = session.user.id;
-    const { id: companyId } = await params;
+    const companyId = params.id;
 
     // Vérifier que l'entreprise appartient au patron
     const company = await prisma.company.findFirst({

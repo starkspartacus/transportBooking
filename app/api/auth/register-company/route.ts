@@ -1,163 +1,109 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import bcrypt from "bcryptjs";
+import { NextResponse, type NextRequest } from "next/server"
+import { hash } from "bcrypt"
+import { z } from "zod"
+import { prisma } from "@/lib/prisma"
 
-export async function POST(request: NextRequest) {
+// Define a schema for input validation
+const schema = z.object({
+  name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
+  email: z.string().email("Email invalide"),
+  phone: z.string().min(8, "Numéro de téléphone invalide"),
+  countryCode: z.string().min(1, "Code pays requis"),
+  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
+})
+
+export async function POST(req: NextRequest) {
   try {
-    const {
-      firstName,
-      lastName,
-      email,
-      phone,
-      password,
-      country,
-      city,
-      commune,
-      address,
-      companyName,
-      companyDescription,
-      companyEmail,
-      companyPhone,
-      companyAddress,
-      licenseNumber,
-      countryCode,
-    } = await request.json();
-
-    // Validate required fields
-    if (
-      !firstName ||
-      !lastName ||
-      !email ||
-      !phone ||
-      !password ||
-      !companyName ||
-      !companyEmail ||
-      !licenseNumber
-    ) {
-      return NextResponse.json(
-        { error: "Champs obligatoires manquants" },
-        { status: 400 }
-      );
-    }
+    const body = await req.json()
+    const { email, password, name, countryCode, phone } = schema.parse(body)
 
     // Check if email already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "Cet email est déjà utilisé" },
-        { status: 409 }
-      );
+    const existingUserByEmail = await prisma.user.findUnique({
+      where: { email: email },
+    })
+    if (existingUserByEmail) {
+      return NextResponse.json({ user: null, message: "Email déjà utilisé" }, { status: 409 })
     }
 
-    // Check if phone already exists
-    const existingPhone = await prisma.user.findUnique({
-      where: {
-        phone_countryCode: {
-          phone,
-          countryCode,
+    // Check if phone number already exists
+    const existingUserByPhone = await prisma.user.findUnique({
+      where: { phone_countryCode: { phone: phone, countryCode: countryCode } },
+    })
+    if (existingUserByPhone) {
+      return NextResponse.json({ user: null, message: "Numéro de téléphone déjà utilisé" }, { status: 409 })
+    }
+
+    const hashedPassword = await hash(password, 10)
+
+    // Create a new user with role PATRON
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        phone,
+        countryCode,
+        password: hashedPassword,
+        role: "PATRON",
+      },
+    })
+
+    // Create a new company associated with the patron
+    const newCompany = await prisma.company.create({
+      data: {
+        name: `${name} Transport`,
+        email: email,
+        phone: phone,
+        countryCode: countryCode,
+        address: "Adresse à définir",
+        country: "Pays à définir",
+        city: "Ville à définir",
+        ownerId: newUser.id,
+        subscriptionTier: "BASIC",
+        subscriptionStatus: "PENDING",
+      },
+    })
+
+    // Update the user to set the active company and connect the company
+    const updatedUser = await prisma.user.update({
+      where: { id: newUser.id },
+      data: {
+        activeCompanyId: newCompany.id,
+        employeeAt: {
+          connect: {
+            id: newCompany.id,
+          },
         },
       },
-    });
+    })
 
-    if (existingPhone) {
-      return NextResponse.json(
-        { error: "Ce numéro de téléphone est déjà utilisé" },
-        { status: 409 }
-      );
-    }
-
-    // Check if company email already exists
-    const existingCompany = await prisma.company.findUnique({
-      where: { email: companyEmail },
-    });
-
-    if (existingCompany) {
-      return NextResponse.json(
-        { error: "Cet email d'entreprise est déjà utilisé" },
-        { status: 409 }
-      );
-    }
-
-    // Check if license number already exists
-    const existingLicense = await prisma.company.findUnique({
-      where: { licenseNumber },
-    });
-
-    if (existingLicense) {
-      return NextResponse.json(
-        { error: "Ce numéro de licence est déjà utilisé" },
-        { status: 409 }
-      );
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // Create user and company in a transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Create the patron user
-      const user = await tx.user.create({
-        data: {
-          firstName,
-          lastName,
-          name: `${firstName} ${lastName}`,
-          email,
-          phone,
-          countryCode,
-          password: hashedPassword,
-          role: "PATRON",
-          country,
-          city,
-          commune,
-          address,
+    // Create activity log
+    await prisma.activity.create({
+      data: {
+        type: "COMPANY_CREATED",
+        description: `Nouvelle entreprise créée: ${newCompany.name}`,
+        status: "SUCCESS",
+        userId: newUser.id,
+        companyId: newCompany.id,
+        metadata: {
+          companyName: newCompany.name,
+          userEmail: email,
         },
-      });
+      },
+    })
 
-      // Create the company
-      const company = await tx.company.create({
-        data: {
-          name: companyName,
-          description: companyDescription,
-          email: companyEmail,
-          phone: companyPhone || phone,
-          countryCode,
-          address: companyAddress,
-          country,
-          city,
-          commune,
-          licenseNumber,
-          ownerId: user.id,
-          isVerified: false, // Requires admin verification
-          isActive: false, // Activated after verification
-        },
-      });
+    const { password: newUserPassword, ...rest } = newUser
 
-      // Update user with company ID
-      await tx.user.update({
-        where: { id: user.id },
-        data: { companyId: company.id },
-      });
-
-      return { user, company };
-    });
-
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = result.user;
-
-    return NextResponse.json({
-      user: userWithoutPassword,
-      company: result.company,
-      message:
-        "Inscription réussie. Votre entreprise est en attente de vérification.",
-    });
-  } catch (error) {
-    console.error("Company registration error:", error);
     return NextResponse.json(
-      { error: "Erreur interne du serveur" },
-      { status: 500 }
-    );
+      {
+        user: rest,
+        company: newCompany,
+        message: "Entreprise créée avec succès",
+        redirectUrl: `/subscription?companyId=${newCompany.id}&welcome=true`,
+      },
+      { status: 201 },
+    )
+  } catch (error) {
+    console.error("Registration Error:", error)
+    return NextResponse.json({ message: "Une erreur s'est produite", error }, { status: 500 })
   }
 }
