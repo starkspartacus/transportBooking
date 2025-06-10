@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     if (!company) {
       return NextResponse.json(
-        { error: "Entreprise non trouvée" },
+        { error: "Entreprise non trouvée ou non autorisée" },
         { status: 404 }
       );
     }
@@ -44,30 +44,20 @@ export async function GET(request: NextRequest) {
       include: {
         route: {
           select: {
-            id: true,
             name: true,
-            departure: true,
-            arrival: true,
-            estimatedDuration: true,
+            departureCountry: true,
+            arrivalCountry: true,
           },
         },
         bus: {
           select: {
-            id: true,
             plateNumber: true,
             model: true,
-            capacity: true,
-          },
-        },
-        _count: {
-          select: {
-            reservations: true,
-            tickets: true,
           },
         },
       },
       orderBy: {
-        departureTime: "asc",
+        departureTime: "desc",
       },
     });
 
@@ -118,7 +108,7 @@ export async function POST(request: NextRequest) {
 
     if (!company) {
       return NextResponse.json(
-        { error: "Entreprise non trouvée" },
+        { error: "Entreprise non trouvée ou non autorisée" },
         { status: 404 }
       );
     }
@@ -140,17 +130,28 @@ export async function POST(request: NextRequest) {
     ]);
 
     if (!route) {
-      return NextResponse.json({ error: "Route non trouvée" }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: "Route non trouvée ou n'appartient pas à votre entreprise",
+        },
+        { status: 404 }
+      );
     }
 
     if (!bus) {
-      return NextResponse.json({ error: "Bus non trouvé" }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: "Bus non trouvé ou n'appartient pas à votre entreprise",
+        },
+        { status: 404 }
+      );
     }
 
     // Vérifier la disponibilité du bus
     const conflictingTrip = await prisma.trip.findFirst({
       where: {
         busId: data.busId,
+        companyId: data.companyId,
         status: {
           in: ["SCHEDULED", "BOARDING", "DEPARTED"],
         },
@@ -186,7 +187,12 @@ export async function POST(request: NextRequest) {
         basePrice: Number.parseFloat(data.basePrice),
         currentPrice: Number.parseFloat(data.currentPrice || data.basePrice),
         availableSeats: data.availableSeats || bus.capacity,
-        status: "SCHEDULED",
+        status: data.status || "SCHEDULED",
+        tripType: data.tripType || "STANDARD",
+        services: data.services || [],
+        driverName: data.driverName || null,
+        driverPhone: data.driverPhone || null,
+        notes: data.notes || null,
         route: {
           connect: { id: data.routeId },
         },

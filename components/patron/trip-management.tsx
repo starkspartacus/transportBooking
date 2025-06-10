@@ -153,11 +153,11 @@ export default function TripManagement() {
       const response = await fetch(`/api/patron/routes?companyId=${companyId}`);
       if (response.ok) {
         const data = await response.json();
-        setRoutes(
-          Array.isArray(data)
-            ? data.filter((route: RouteData) => route.status === "ACTIVE")
-            : []
-        );
+        console.log("Routes fetched:", data); // Debug log
+        setRoutes(Array.isArray(data) ? data : []);
+      } else {
+        console.error("Error response:", response.status, response.statusText);
+        setRoutes([]);
       }
     } catch (error) {
       console.error("Error fetching routes:", error);
@@ -173,11 +173,11 @@ export default function TripManagement() {
       const response = await fetch(`/api/patron/buses?companyId=${companyId}`);
       if (response.ok) {
         const data = await response.json();
-        setBuses(
-          Array.isArray(data)
-            ? data.filter((bus: BusData) => bus.status === "ACTIVE")
-            : []
-        );
+        console.log("Buses fetched:", data); // Debug log
+        setBuses(Array.isArray(data) ? data : []);
+      } else {
+        console.error("Error response:", response.status, response.statusText);
+        setBuses([]);
       }
     } catch (error) {
       console.error("Error fetching buses:", error);

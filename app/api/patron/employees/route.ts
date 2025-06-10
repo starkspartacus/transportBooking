@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// GET - Récupérer tous les employés d'une entreprise
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -11,20 +12,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    const companyId = session.user.companyId;
+    const { searchParams } = new URL(request.url);
+    const companyId = searchParams.get("companyId");
 
     if (!companyId) {
       return NextResponse.json(
-        { error: "Entreprise non trouvée" },
+        { error: "ID de l'entreprise requis" },
+        { status: 400 }
+      );
+    }
+
+    // Vérifier que l'entreprise appartient au patron
+    const company = await prisma.company.findFirst({
+      where: {
+        id: companyId,
+        ownerId: session.user.id,
+      },
+    });
+
+    if (!company) {
+      return NextResponse.json(
+        { error: "Entreprise non trouvée ou non autorisée" },
         { status: 404 }
       );
     }
 
-    // Fixed: Use correct UserRole enum values
     const employees = await prisma.user.findMany({
       where: {
-        companyId,
-        role: { in: ["GESTIONNAIRE", "CAISSIER"] }, // Fixed: Use correct enum values
+        companyId: companyId,
+        role: { in: ["GESTIONNAIRE", "CAISSIER"] },
       },
       select: {
         id: true,
@@ -35,7 +51,9 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         lastLogin: true,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
 
     return NextResponse.json(employees);
@@ -45,6 +63,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// POST - Créer un nouvel employé
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -53,50 +72,55 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    const companyId = session.user.companyId;
+    const data = await request.json();
 
-    if (!companyId) {
+    // Validation des données
+    const requiredFields = ["name", "email", "role", "companyId"];
+
+    for (const field of requiredFields) {
+      if (!data[field]) {
+        return NextResponse.json(
+          { error: `Le champ ${field} est requis` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Vérifier que l'entreprise appartient au patron
+    const company = await prisma.company.findFirst({
+      where: {
+        id: data.companyId,
+        ownerId: session.user.id,
+      },
+    });
+
+    if (!company) {
       return NextResponse.json(
-        { error: "Entreprise non trouvée" },
+        { error: "Entreprise non trouvée ou non autorisée" },
         { status: 404 }
       );
     }
 
-    const data = await request.json();
-
-    // Validate required fields
-    if (!data.name || !data.email || !data.role) {
-      return NextResponse.json(
-        { error: "Données incomplètes" },
-        { status: 400 }
-      );
-    }
-
-    // Validate role
-    if (!["GESTIONNAIRE", "CAISSIER"].includes(data.role)) {
-      return NextResponse.json({ error: "Rôle invalide" }, { status: 400 });
-    }
-
-    // Check if email already exists
+    // Vérifier l'unicité de l'email
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "Cet email est déjà utilisé" },
+        { error: "Un utilisateur avec cet email existe déjà" },
         { status: 400 }
       );
     }
 
-    // Create new employee
-    const newEmployee = await prisma.user.create({
+    // Créer l'employé
+    const employee = await prisma.user.create({
       data: {
         name: data.name,
         email: data.email,
         role: data.role,
-        companyId,
-        status: "ACTIVE",
+        status: data.status || "ACTIVE",
+        companyId: data.companyId,
       },
       select: {
         id: true,
@@ -105,11 +129,21 @@ export async function POST(request: NextRequest) {
         role: true,
         status: true,
         createdAt: true,
-        lastLogin: true,
       },
     });
 
-    return NextResponse.json(newEmployee);
+    // Enregistrer l'activité
+    await prisma.activity.create({
+      data: {
+        type: "EMPLOYEE_ADDED",
+        description: `Employé ${employee.name} ajouté`,
+        status: "SUCCESS",
+        userId: session.user.id,
+        companyId: data.companyId,
+      },
+    });
+
+    return NextResponse.json(employee);
   } catch (error) {
     console.error("Error creating employee:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

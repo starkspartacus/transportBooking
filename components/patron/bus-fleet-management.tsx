@@ -32,11 +32,20 @@ import {
   Car,
   Package,
   Accessibility,
-  Zap,
   Shield,
   Wrench,
   Clock,
   X,
+  Search,
+  RefreshCw,
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Settings,
+  Fuel,
+  Gauge,
+  CalendarDays,
+  Star,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -67,7 +76,10 @@ interface BusType {
   status: string;
   lastMaintenance: string;
   nextMaintenance: string;
-  totalKm: number;
+  mileage: number;
+  year?: number;
+  brand?: string;
+  features?: string[];
 }
 
 const busSchema = z.object({
@@ -81,7 +93,7 @@ const busSchema = z.object({
   color: z.string().min(1, "La couleur est requise"),
   fuelType: z.string().min(1, "Le type de carburant est requis"),
   status: z.enum(["ACTIVE", "MAINTENANCE", "OUT_OF_SERVICE"]),
-  totalKm: z
+  mileage: z
     .string()
     .regex(/^[0-9]+$/, "Le kilométrage doit être un nombre")
     .optional(),
@@ -102,13 +114,21 @@ const busSchema = z.object({
 
 type BusFormData = z.infer<typeof busSchema>;
 
-export default function BusFleetManagement() {
+interface BusFleetManagementProps {
+  companyId: string;
+}
+
+export default function BusFleetManagement({
+  companyId,
+}: BusFleetManagementProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
   const [buses, setBuses] = useState<BusType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showNewForm, setShowNewForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const [customBrands, setCustomBrands] = useState<
     Array<{ id: string; name: string; models: string[] }>
@@ -131,7 +151,7 @@ export default function BusFleetManagement() {
       color: "",
       fuelType: "",
       status: "ACTIVE",
-      totalKm: "0",
+      mileage: "0",
       insuranceExpiry: "",
       technicalInspectionExpiry: "",
       lastMaintenance: "",
@@ -141,17 +161,32 @@ export default function BusFleetManagement() {
   });
 
   useEffect(() => {
-    fetchBuses();
-  }, []);
+    if (companyId) {
+      fetchBuses();
+    }
+  }, [companyId]);
 
   const fetchBuses = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/company/buses");
-      const data = await response.json();
-      setBuses(data);
+      const response = await fetch(`/api/patron/buses?companyId=${companyId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setBuses(data);
+      } else {
+        toast({
+          title: "❌ Erreur",
+          description: "Impossible de charger les véhicules",
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       console.error("Error fetching buses:", error);
+      toast({
+        title: "❌ Erreur",
+        description: "Erreur lors du chargement des véhicules",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -159,15 +194,18 @@ export default function BusFleetManagement() {
 
   const onSubmit = async (data: BusFormData) => {
     try {
-      const response = await fetch("/api/company/buses", {
+      const response = await fetch("/api/patron/buses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          companyId,
+        }),
       });
 
       if (response.ok) {
         toast({
-          title: "Bus ajouté",
+          title: "✅ Bus ajouté",
           description: "Le bus a été ajouté avec succès",
         });
         fetchBuses();
@@ -176,7 +214,7 @@ export default function BusFleetManagement() {
       } else {
         const error = await response.json();
         toast({
-          title: "Erreur",
+          title: "❌ Erreur",
           description: error.error || "Erreur lors de l'ajout du bus",
           variant: "destructive",
         });
@@ -184,7 +222,7 @@ export default function BusFleetManagement() {
     } catch (error) {
       console.error("Error creating bus:", error);
       toast({
-        title: "Erreur",
+        title: "❌ Erreur",
         description: "Erreur lors de l'ajout du bus",
         variant: "destructive",
       });
@@ -203,20 +241,20 @@ export default function BusFleetManagement() {
     if (!confirm("Êtes-vous sûr de vouloir supprimer ce bus ?")) return;
 
     try {
-      const response = await fetch(`/api/company/buses/${busId}`, {
+      const response = await fetch(`/api/patron/buses/${busId}`, {
         method: "DELETE",
       });
 
       if (response.ok) {
         toast({
-          title: "Bus supprimé",
+          title: "🗑️ Bus supprimé",
           description: "Le bus a été supprimé avec succès",
         });
         fetchBuses();
       } else {
         const error = await response.json();
         toast({
-          title: "Erreur",
+          title: "❌ Erreur",
           description: error.error || "Erreur lors de la suppression du bus",
           variant: "destructive",
         });
@@ -224,7 +262,7 @@ export default function BusFleetManagement() {
     } catch (error) {
       console.error("Error deleting bus:", error);
       toast({
-        title: "Erreur",
+        title: "❌ Erreur",
         description: "Erreur lors de la suppression du bus",
         variant: "destructive",
       });
@@ -240,6 +278,56 @@ export default function BusFleetManagement() {
       return "N/A";
     }
   };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "ACTIVE":
+        return (
+          <Badge className="bg-green-100 text-green-800 border-green-200 hover:bg-green-200 transition-colors">
+            <CheckCircle2 className="h-3 w-3 mr-1" />
+            En service
+          </Badge>
+        );
+      case "MAINTENANCE":
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200 transition-colors">
+            <Settings className="h-3 w-3 mr-1" />
+            Maintenance
+          </Badge>
+        );
+      case "OUT_OF_SERVICE":
+        return (
+          <Badge className="bg-red-100 text-red-800 border-red-200 hover:bg-red-200 transition-colors">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Hors service
+          </Badge>
+        );
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const filteredBuses = buses.filter((bus) => {
+    const matchesSearch =
+      bus.plateNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      bus.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (bus.brand && bus.brand.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesStatus = statusFilter === "all" || bus.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // Statistiques
+  const totalBuses = buses.length;
+  const activeBuses = buses.filter((bus) => bus.status === "ACTIVE").length;
+  const maintenanceBuses = buses.filter(
+    (bus) => bus.status === "MAINTENANCE"
+  ).length;
+  const outOfServiceBuses = buses.filter(
+    (bus) => bus.status === "OUT_OF_SERVICE"
+  ).length;
+  const totalCapacity = buses.reduce((total, bus) => total + bus.capacity, 0);
 
   const EQUIPMENT_OPTIONS = [
     {
@@ -300,6 +388,21 @@ export default function BusFleetManagement() {
     },
   ];
 
+  if (isLoading) {
+    return (
+      <Card className="shadow-xl border-0">
+        <CardContent className="pt-6">
+          <div className="flex justify-center items-center h-64">
+            <div className="text-center">
+              <RefreshCw className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+              <p className="text-gray-600">Chargement de la flotte...</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header avec gradient */}
@@ -317,17 +420,153 @@ export default function BusFleetManagement() {
                 </p>
               </div>
             </CardTitle>
-            <Button
-              onClick={() => setShowNewForm(true)}
-              className="bg-white text-blue-600 hover:bg-blue-50 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-              size="lg"
-            >
-              <Plus className="h-5 w-5 mr-2" />
-              Ajouter un bus
-              <Sparkles className="h-4 w-4 ml-2" />
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={fetchBuses}
+                disabled={isLoading}
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20 transition-all duration-300"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
+                />
+                Actualiser
+              </Button>
+              <Button
+                onClick={() => setShowNewForm(true)}
+                className="bg-white text-blue-600 hover:bg-blue-50 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                size="lg"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Ajouter un bus
+                <Sparkles className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
           </div>
         </CardHeader>
+      </Card>
+
+      {/* Statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 hover:shadow-lg transition-all duration-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-bold text-blue-700">{totalBuses}</p>
+                <p className="text-sm text-blue-600">Total véhicules</p>
+              </div>
+              <div className="p-3 bg-blue-200 rounded-full">
+                <BusIcon className="h-6 w-6 text-blue-700" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 hover:shadow-lg transition-all duration-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-bold text-green-700">
+                  {activeBuses}
+                </p>
+                <p className="text-sm text-green-600">En service</p>
+              </div>
+              <div className="p-3 bg-green-200 rounded-full">
+                <CheckCircle2 className="h-6 w-6 text-green-700" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200 hover:shadow-lg transition-all duration-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-bold text-yellow-700">
+                  {maintenanceBuses}
+                </p>
+                <p className="text-sm text-yellow-600">Maintenance</p>
+              </div>
+              <div className="p-3 bg-yellow-200 rounded-full">
+                <Settings className="h-6 w-6 text-yellow-700" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 hover:shadow-lg transition-all duration-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-bold text-red-700">
+                  {outOfServiceBuses}
+                </p>
+                <p className="text-sm text-red-600">Hors service</p>
+              </div>
+              <div className="p-3 bg-red-200 rounded-full">
+                <AlertTriangle className="h-6 w-6 text-red-700" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 hover:shadow-lg transition-all duration-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-bold text-purple-700">
+                  {totalCapacity}
+                </p>
+                <p className="text-sm text-purple-600">Capacité totale</p>
+              </div>
+              <div className="p-3 bg-purple-200 rounded-full">
+                <Armchair className="h-6 w-6 text-purple-700" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filtres */}
+      <Card className="shadow-sm">
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Rechercher par plaque, modèle ou marque..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-2 border-2 border-gray-200 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
+              >
+                <option value="all">Tous les statuts</option>
+                <option value="ACTIVE">En service</option>
+                <option value="MAINTENANCE">Maintenance</option>
+                <option value="OUT_OF_SERVICE">Hors service</option>
+              </select>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchTerm("");
+                  setStatusFilter("all");
+                }}
+                className="hover:bg-gray-50 transition-colors border-2 border-gray-200 hover:border-gray-300"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Réinitialiser
+              </Button>
+            </div>
+          </div>
+        </CardContent>
       </Card>
 
       {/* Formulaire d'ajout avec animations */}
@@ -606,7 +845,7 @@ export default function BusFleetManagement() {
                       render={({ field }) => (
                         <FormItem className="space-y-2">
                           <FormLabel className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                            <Zap className="h-4 w-4 text-yellow-500" />
+                            <Fuel className="h-4 w-4 text-yellow-500" />
                             Type de carburant *
                           </FormLabel>
                           <FormControl>
@@ -633,7 +872,7 @@ export default function BusFleetManagement() {
                       render={({ field }) => (
                         <FormItem className="space-y-2">
                           <FormLabel className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
+                            <Activity className="h-4 w-4 text-green-500" />
                             Statut *
                           </FormLabel>
                           <FormControl>
@@ -665,7 +904,7 @@ export default function BusFleetManagement() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
                     <div className="p-2 bg-green-100 rounded-lg">
-                      <Wrench className="h-5 w-5 text-green-600" />
+                      <Gauge className="h-5 w-5 text-green-600" />
                     </div>
                     <h3 className="text-lg font-semibold text-gray-800">
                       Informations techniques
@@ -674,11 +913,11 @@ export default function BusFleetManagement() {
 
                   <FormField
                     control={form.control}
-                    name="totalKm"
+                    name="mileage"
                     render={({ field }) => (
                       <FormItem className="space-y-2">
                         <FormLabel className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                          <div className="w-4 h-4 rounded-full bg-gradient-to-r from-green-400 to-blue-400"></div>
+                          <Gauge className="h-4 w-4 text-green-500" />
                           Kilométrage total
                         </FormLabel>
                         <FormControl>
@@ -699,7 +938,7 @@ export default function BusFleetManagement() {
                 <div className="space-y-6">
                   <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
                     <div className="p-2 bg-purple-100 rounded-lg">
-                      <CalendarIcon className="h-5 w-5 text-purple-600" />
+                      <CalendarDays className="h-5 w-5 text-purple-600" />
                     </div>
                     <h3 className="text-lg font-semibold text-gray-800">
                       Dates importantes
@@ -1062,111 +1301,147 @@ export default function BusFleetManagement() {
       {/* Liste des bus */}
       <Card className="shadow-xl border-0">
         <CardContent className="p-6">
-          {isLoading ? (
+          {filteredBuses.length === 0 ? (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Chargement des bus...</p>
+              <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 rounded-full w-24 h-24 mx-auto mb-4 flex items-center justify-center">
+                <BusIcon className="h-12 w-12 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {buses.length === 0
+                  ? "Aucun véhicule trouvé"
+                  : "Aucun véhicule ne correspond aux critères"}
+              </h3>
+              <p className="text-gray-600 mb-4">
+                {buses.length === 0
+                  ? "Commencez par ajouter votre premier véhicule"
+                  : "Essayez de modifier vos critères de recherche"}
+              </p>
+              {buses.length === 0 && (
+                <Button
+                  onClick={() => setShowNewForm(true)}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Ajouter un véhicule
+                  <Sparkles className="h-4 w-4 ml-2" />
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
-              {Array.isArray(buses) && buses.length > 0 ? (
-                buses.map((bus, index) => (
-                  <div
-                    key={bus.id}
-                    className="border-2 border-gray-100 rounded-xl p-6 hover:shadow-lg hover:border-blue-200 transition-all duration-300 transform hover:scale-[1.02] animate-in slide-in-from-left-4"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="p-2 bg-blue-100 rounded-lg">
-                            <BusIcon className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <h3 className="font-bold text-lg text-gray-800">
-                            {bus.plateNumber}
-                          </h3>
+              {filteredBuses.map((bus, index) => (
+                <div
+                  key={bus.id}
+                  className="border-2 border-gray-100 rounded-xl p-6 hover:shadow-lg hover:border-blue-200 transition-all duration-300 transform hover:scale-[1.02] animate-in slide-in-from-left-4 group"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
+                          <BusIcon className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <h3 className="font-bold text-lg text-gray-800 group-hover:text-blue-600 transition-colors">
+                          {bus.plateNumber}
+                        </h3>
+                        {getStatusBadge(bus.status)}
+                        {bus.features && bus.features.length > 0 && (
                           <Badge
                             variant="outline"
-                            className={cn(
-                              "px-3 py-1 font-medium",
-                              bus.status === "ACTIVE" &&
-                                "bg-green-50 text-green-700 border-green-200",
-                              bus.status === "MAINTENANCE" &&
-                                "bg-yellow-50 text-yellow-700 border-yellow-200",
-                              bus.status === "OUT_OF_SERVICE" &&
-                                "bg-red-50 text-red-700 border-red-200"
-                            )}
+                            className="bg-purple-50 text-purple-700 border-purple-200"
                           >
-                            {bus.status === "ACTIVE" && "🟢"}
-                            {bus.status === "MAINTENANCE" && "🟡"}
-                            {bus.status === "OUT_OF_SERVICE" && "🔴"}{" "}
-                            {bus.status}
+                            <Star className="h-3 w-3 mr-1" />
+                            {bus.features.length} équipement
+                            {bus.features.length > 1 ? "s" : ""}
                           </Badge>
-                        </div>
-                        <p className="text-gray-600 mb-3 font-medium">
-                          {bus.model}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-6 text-sm text-gray-500">
-                          <span className="flex items-center gap-2">
-                            <Armchair className="h-4 w-4 text-indigo-500" />
-                            Capacité: {bus.capacity} places
-                          </span>
-                          <span className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-green-500" />
-                            Dernière maintenance:{" "}
-                            {formatDate(bus.lastMaintenance)}
-                          </span>
-                          <span className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-purple-500" />
-                            Prochaine maintenance:{" "}
-                            {formatDate(bus.nextMaintenance)}
-                          </span>
-                          <span className="flex items-center gap-2">
-                            <div className="w-4 h-4 rounded-full bg-gradient-to-r from-green-400 to-blue-400"></div>
-                            Kilométrage: {bus.totalKm} km
-                          </span>
-                        </div>
+                        )}
                       </div>
-                      <div className="flex gap-3">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleViewBus(bus.id)}
-                          className="border-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all duration-300 hover:scale-105"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEditBus(bus.id)}
-                          className="border-2 border-green-200 text-green-600 hover:bg-green-50 hover:border-green-300 transition-all duration-300 hover:scale-105"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteBus(bus.id)}
-                          className="border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 transition-all duration-300 hover:scale-105"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      <p className="text-gray-600 mb-3 font-medium flex items-center gap-2">
+                        <Car className="h-4 w-4 text-gray-500" />
+                        {bus.brand && `${bus.brand} `}
+                        {bus.model}
+                        {bus.year && (
+                          <span className="text-gray-500">({bus.year})</span>
+                        )}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-6 text-sm text-gray-500">
+                        <span className="flex items-center gap-2">
+                          <Armchair className="h-4 w-4 text-indigo-500" />
+                          Capacité: {bus.capacity} places
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-green-500" />
+                          Dernière maintenance:{" "}
+                          {formatDate(bus.lastMaintenance)}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-purple-500" />
+                          Prochaine maintenance:{" "}
+                          {formatDate(bus.nextMaintenance)}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <Gauge className="h-4 w-4 text-orange-500" />
+                          Kilométrage: {bus.mileage?.toLocaleString() || 0} km
+                        </span>
                       </div>
+
+                      {/* Équipements */}
+                      {bus.features && bus.features.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {bus.features.slice(0, 4).map((feature) => {
+                            const equipment = EQUIPMENT_OPTIONS.find(
+                              (eq) => eq.id === feature
+                            );
+                            if (!equipment) return null;
+                            const IconComponent = equipment.icon;
+                            return (
+                              <div
+                                key={feature}
+                                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs ${equipment.bgColor} ${equipment.color} border`}
+                              >
+                                <IconComponent className="h-3 w-3" />
+                                <span>{equipment.name}</span>
+                              </div>
+                            );
+                          })}
+                          {bus.features.length > 4 && (
+                            <div className="flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-gray-100 text-gray-600 border">
+                              <Plus className="h-3 w-3" />+
+                              {bus.features.length - 4} autres
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleViewBus(bus.id)}
+                        className="border-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all duration-300 hover:scale-105"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEditBus(bus.id)}
+                        className="border-2 border-green-200 text-green-600 hover:bg-green-50 hover:border-green-300 transition-all duration-300 hover:scale-105"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDeleteBus(bus.id)}
+                        className="border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 transition-all duration-300 hover:scale-105"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-12">
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <BusIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">Aucun bus trouvé</p>
-                    <p className="text-sm text-gray-500">
-                      Commencez par ajouter votre premier véhicule
-                    </p>
-                  </div>
                 </div>
-              )}
+              ))}
             </div>
           )}
         </CardContent>

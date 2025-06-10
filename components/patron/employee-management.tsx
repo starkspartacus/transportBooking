@@ -31,7 +31,6 @@ import {
   Phone,
   MapPin,
   Calendar,
-  Plus,
   Search,
   Filter,
   Eye,
@@ -42,6 +41,18 @@ import {
   Copy,
   Users,
   Shield,
+  Sparkles,
+  UserPlus,
+  Building2,
+  Briefcase,
+  DollarSign,
+  AlertCircle,
+  CheckCircle2,
+  RefreshCw,
+  X,
+  Star,
+  Award,
+  Activity,
 } from "lucide-react";
 import { NATIONALITIES, DEPARTMENTS, POSITIONS } from "@/constants/employee";
 import { AFRICAN_COUNTRIES } from "@/constants/countries";
@@ -112,11 +123,13 @@ const initialFormData: EmployeeFormData = {
   notes: "",
 };
 
+interface EmployeeManagementProps {
+  companyId: string;
+}
+
 export default function EmployeeManagement({
   companyId,
-}: {
-  companyId?: string;
-}) {
+}: EmployeeManagementProps) {
   const { toast } = useToast();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeCodes, setEmployeeCodes] = useState<EmployeeCode[]>([]);
@@ -130,7 +143,9 @@ export default function EmployeeManagement({
   const [generatingCode, setGeneratingCode] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchEmployees();
+    if (companyId) {
+      fetchEmployees();
+    }
     // Décompte toutes les minutes
     const interval = setInterval(() => {
       setEmployeeCodes((prev) =>
@@ -155,10 +170,9 @@ export default function EmployeeManagement({
   const fetchEmployees = async () => {
     setIsLoading(true);
     try {
-      const url = companyId
-        ? `/api/company/employees?companyId=${companyId}`
-        : "/api/company/employees";
-      const response = await fetch(url);
+      const response = await fetch(
+        `/api/patron/employees?companyId=${companyId}`
+      );
       const contentType = response.headers.get("content-type");
       if (
         response.ok &&
@@ -203,7 +217,7 @@ export default function EmployeeManagement({
         position: !formData.position ? undefined : formData.position,
       };
 
-      const response = await fetch("/api/company/employees", {
+      const response = await fetch("/api/patron/employees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -211,7 +225,7 @@ export default function EmployeeManagement({
 
       if (response.ok) {
         toast({
-          title: "Succès",
+          title: "✅ Succès",
           description: "Employé créé avec succès",
         });
         setIsDialogOpen(false);
@@ -220,7 +234,7 @@ export default function EmployeeManagement({
       } else {
         const errorData = await response.json();
         toast({
-          title: "Erreur",
+          title: "❌ Erreur",
           description:
             errorData.error || "Erreur lors de la création de l'employé",
           variant: "destructive",
@@ -229,7 +243,7 @@ export default function EmployeeManagement({
     } catch (error) {
       console.error("Error creating employee:", error);
       toast({
-        title: "Erreur",
+        title: "❌ Erreur",
         description: "Erreur lors de la création de l'employé",
         variant: "destructive",
       });
@@ -264,13 +278,13 @@ export default function EmployeeManagement({
         });
 
         toast({
-          title: "Code généré",
+          title: "🔑 Code généré",
           description: `Code d'accès généré: ${data.code}`,
         });
       } else {
         const errorData = await response.json();
         toast({
-          title: "Erreur",
+          title: "❌ Erreur",
           description:
             errorData.error || "Erreur lors de la génération du code",
           variant: "destructive",
@@ -279,7 +293,7 @@ export default function EmployeeManagement({
     } catch (error) {
       console.error("Error generating code:", error);
       toast({
-        title: "Erreur",
+        title: "❌ Erreur",
         description: "Erreur lors de la génération du code",
         variant: "destructive",
       });
@@ -292,7 +306,7 @@ export default function EmployeeManagement({
     try {
       await navigator.clipboard.writeText(text);
       toast({
-        title: "Copié",
+        title: "📋 Copié",
         description: "Code copié dans le presse-papiers",
       });
     } catch (error) {
@@ -364,10 +378,13 @@ export default function EmployeeManagement({
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="shadow-xl border-0">
         <CardContent className="pt-6">
           <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+            <div className="text-center">
+              <RefreshCw className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+              <p className="text-gray-600">Chargement des employés...</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -376,7 +393,7 @@ export default function EmployeeManagement({
 
   return (
     <div className="space-y-6">
-      {/* Header avec statistiques */}
+      {/* Header avec gradient */}
       <Card className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white border-0 shadow-2xl">
         <CardHeader>
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -397,23 +414,41 @@ export default function EmployeeManagement({
                   className="bg-white text-blue-600 hover:bg-blue-50 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                   size="lg"
                 >
-                  <Plus className="h-5 w-5 mr-2" />
+                  <UserPlus className="h-5 w-5 mr-2" />
                   Ajouter un employé
+                  <Sparkles className="h-4 w-4 ml-2" />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Ajouter un nouvel employé</DialogTitle>
+                  <DialogTitle className="flex items-center gap-3 text-xl">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <UserPlus className="h-5 w-5 text-blue-600" />
+                    </div>
+                    Ajouter un nouvel employé
+                  </DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Informations personnelles */}
-                  <div className="space-y-4">
-                    <h3 className="font-medium text-lg">
-                      Informations personnelles
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleSubmit} className="space-y-8">
+                  {/* Section Informations personnelles */}
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <User className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-800">
+                        Informations personnelles
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <Label htmlFor="firstName">Prénom *</Label>
+                        <Label
+                          htmlFor="firstName"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <User className="h-4 w-4 text-blue-500" />
+                          Prénom *
+                        </Label>
                         <Input
                           id="firstName"
                           value={formData.firstName}
@@ -424,10 +459,17 @@ export default function EmployeeManagement({
                             }))
                           }
                           required
+                          className="border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300 hover:border-gray-300"
                         />
                       </div>
                       <div>
-                        <Label htmlFor="lastName">Nom *</Label>
+                        <Label
+                          htmlFor="lastName"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <User className="h-4 w-4 text-green-500" />
+                          Nom *
+                        </Label>
                         <Input
                           id="lastName"
                           value={formData.lastName}
@@ -438,10 +480,17 @@ export default function EmployeeManagement({
                             }))
                           }
                           required
+                          className="border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300 hover:border-gray-300"
                         />
                       </div>
                       <div>
-                        <Label htmlFor="email">Email *</Label>
+                        <Label
+                          htmlFor="email"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <Mail className="h-4 w-4 text-purple-500" />
+                          Email *
+                        </Label>
                         <Input
                           id="email"
                           type="email"
@@ -453,10 +502,17 @@ export default function EmployeeManagement({
                             }))
                           }
                           required
+                          className="border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300 hover:border-gray-300"
                         />
                       </div>
                       <div>
-                        <Label htmlFor="phone">Téléphone</Label>
+                        <Label
+                          htmlFor="phone"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <Phone className="h-4 w-4 text-orange-500" />
+                          Téléphone
+                        </Label>
                         <div className="flex gap-2">
                           <Select
                             value={formData.countryCode}
@@ -467,7 +523,7 @@ export default function EmployeeManagement({
                               }))
                             }
                           >
-                            <SelectTrigger className="w-24">
+                            <SelectTrigger className="w-24 border-2 border-gray-200 focus:border-blue-500">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -491,11 +547,18 @@ export default function EmployeeManagement({
                               }))
                             }
                             placeholder="0123456789"
+                            className="border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300 hover:border-gray-300"
                           />
                         </div>
                       </div>
                       <div>
-                        <Label htmlFor="nationality">Nationalité</Label>
+                        <Label
+                          htmlFor="nationality"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <MapPin className="h-4 w-4 text-red-500" />
+                          Nationalité
+                        </Label>
                         <Select
                           value={formData.nationality}
                           onValueChange={(value) =>
@@ -505,7 +568,7 @@ export default function EmployeeManagement({
                             }))
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="border-2 border-gray-200 focus:border-blue-500">
                             <SelectValue placeholder="Sélectionner une nationalité" />
                           </SelectTrigger>
                           <SelectContent>
@@ -525,33 +588,45 @@ export default function EmployeeManagement({
 
                   <Separator />
 
-                  {/* Informations professionnelles */}
-                  <div className="space-y-4">
-                    <h3 className="font-medium text-lg">
-                      Informations professionnelles
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Section Informations professionnelles */}
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
+                      <div className="p-2 bg-green-100 rounded-lg">
+                        <Briefcase className="h-5 w-5 text-green-600" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-800">
+                        Informations professionnelles
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <Label htmlFor="role">Rôle *</Label>
+                        <Label
+                          htmlFor="role"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <Shield className="h-4 w-4 text-blue-500" />
+                          Rôle *
+                        </Label>
                         <Select
                           value={formData.role}
                           onValueChange={(value: "GESTIONNAIRE" | "CAISSIER") =>
                             setFormData((prev) => ({ ...prev, role: value }))
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="border-2 border-gray-200 focus:border-blue-500">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="CAISSIER">
                               <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4" />
+                                <Users className="h-4 w-4 text-purple-500" />
                                 Caissier
                               </div>
                             </SelectItem>
                             <SelectItem value="GESTIONNAIRE">
                               <div className="flex items-center gap-2">
-                                <Shield className="h-4 w-4" />
+                                <Shield className="h-4 w-4 text-blue-500" />
                                 Gestionnaire
                               </div>
                             </SelectItem>
@@ -559,26 +634,46 @@ export default function EmployeeManagement({
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="status">Statut</Label>
+                        <Label
+                          htmlFor="status"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <Activity className="h-4 w-4 text-green-500" />
+                          Statut
+                        </Label>
                         <Select
                           value={formData.status}
                           onValueChange={(value: "ACTIVE" | "SUSPENDED") =>
                             setFormData((prev) => ({ ...prev, status: value }))
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="border-2 border-gray-200 focus:border-blue-500">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="ACTIVE">🟢 Actif</SelectItem>
+                            <SelectItem value="ACTIVE">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                Actif
+                              </div>
+                            </SelectItem>
                             <SelectItem value="SUSPENDED">
-                              🔴 Suspendu
+                              <div className="flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-red-500" />
+                                Suspendu
+                              </div>
                             </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="department">Département</Label>
+                        <Label
+                          htmlFor="department"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <Building2 className="h-4 w-4 text-indigo-500" />
+                          Département
+                        </Label>
                         <Select
                           value={formData.department}
                           onValueChange={(value) =>
@@ -588,7 +683,7 @@ export default function EmployeeManagement({
                             }))
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="border-2 border-gray-200 focus:border-blue-500">
                             <SelectValue placeholder="Sélectionner un département" />
                           </SelectTrigger>
                           <SelectContent>
@@ -604,7 +699,13 @@ export default function EmployeeManagement({
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="position">Poste</Label>
+                        <Label
+                          htmlFor="position"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <Award className="h-4 w-4 text-yellow-500" />
+                          Poste
+                        </Label>
                         <Select
                           value={formData.position}
                           onValueChange={(value) =>
@@ -618,7 +719,7 @@ export default function EmployeeManagement({
                             formData.department === "none"
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="border-2 border-gray-200 focus:border-blue-500">
                             <SelectValue placeholder="Sélectionner un poste" />
                           </SelectTrigger>
                           <SelectContent>
@@ -634,7 +735,13 @@ export default function EmployeeManagement({
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="salary">Salaire (FCFA)</Label>
+                        <Label
+                          htmlFor="salary"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <DollarSign className="h-4 w-4 text-green-500" />
+                          Salaire (FCFA)
+                        </Label>
                         <Input
                           id="salary"
                           type="number"
@@ -646,10 +753,17 @@ export default function EmployeeManagement({
                             }))
                           }
                           placeholder="500000"
+                          className="border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300 hover:border-gray-300"
                         />
                       </div>
                       <div>
-                        <Label htmlFor="hireDate">Date d'embauche</Label>
+                        <Label
+                          htmlFor="hireDate"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <Calendar className="h-4 w-4 text-purple-500" />
+                          Date d'embauche
+                        </Label>
                         <Input
                           id="hireDate"
                           type="date"
@@ -660,6 +774,7 @@ export default function EmployeeManagement({
                               hireDate: e.target.value,
                             }))
                           }
+                          className="border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300 hover:border-gray-300"
                         />
                       </div>
                     </div>
@@ -667,12 +782,26 @@ export default function EmployeeManagement({
 
                   <Separator />
 
-                  {/* Contact d'urgence */}
-                  <div className="space-y-4">
-                    <h3 className="font-medium text-lg">Contact d'urgence</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Section Contact d'urgence */}
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
+                      <div className="p-2 bg-red-100 rounded-lg">
+                        <AlertCircle className="h-5 w-5 text-red-600" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-800">
+                        Contact d'urgence
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <Label htmlFor="emergencyContact">Nom du contact</Label>
+                        <Label
+                          htmlFor="emergencyContact"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <User className="h-4 w-4 text-red-500" />
+                          Nom du contact
+                        </Label>
                         <Input
                           id="emergencyContact"
                           value={formData.emergencyContact}
@@ -682,10 +811,15 @@ export default function EmployeeManagement({
                               emergencyContact: e.target.value,
                             }))
                           }
+                          className="border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300 hover:border-gray-300"
                         />
                       </div>
                       <div>
-                        <Label htmlFor="emergencyPhone">
+                        <Label
+                          htmlFor="emergencyPhone"
+                          className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                        >
+                          <Phone className="h-4 w-4 text-red-500" />
                           Téléphone d'urgence
                         </Label>
                         <Input
@@ -697,13 +831,20 @@ export default function EmployeeManagement({
                               emergencyPhone: e.target.value,
                             }))
                           }
+                          className="border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300 hover:border-gray-300"
                         />
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <Label htmlFor="notes">Notes</Label>
+                    <Label
+                      htmlFor="notes"
+                      className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                    >
+                      <Star className="h-4 w-4 text-yellow-500" />
+                      Notes
+                    </Label>
                     <Input
                       id="notes"
                       value={formData.notes}
@@ -714,18 +855,28 @@ export default function EmployeeManagement({
                         }))
                       }
                       placeholder="Notes additionnelles..."
+                      className="border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300 hover:border-gray-300"
                     />
                   </div>
 
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() => setIsDialogOpen(false)}
+                      className="px-8 py-3 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-all duration-300"
                     >
+                      <X className="h-4 w-4 mr-2" />
                       Annuler
                     </Button>
-                    <Button type="submit">Créer l'employé</Button>
+                    <Button
+                      type="submit"
+                      className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                    >
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Créer l'employé
+                      <Sparkles className="h-4 w-4 ml-2" />
+                    </Button>
                   </div>
                 </form>
               </DialogContent>
@@ -736,7 +887,7 @@ export default function EmployeeManagement({
 
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 hover:shadow-lg transition-all duration-200">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -745,12 +896,14 @@ export default function EmployeeManagement({
                 </p>
                 <p className="text-sm text-blue-600">Total employés</p>
               </div>
-              <Users className="h-8 w-8 text-blue-500" />
+              <div className="p-3 bg-blue-200 rounded-full">
+                <Users className="h-6 w-6 text-blue-700" />
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 hover:shadow-lg transition-all duration-200">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -759,14 +912,14 @@ export default function EmployeeManagement({
                 </p>
                 <p className="text-sm text-green-600">Actifs</p>
               </div>
-              <div className="h-8 w-8 bg-green-500 rounded-full flex items-center justify-center">
-                <div className="h-3 w-3 bg-white rounded-full"></div>
+              <div className="p-3 bg-green-200 rounded-full">
+                <CheckCircle2 className="h-6 w-6 text-green-700" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 hover:shadow-lg transition-all duration-200">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -775,12 +928,14 @@ export default function EmployeeManagement({
                 </p>
                 <p className="text-sm text-purple-600">Gestionnaires</p>
               </div>
-              <Shield className="h-8 w-8 text-purple-500" />
+              <div className="p-3 bg-purple-200 rounded-full">
+                <Shield className="h-6 w-6 text-purple-700" />
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 hover:shadow-lg transition-all duration-200">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -789,15 +944,17 @@ export default function EmployeeManagement({
                 </p>
                 <p className="text-sm text-orange-600">Caissiers</p>
               </div>
-              <Users className="h-8 w-8 text-orange-500" />
+              <div className="p-3 bg-orange-200 rounded-full">
+                <Users className="h-6 w-6 text-orange-700" />
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Filtres */}
-      <Card>
-        <CardContent className="pt-6">
+      <Card className="shadow-sm">
+        <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
@@ -806,7 +963,7 @@ export default function EmployeeManagement({
                   placeholder="Rechercher par nom, email ou téléphone..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
                 />
               </div>
             </div>
@@ -814,7 +971,7 @@ export default function EmployeeManagement({
               value={departmentFilter}
               onValueChange={setDepartmentFilter}
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-48 border-2 border-gray-200 focus:border-blue-500">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Département" />
               </SelectTrigger>
@@ -828,7 +985,7 @@ export default function EmployeeManagement({
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-32 border-2 border-gray-200 focus:border-blue-500">
                 <SelectValue placeholder="Statut" />
               </SelectTrigger>
               <SelectContent>
@@ -837,7 +994,12 @@ export default function EmployeeManagement({
                 <SelectItem value="SUSPENDED">Suspendu</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={resetFilters}>
+            <Button
+              variant="outline"
+              onClick={resetFilters}
+              className="hover:bg-gray-50 transition-colors border-2 border-gray-200 hover:border-gray-300"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
               Réinitialiser
             </Button>
           </div>
@@ -846,7 +1008,7 @@ export default function EmployeeManagement({
 
       {/* Liste des employés */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredEmployees.map((employee) => {
+        {filteredEmployees.map((employee, index) => {
           const employeeCode = getEmployeeCode(employee.id);
           const timeRemaining = employeeCode
             ? getTimeRemaining(employeeCode.expiresAt)
@@ -855,7 +1017,8 @@ export default function EmployeeManagement({
           return (
             <Card
               key={employee.id}
-              className="hover:shadow-lg transition-shadow border-l-4 border-l-blue-500"
+              className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500 group transform hover:scale-[1.02] animate-in slide-in-from-left-4"
+              style={{ animationDelay: `${index * 100}ms` }}
             >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
@@ -870,7 +1033,9 @@ export default function EmployeeManagement({
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <CardTitle className="text-lg">{employee.name}</CardTitle>
+                      <CardTitle className="text-lg group-hover:text-blue-600 transition-colors">
+                        {employee.name}
+                      </CardTitle>
                       <Badge
                         variant={
                           employee.role === "GESTIONNAIRE"
@@ -904,6 +1069,11 @@ export default function EmployeeManagement({
                         : "bg-red-100 text-red-800 border-red-200"
                     }
                   >
+                    {employee.status === "ACTIVE" ? (
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                    ) : (
+                      <AlertCircle className="h-3 w-3 mr-1" />
+                    )}
                     {employee.status === "ACTIVE" ? "Actif" : "Suspendu"}
                   </Badge>
                 </div>
@@ -931,7 +1101,7 @@ export default function EmployeeManagement({
                   )}
                   {employee.department && (
                     <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-gray-500" />
+                      <Building2 className="h-4 w-4 text-gray-500" />
                       <span>{getDepartmentName(employee.department)}</span>
                     </div>
                   )}
@@ -946,7 +1116,7 @@ export default function EmployeeManagement({
 
                 {/* Code d'accès */}
                 {employeeCode && timeRemaining ? (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Key className="h-4 w-4 text-blue-600" />
@@ -958,7 +1128,7 @@ export default function EmployeeManagement({
                         size="sm"
                         variant="ghost"
                         onClick={() => copyToClipboard(employeeCode.code)}
-                        className="h-6 w-6 p-0"
+                        className="h-6 w-6 p-0 hover:bg-blue-100"
                       >
                         <Copy className="h-3 w-3" />
                       </Button>
@@ -979,30 +1149,43 @@ export default function EmployeeManagement({
                     size="sm"
                     onClick={() => generateAccessCode(employee.id)}
                     disabled={generatingCode === employee.id}
-                    className="w-full"
+                    className="w-full border-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all duration-300"
                   >
                     <Key className="h-4 w-4 mr-2" />
-                    {generatingCode === employee.id
-                      ? "Génération..."
-                      : "Code d'accès"}
+                    {generatingCode === employee.id ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Génération...
+                      </>
+                    ) : (
+                      "Générer code d'accès"
+                    )}
                   </Button>
                 )}
 
                 <Separator />
 
                 <div className="flex justify-between">
-                  <Button variant="ghost" size="sm">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                  >
                     <Eye className="h-4 w-4 mr-2" />
                     Voir
                   </Button>
-                  <Button variant="ghost" size="sm">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="hover:bg-green-50 hover:text-green-600 transition-colors"
+                  >
                     <Edit className="h-4 w-4 mr-2" />
                     Modifier
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-red-600 hover:text-red-700"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -1014,20 +1197,32 @@ export default function EmployeeManagement({
       </div>
 
       {filteredEmployees.length === 0 && (
-        <Card>
+        <Card className="shadow-xl border-0">
           <CardContent className="pt-6">
-            <div className="text-center py-8">
-              <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <div className="text-center py-12">
+              <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 rounded-full w-24 h-24 mx-auto mb-4 flex items-center justify-center">
+                <User className="h-12 w-12 text-gray-400" />
+              </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">
                 Aucun employé trouvé
               </h3>
-              <p className="text-gray-600">
+              <p className="text-gray-600 mb-4">
                 {searchTerm ||
                 departmentFilter !== "all" ||
                 statusFilter !== "all"
                   ? "Aucun employé ne correspond aux critères de recherche."
                   : "Commencez par ajouter votre premier employé."}
               </p>
+              {employees.length === 0 && (
+                <Button
+                  onClick={() => setIsDialogOpen(true)}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                >
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Ajouter un employé
+                  <Sparkles className="h-4 w-4 ml-2" />
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

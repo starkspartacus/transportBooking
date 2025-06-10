@@ -15,75 +15,50 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const companyId = searchParams.get("companyId");
 
-    // Si pas de companyId fourni, utiliser l'entreprise active de l'utilisateur
-    let targetCompanyId = companyId;
-
-    if (!targetCompanyId) {
-      // Récupérer la première entreprise du patron
-      const userCompany = await prisma.company.findFirst({
-        where: {
-          ownerId: session.user.id,
-        },
-        select: { id: true },
-      });
-
-      if (!userCompany) {
-        return NextResponse.json(
-          { error: "Aucune entreprise trouvée" },
-          { status: 404 }
-        );
-      }
-
-      targetCompanyId = userCompany.id;
+    if (!companyId) {
+      return NextResponse.json(
+        { error: "ID de l'entreprise requis" },
+        { status: 400 }
+      );
     }
 
     // Vérifier que l'entreprise appartient au patron
     const company = await prisma.company.findFirst({
       where: {
-        id: targetCompanyId,
+        id: companyId,
         ownerId: session.user.id,
       },
     });
 
     if (!company) {
       return NextResponse.json(
-        { error: "Entreprise non trouvée" },
+        { error: "Entreprise non trouvée ou non autorisée" },
         { status: 404 }
       );
     }
 
     const buses = await prisma.bus.findMany({
-      where: { companyId: targetCompanyId },
-      orderBy: { createdAt: "desc" },
+      where: {
+        companyId: companyId,
+        status: "ACTIVE",
+      },
+      select: {
+        id: true,
+        plateNumber: true,
+        model: true,
+        capacity: true,
+        status: true,
+        lastMaintenance: true,
+        nextMaintenance: true,
+        mileage: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
 
-    // Format the data for the frontend
-    const formattedBuses = buses.map((bus) => ({
-      id: bus.id,
-      plateNumber: bus.plateNumber,
-      model: bus.model,
-      brand: "Non spécifié", // Valeur par défaut car le champ n'existe pas dans le schéma
-      capacity: bus.capacity,
-      status: bus.status || "ACTIVE",
-      lastMaintenance:
-        bus.lastMaintenance?.toISOString() || new Date().toISOString(),
-      nextMaintenance:
-        bus.nextMaintenance?.toISOString() ||
-        new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-      mileage: bus.mileage || 0,
-      year: bus.year || new Date().getFullYear(),
-      color: "Non spécifié", // Valeur par défaut car le champ n'existe pas dans le schéma
-      fuelType: "DIESEL", // Valeur par défaut car le champ n'existe pas dans le schéma
-      features: [], // Valeur par défaut car le champ n'existe pas dans le schéma
-      // Calculer les propriétés booléennes à partir des features (toutes false par défaut)
-      hasAC: false,
-      hasWifi: false,
-      hasTV: false,
-      hasToilet: false,
-      hasUSB: false,
-    }));
-
-    return NextResponse.json(formattedBuses);
+    return NextResponse.json(buses);
   } catch (error) {
     console.error("Error fetching buses:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
@@ -101,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     const data = await request.json();
 
-    // Validation des données (seulement les champs qui existent dans le schéma)
+    // Validation des données
     const requiredFields = ["plateNumber", "model", "capacity", "companyId"];
 
     for (const field of requiredFields) {
@@ -123,32 +98,40 @@ export async function POST(request: NextRequest) {
 
     if (!company) {
       return NextResponse.json(
-        { error: "Entreprise non trouvée" },
+        { error: "Entreprise non trouvée ou non autorisée" },
         { status: 404 }
       );
     }
 
-    // Vérifier l'unicité du numéro d'immatriculation
-    const existingBus = await prisma.bus.findUnique({
-      where: { plateNumber: data.plateNumber },
+    // Vérifier l'unicité du numéro d'immatriculation dans l'entreprise
+    const existingBus = await prisma.bus.findFirst({
+      where: {
+        plateNumber: data.plateNumber,
+        companyId: data.companyId,
+      },
     });
 
     if (existingBus) {
       return NextResponse.json(
-        { error: "Ce numéro d'immatriculation est déjà utilisé" },
+        {
+          error:
+            "Ce numéro d'immatriculation est déjà utilisé dans votre entreprise",
+        },
         { status: 400 }
       );
     }
 
-    // Créer le bus avec seulement les champs qui existent dans le schéma
+    // Créer le bus
     const bus = await prisma.bus.create({
       data: {
         plateNumber: data.plateNumber,
         model: data.model,
+        brand: data.brand || null,
         capacity: Number.parseInt(data.capacity),
         year: data.year ? Number.parseInt(data.year) : null,
         status: data.status || "ACTIVE",
         mileage: data.mileage || 0,
+        features: data.equipment || [],
         lastMaintenance: data.lastMaintenance
           ? new Date(data.lastMaintenance)
           : new Date(),
@@ -158,8 +141,8 @@ export async function POST(request: NextRequest) {
         insuranceExpiry: data.insuranceExpiry
           ? new Date(data.insuranceExpiry)
           : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        technicalControlExpiry: data.technicalControlExpiry
-          ? new Date(data.technicalControlExpiry)
+        technicalControlExpiry: data.technicalInspectionExpiry
+          ? new Date(data.technicalInspectionExpiry)
           : new Date(Date.now() + 180 * 24 * 60 * 60 * 1000),
         companyId: data.companyId,
       },
@@ -180,21 +163,14 @@ export async function POST(request: NextRequest) {
       id: bus.id,
       plateNumber: bus.plateNumber,
       model: bus.model,
-      brand: "Non spécifié",
+      brand: bus.brand || "Non spécifié",
       capacity: bus.capacity,
       status: bus.status,
       lastMaintenance: bus.lastMaintenance?.toISOString(),
       nextMaintenance: bus.nextMaintenance?.toISOString(),
       mileage: bus.mileage,
       year: bus.year,
-      color: "Non spécifié",
-      fuelType: "DIESEL",
-      features: [],
-      hasAC: false,
-      hasWifi: false,
-      hasTV: false,
-      hasToilet: false,
-      hasUSB: false,
+      features: bus.features,
     });
   } catch (error) {
     console.error("Error creating bus:", error);

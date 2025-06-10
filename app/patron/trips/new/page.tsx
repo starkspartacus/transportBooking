@@ -58,20 +58,41 @@ export default function NewTripPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const fetchRoutes = async () => {
-      const response = await fetch("/api/routes");
-      const data = await response.json();
-      setRoutes(data);
+    const fetchData = async () => {
+      try {
+        // Récupérer l'ID de l'entreprise active depuis la session ou le localStorage
+        const companyId =
+          localStorage.getItem("activeCompanyId") ||
+          sessionStorage.getItem("activeCompanyId");
+
+        if (!companyId) {
+          console.error("No active company ID found");
+          return;
+        }
+
+        // Fetch routes
+        const routesResponse = await fetch(
+          `/api/patron/routes?companyId=${companyId}`
+        );
+        if (routesResponse.ok) {
+          const routesData = await routesResponse.json();
+          setRoutes(Array.isArray(routesData) ? routesData : []);
+        }
+
+        // Fetch buses
+        const busesResponse = await fetch(
+          `/api/patron/buses?companyId=${companyId}`
+        );
+        if (busesResponse.ok) {
+          const busesData = await busesResponse.json();
+          setBuses(Array.isArray(busesData) ? busesData : []);
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
     };
 
-    const fetchBuses = async () => {
-      const response = await fetch("/api/buses");
-      const data = await response.json();
-      setBuses(data);
-    };
-
-    fetchRoutes();
-    fetchBuses();
+    fetchData();
   }, []);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -141,7 +162,7 @@ export default function NewTripPage() {
                             key={route.id}
                             value={route.id.toString()}
                           >
-                            {route.departure} → {route.arrival}
+                            {route.departureCountry} → {route.arrivalCountry}
                           </SelectItem>
                         ))}
                       </SelectContent>
