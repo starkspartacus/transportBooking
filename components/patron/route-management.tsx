@@ -41,6 +41,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import type { Route } from "@/lib/types";
+import { AFRICAN_COUNTRIES, getCountryNames } from "@/constants/countries";
 import {
   Plus,
   MapPin,
@@ -67,6 +68,14 @@ import {
   Settings,
   Loader2,
 } from "lucide-react";
+
+const COUNTRIES = getCountryNames();
+const CITIES_BY_COUNTRY: Record<string, string[]> = {};
+
+// Initialiser le dictionnaire des villes par pays
+AFRICAN_COUNTRIES.forEach((country) => {
+  CITIES_BY_COUNTRY[country.name] = country.cities.map((city) => city.name);
+});
 
 interface RouteManagementProps {
   companyId: string;
@@ -100,21 +109,6 @@ const initialFormData: RouteFormData = {
   status: "ACTIVE",
 };
 
-const countries = [
-  "Côte d'Ivoire",
-  "Ghana",
-  "Burkina Faso",
-  "Mali",
-  "Guinée",
-  "Liberia",
-  "Sierra Leone",
-  "Sénégal",
-  "Togo",
-  "Bénin",
-  "Niger",
-  "Nigeria",
-];
-
 export default function RouteManagement({ companyId }: RouteManagementProps) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -128,6 +122,15 @@ export default function RouteManagement({ companyId }: RouteManagementProps) {
   useEffect(() => {
     fetchRoutes();
   }, [companyId]);
+
+  // Auto-detect international route
+  useEffect(() => {
+    if (formData.departureCountry !== formData.arrivalCountry) {
+      setFormData((prev) => ({ ...prev, isInternational: true }));
+    } else {
+      setFormData((prev) => ({ ...prev, isInternational: false }));
+    }
+  }, [formData.departureCountry, formData.arrivalCountry]);
 
   const fetchRoutes = async () => {
     if (!companyId) {
@@ -433,46 +436,6 @@ export default function RouteManagement({ companyId }: RouteManagementProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label
-              htmlFor="departureLocation"
-              className="flex items-center space-x-2"
-            >
-              <MapPin className="h-4 w-4 text-green-600" />
-              <span>Ville de départ *</span>
-            </Label>
-            <Input
-              id="departureLocation"
-              value={formData.departureLocation}
-              onChange={(e) =>
-                setFormData({ ...formData, departureLocation: e.target.value })
-              }
-              placeholder="Ex: Abidjan"
-              className="border-gray-300 focus:border-blue-500"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label
-              htmlFor="arrivalLocation"
-              className="flex items-center space-x-2"
-            >
-              <MapPin className="h-4 w-4 text-red-600" />
-              <span>Ville d'arrivée *</span>
-            </Label>
-            <Input
-              id="arrivalLocation"
-              value={formData.arrivalLocation}
-              onChange={(e) =>
-                setFormData({ ...formData, arrivalLocation: e.target.value })
-              }
-              placeholder="Ex: Accra"
-              className="border-gray-300 focus:border-blue-500"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label
               htmlFor="departureCountry"
               className="flex items-center space-x-2"
             >
@@ -481,17 +444,24 @@ export default function RouteManagement({ companyId }: RouteManagementProps) {
             </Label>
             <Select
               value={formData.departureCountry}
-              onValueChange={(value) =>
-                setFormData({ ...formData, departureCountry: value })
-              }
+              onValueChange={(value) => {
+                setFormData({
+                  ...formData,
+                  departureCountry: value,
+                  departureLocation: "", // Reset city when country changes
+                });
+              }}
             >
               <SelectTrigger className="border-gray-300 focus:border-blue-500">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {countries.map((country) => (
+                {COUNTRIES.map((country) => (
                   <SelectItem key={country} value={country}>
-                    {country}
+                    <div className="flex items-center space-x-2">
+                      <Globe className="h-4 w-4 text-blue-600" />
+                      <span>{country}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -508,19 +478,104 @@ export default function RouteManagement({ companyId }: RouteManagementProps) {
             </Label>
             <Select
               value={formData.arrivalCountry}
-              onValueChange={(value) =>
-                setFormData({ ...formData, arrivalCountry: value })
-              }
+              onValueChange={(value) => {
+                setFormData({
+                  ...formData,
+                  arrivalCountry: value,
+                  arrivalLocation: "", // Reset city when country changes
+                });
+              }}
             >
               <SelectTrigger className="border-gray-300 focus:border-blue-500">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {countries.map((country) => (
+                {COUNTRIES.map((country) => (
                   <SelectItem key={country} value={country}>
-                    {country}
+                    <div className="flex items-center space-x-2">
+                      <Globe className="h-4 w-4 text-purple-600" />
+                      <span>{country}</span>
+                    </div>
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label
+              htmlFor="departureLocation"
+              className="flex items-center space-x-2"
+            >
+              <MapPin className="h-4 w-4 text-green-600" />
+              <span>Ville de départ *</span>
+            </Label>
+            <Select
+              value={formData.departureLocation}
+              onValueChange={(value) =>
+                setFormData({ ...formData, departureLocation: value })
+              }
+              disabled={!formData.departureCountry}
+            >
+              <SelectTrigger className="border-gray-300 focus:border-blue-500">
+                <SelectValue
+                  placeholder={
+                    formData.departureCountry
+                      ? "Sélectionnez une ville"
+                      : "Sélectionnez d'abord un pays"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {formData.departureCountry &&
+                  CITIES_BY_COUNTRY[formData.departureCountry]?.map((city) => (
+                    <SelectItem key={city} value={city}>
+                      <div className="flex items-center space-x-2">
+                        <MapPin className="h-4 w-4 text-green-600" />
+                        <span>{city}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label
+              htmlFor="arrivalLocation"
+              className="flex items-center space-x-2"
+            >
+              <MapPin className="h-4 w-4 text-red-600" />
+              <span>Ville d'arrivée *</span>
+            </Label>
+            <Select
+              value={formData.arrivalLocation}
+              onValueChange={(value) =>
+                setFormData({ ...formData, arrivalLocation: value })
+              }
+              disabled={!formData.arrivalCountry}
+            >
+              <SelectTrigger className="border-gray-300 focus:border-blue-500">
+                <SelectValue
+                  placeholder={
+                    formData.arrivalCountry
+                      ? "Sélectionnez une ville"
+                      : "Sélectionnez d'abord un pays"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {formData.arrivalCountry &&
+                  CITIES_BY_COUNTRY[formData.arrivalCountry]?.map((city) => (
+                    <SelectItem key={city} value={city}>
+                      <div className="flex items-center space-x-2">
+                        <MapPin className="h-4 w-4 text-red-600" />
+                        <span>{city}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -537,6 +592,13 @@ export default function RouteManagement({ companyId }: RouteManagementProps) {
             <Globe className="h-4 w-4 text-purple-600" />
             <Label className="text-sm font-medium">Route internationale</Label>
           </div>
+          {formData.departureCountry !== formData.arrivalCountry && (
+            <div className="ml-auto">
+              <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                Détecté automatiquement
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
