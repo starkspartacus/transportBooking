@@ -397,7 +397,7 @@ export default function EmployeeSettings() {
               <div>
                 <p className="font-medium text-gray-900">Nom de l'entreprise</p>
                 <p className="text-sm text-gray-600">
-                  {session?.user.company?.name || "Non défini"}
+                  {session?.user.companyId || "Non défini"}
                 </p>
               </div>
               <Badge variant="outline">

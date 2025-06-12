@@ -8,26 +8,18 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== "PATRON") {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-    }
-
     const employeeId = params.id;
 
-    // Récupérer l'employé avec ses informations
-    const employee = await prisma.user.findFirst({
-      where: {
-        id: employeeId,
-        role: { in: ["GESTIONNAIRE", "CAISSIER"] },
-        companyId: session.user.companyId,
-      },
+    // Vérifier que l'employé existe et récupérer ses informations
+    const employee = await prisma.user.findUnique({
+      where: { id: employeeId },
       select: {
         id: true,
         name: true,
         phone: true,
         countryCode: true,
+        role: true,
+        status: true,
         companyId: true,
       },
     });
@@ -42,24 +34,27 @@ export async function POST(
     if (!employee.phone || !employee.countryCode) {
       return NextResponse.json(
         {
-          error:
-            "L'employé doit avoir un numéro de téléphone et un indicatif pays pour générer un code",
+          error: "Numéro de téléphone manquant pour cet employé",
         },
         { status: 400 }
       );
     }
 
-    // Supprimer les anciens codes non utilisés
+    if (employee.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Employé inactif" }, { status: 400 });
+    }
+
+    // Supprimer les anciens codes non utilisés pour cet employé
     await prisma.employeeAuthCode.deleteMany({
       where: {
-        employeeId: employeeId,
-        OR: [{ expiresAt: { lt: new Date() } }, { isUsed: true }],
+        employeeId: employee.id,
+        OR: [{ isUsed: true }, { expiresAt: { lt: new Date() } }],
       },
     });
 
     // Générer un nouveau code à 6 chiffres
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 heures
+    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 heures
 
     // Créer le nouveau code d'authentification
     const authCode = await prisma.employeeAuthCode.create({
@@ -69,20 +64,20 @@ export async function POST(
         countryCode: employee.countryCode,
         employeeId: employee.id,
         expiresAt,
+        isUsed: false,
       },
     });
 
     // Enregistrer l'activité
     await prisma.activity.create({
       data: {
-        type: "EMPLOYEE_ADDED",
+        type: "EMPLOYEE_CODE_GENERATED",
         description: `Code d'accès généré pour ${employee.name}`,
         status: "SUCCESS",
-        userId: session.user.id,
+        userId: employee.id,
         companyId: employee.companyId,
         metadata: {
-          employeeId: employee.id,
-          codeGenerated: true,
+          codeId: authCode.id,
           expiresAt: expiresAt.toISOString(),
         },
       },
@@ -93,7 +88,11 @@ export async function POST(
       code: authCode.code,
       expiresAt: authCode.expiresAt,
       phone: `${employee.countryCode} ${employee.phone}`,
-      message: `Code généré pour ${employee.name}. Valide pendant 8 heures.`,
+      employee: {
+        name: employee.name,
+        role: employee.role,
+      },
+      message: "Code d'accès généré avec succès",
     });
   } catch (error) {
     console.error("Error generating employee code:", error);

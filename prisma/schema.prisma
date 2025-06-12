@@ -86,6 +86,9 @@ model User {
  accounts      Account[]
  sessions      Session[]
 
+ // Add this line in the User model relations section
+ employeeAuthCodes EmployeeAuthCode[] @relation("EmployeeAuthCodes")
+
  // Company relations - Updated for multi-company support
  ownedCompanies Company[]  @relation("CompanyOwner")
  employeeAt    Company?  @relation("CompanyEmployee", fields: [companyId], references: [id])
@@ -133,6 +136,27 @@ model User {
  @@index([email])
  @@index([phone, countryCode])
  @@index([role])
+}
+
+model EmployeeAuthCode {
+  id         String   @id @default(cuid())
+  code       String
+  phone      String
+  countryCode String
+  isUsed     Boolean  @default(false)
+  expiresAt  DateTime
+  usedAt     DateTime?
+  
+  employee   User     @relation("EmployeeAuthCodes", fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([code])
+  @@index([phone, countryCode])
+  @@index([expiresAt])
 }
 
 model PasswordHistory {
@@ -556,17 +580,18 @@ model Activity {
 
 enum ActivityType {
  USER_LOGIN
- USER_UPDATED
  USER_LOGOUT
+ USER_REGISTRATION
+ USER_UPDATED
  RESERVATION_CREATED
  RESERVATION_CANCELLED
- USER_REGISTRATION
  PAYMENT_COMPLETED
  TRIP_CREATED
  TRIP_UPDATED
  BUS_ADDED
  ROUTE_CREATED
  EMPLOYEE_ADDED
+ EMPLOYEE_CODE_GENERATED
  SYSTEM_UPDATE
  COMPANY_CREATED
  COMPANY_UPDATED
@@ -616,7 +641,7 @@ model Bus {
  color       String?
  fuelType    FuelType @default(DIESEL)
  features    String[] @default([])
- busType     BusType @default(CAR)
+
  // Maintenance and documents
  lastMaintenance         DateTime? @default(now())
  nextMaintenance         DateTime?
@@ -648,14 +673,6 @@ enum BusStatus {
  RETIRED
  SOLD
  RENTED
-}
-
-enum BusType {
- BUS
- COACH
- MINIBUS
- VAN
- CAR
 }
 
 enum FuelType {
