@@ -191,7 +191,7 @@ export default function SettingsLayout() {
                         .toUpperCase() || "U"}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="absolute -bottom-2 -right-2 p-2 bg-white rounded-full shadow-lg">
+                  <div className="absolute -bottom-2 -right-2 p-2 bg-slate-900 rounded-full shadow-lg">
                     <RoleIcon className="h-5 w-5 text-indigo-600" />
                   </div>
                 </div>
@@ -203,7 +203,7 @@ export default function SettingsLayout() {
                   <p className="text-gray-600 mb-3">{session.user.email}</p>
                   <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
                     <Badge
-                      className={`${roleInfo.color} text-white px-4 py-2 text-sm font-medium shadow-lg`}
+                      className={`${roleInfo.color} text-slate-900 px-4 py-2 text-sm font-medium shadow-lg`}
                     >
                       <RoleIcon className="h-4 w-4 mr-2" />
                       {roleInfo.label}
@@ -247,7 +247,7 @@ export default function SettingsLayout() {
           className="space-y-8"
         >
           {/* Liste des onglets avec design moderne */}
-          <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
+          <Card className="border-0 shadow-xl bg-slate-900 backdrop-blur-sm">
             <CardContent className="p-2">
               <TabsList
                 className="grid w-full bg-transparent gap-2 p-2"
@@ -264,9 +264,9 @@ export default function SettingsLayout() {
                       className={`
                         relative flex flex-col items-center gap-2 p-4 rounded-xl transition-all duration-300
                         data-[state=active]:bg-gradient-to-r data-[state=active]:${tab.color} 
-                        data-[state=active]:text-white data-[state=active]:shadow-lg
+                        data-[state=active]:text-slate-900 data-[state=active]:shadow-lg
                         data-[state=active]:scale-105 hover:scale-102
-                        data-[state=inactive]:hover:bg-gray-100
+                        data-[state=inactive]:hover:bg-slate-900
                         group
                       `}
                     >
