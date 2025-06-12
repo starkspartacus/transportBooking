@@ -39,6 +39,7 @@ export async function GET(
         city: true,
         commune: true,
         createdAt: true,
+        updatedAt: true, // Added updatedAt
         lastLogin: true,
         companyId: true,
         image: true,
@@ -187,31 +188,37 @@ export async function PATCH(
     const updateData: any = {};
 
     // Informations de base
-    if (firstName && lastName) {
+    if (firstName !== undefined && lastName !== undefined) {
       updateData.name = `${firstName} ${lastName}`;
       updateData.firstName = firstName;
       updateData.lastName = lastName;
-    } else if (firstName) {
+    } else if (firstName !== undefined) {
       updateData.firstName = firstName;
       updateData.name = `${firstName} ${employee.lastName || ""}`.trim();
-    } else if (lastName) {
+    } else if (lastName !== undefined) {
       updateData.lastName = lastName;
       updateData.name = `${employee.firstName || ""} ${lastName}`.trim();
     }
 
-    if (email) updateData.email = email;
+    if (email !== undefined) updateData.email = email;
     if (phone !== undefined) updateData.phone = phone || null;
     if (countryCode !== undefined) updateData.countryCode = countryCode || null;
-    if (role) updateData.role = role;
-    if (status) updateData.status = status;
+    if (role !== undefined) updateData.role = role;
+    if (status !== undefined) updateData.status = status;
     if (nationality !== undefined) updateData.nationality = nationality || null;
     if (department !== undefined)
       updateData.department = department === "none" ? null : department;
     if (position !== undefined) updateData.position = position || null;
     if (salary !== undefined)
-      updateData.salary = salary ? Number.parseFloat(salary.toString()) : null;
+      updateData.salary =
+        salary === ""
+          ? null
+          : salary
+          ? Number.parseFloat(salary.toString())
+          : null; // Handle empty string for salary
     if (hireDate !== undefined)
-      updateData.hireDate = hireDate ? new Date(hireDate) : null;
+      updateData.hireDate =
+        hireDate === "" ? null : hireDate ? new Date(hireDate) : null; // Handle empty string for date
 
     // Informations personnelles
     if (image !== undefined) updateData.image = image || null;
@@ -220,12 +227,18 @@ export async function PATCH(
     if (city !== undefined) updateData.city = city || null;
     if (commune !== undefined) updateData.commune = commune || null;
     if (dateOfBirth !== undefined)
-      updateData.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+      updateData.dateOfBirth =
+        dateOfBirth === "" ? null : dateOfBirth ? new Date(dateOfBirth) : null;
     if (gender !== undefined) updateData.gender = gender || null;
     if (idNumber !== undefined) updateData.idNumber = idNumber || null;
     if (idType !== undefined) updateData.idType = idType || null;
     if (idExpiryDate !== undefined)
-      updateData.idExpiryDate = idExpiryDate ? new Date(idExpiryDate) : null;
+      updateData.idExpiryDate =
+        idExpiryDate === ""
+          ? null
+          : idExpiryDate
+          ? new Date(idExpiryDate)
+          : null;
 
     // Informations professionnelles
     if (education !== undefined) updateData.education = education || null;
