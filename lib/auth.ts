@@ -1,8 +1,8 @@
-import type { NextAuthOptions } from "next-auth"
-import CredentialsProvider from "next-auth/providers/credentials"
-import { prisma } from "@/lib/prisma"
-import bcrypt from "bcryptjs"
-import type { UserRole } from "@prisma/client"
+import type { NextAuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+import type { UserRole } from "@prisma/client";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -19,7 +19,7 @@ export const authOptions: NextAuthOptions = {
         ipAddress: { label: "IP Address", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials) return null
+        if (!credentials) return null;
 
         try {
           // Connexion avec code d'accès (pour employés - pas de vérification pays)
@@ -34,36 +34,81 @@ export const authOptions: NextAuthOptions = {
               include: {
                 employeeAt: true,
               },
-            })
+            });
 
-            if (!employee || !employee.companyId) return null
+            if (!employee || !employee.companyId) {
+              console.log(
+                "Employee not found or no companyId for employee login."
+              );
+              return null;
+            }
 
-            // Vérifier le code dans les activités
-            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-            const codeActivity = await prisma.activity.findFirst({
+            // CORRECTED: Check the EmployeeAuthCode table for the valid code
+            const authCode = await prisma.employeeAuthCode.findFirst({
               where: {
-                description: { contains: credentials.code },
-                companyId: employee.companyId,
-                createdAt: { gte: thirtyDaysAgo },
-                userId: employee.id,
+                code: credentials.code,
+                phone: credentials.phone,
+                countryCode: credentials.countryCode,
+                employeeId: employee.id, // Ensure the code belongs to this employee
+                isUsed: false,
+                expiresAt: { gt: new Date() },
               },
-            })
+            });
 
-            if (!codeActivity) return null
+            if (!authCode) {
+              console.log("Invalid or expired auth code for employee.");
+              // Log failed attempt
+              try {
+                await prisma.activity.create({
+                  data: {
+                    type: "USER_LOGIN",
+                    description: `Tentative de connexion employé échouée (code invalide/expiré): ${
+                      employee.name || credentials.phone
+                    }`,
+                    status: "ERROR",
+                    userId: employee.id,
+                    companyId: employee.companyId,
+                    metadata: {
+                      loginMethod: "employee_code",
+                      phone: `${credentials.countryCode} ${credentials.phone}`,
+                      codeProvided: credentials.code,
+                      reason: "Invalid or expired code",
+                    },
+                  },
+                });
+              } catch (logError) {
+                console.error(
+                  "Failed to log failed employee login attempt:",
+                  logError
+                );
+              }
+              return null;
+            }
+
+            // Mark the code as used
+            await prisma.employeeAuthCode.update({
+              where: { id: authCode.id },
+              data: {
+                isUsed: true,
+                usedAt: new Date(),
+              },
+            });
 
             // Enregistrer la connexion réussie
             try {
               await prisma.activity.create({
                 data: {
                   type: "USER_LOGIN",
-                  description: `Connexion réussie: ${employee.name || "Utilisateur"} (${employee.role})`,
+                  description: `Connexion réussie: ${
+                    employee.name || "Utilisateur"
+                  } (${employee.role})`,
                   status: "SUCCESS",
                   userId: employee.id,
                   companyId: employee.companyId,
                 },
-              })
+              });
             } catch (logError) {
-              console.error("Failed to log successful login:", logError)
+              console.error("Failed to log successful login:", logError);
               // Continue même si le log échoue
             }
 
@@ -74,12 +119,12 @@ export const authOptions: NextAuthOptions = {
               role: employee.role,
               companyId: employee.companyId || undefined,
               employeeAt: employee.employeeAt,
-            }
+            };
           }
 
           // Connexion classique avec vérification du pays (sauf pour caissiers)
           if (credentials.password && credentials.country) {
-            let user = null
+            let user = null;
 
             // Connexion par email
             if (credentials.email) {
@@ -93,7 +138,7 @@ export const authOptions: NextAuthOptions = {
                   ownedCompanies: true,
                   employeeAt: true,
                 },
-              })
+              });
             }
             // Connexion par téléphone
             else if (credentials.phone && credentials.countryCode) {
@@ -108,19 +153,23 @@ export const authOptions: NextAuthOptions = {
                   ownedCompanies: true,
                   employeeAt: true,
                 },
-              })
+              });
             }
 
-            if (!user) return null
+            if (!user) return null;
 
-            const isPasswordValid = await bcrypt.compare(credentials.password, user.password || "")
+            const isPasswordValid = await bcrypt.compare(
+              credentials.password,
+              user.password || ""
+            );
 
-            if (!isPasswordValid) return null
+            if (!isPasswordValid) return null;
 
             // Enregistrer la tentative de connexion réussie
             try {
               // Utiliser le companyId de l'utilisateur ou "system" si pas de companyId
-              const logCompanyId = user.companyId || user.ownedCompanies?.[0]?.id || null
+              const logCompanyId =
+                user.companyId || user.ownedCompanies?.[0]?.id || null;
 
               if (logCompanyId) {
                 await prisma.activity.create({
@@ -138,10 +187,10 @@ export const authOptions: NextAuthOptions = {
                       ipAddress: credentials.ipAddress || "unknown",
                     },
                   },
-                })
+                });
               }
             } catch (logError) {
-              console.error("Failed to log successful login:", logError)
+              console.error("Failed to log successful login:", logError);
               // Continue même si le log échoue
             }
 
@@ -153,12 +202,12 @@ export const authOptions: NextAuthOptions = {
               companyId: user.companyId || undefined,
               ownedCompanies: user.ownedCompanies,
               employeeAt: user.employeeAt,
-            }
+            };
           }
 
-          return null
+          return null;
         } catch (error) {
-          console.error("Auth error:", error)
+          console.error("Auth error:", error);
 
           // Enregistrer la tentative de connexion échouée (optionnel, sans bloquer)
           if (credentials.email || credentials.phone) {
@@ -173,19 +222,20 @@ export const authOptions: NextAuthOptions = {
                   status: "ERROR",
                   // Pas de companyId pour éviter l'erreur de contrainte
                   metadata: {
-                    error: error instanceof Error ? error.message : "Unknown error",
+                    error:
+                      error instanceof Error ? error.message : "Unknown error",
                     country: credentials.country,
                     loginMethod: credentials.email ? "email" : "phone",
                   },
                 },
-              })
+              });
             } catch (logError) {
-              console.error("Failed to log failed login attempt:", logError)
+              console.error("Failed to log failed login attempt:", logError);
               // Ignorer l'erreur de log pour ne pas bloquer l'authentification
             }
           }
 
-          return null
+          return null;
         }
       },
     }),
@@ -193,22 +243,22 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = user.role
-        token.companyId = user.companyId
-        token.ownedCompanies = user.ownedCompanies
-        token.employeeAt = user.employeeAt
+        token.role = user.role;
+        token.companyId = user.companyId;
+        token.ownedCompanies = user.ownedCompanies;
+        token.employeeAt = user.employeeAt;
       }
-      return token
+      return token;
     },
     async session({ session, token }) {
       if (token) {
-        session.user.id = token.sub!
-        session.user.role = token.role as UserRole
-        session.user.companyId = token.companyId as string
-        session.user.ownedCompanies = token.ownedCompanies as any[]
-        session.user.employeeAt = token.employeeAt as any
+        session.user.id = token.sub!;
+        session.user.role = token.role as UserRole;
+        session.user.companyId = token.companyId as string;
+        session.user.ownedCompanies = token.ownedCompanies as any[];
+        session.user.employeeAt = token.employeeAt as any;
       }
-      return session
+      return session;
     },
   },
   pages: {
@@ -218,4 +268,4 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
   },
-}
+};

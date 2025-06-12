@@ -5,15 +5,13 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: { id: employeeId } }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
-
-    const employeeId = params.id;
 
     const employee = await prisma.user.findFirst({
       where: {
@@ -100,7 +98,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: { id: employeeId } }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -111,7 +109,6 @@ export async function PATCH(
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    const employeeId = params.id;
     const body = await request.json();
 
     // Vérifier que l'employé existe
@@ -344,15 +341,13 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: { id: employeeId } }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || !["ADMIN", "PATRON"].includes(session.user.role)) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
-
-    const employeeId = params.id;
 
     // Vérifier que l'employé existe
     const employee = await prisma.user.findFirst({

@@ -23,17 +23,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
-  Mail,
   Phone,
-  Calendar,
   Search,
   Filter,
-  Eye,
-  Edit,
   Key,
   Clock,
   Copy,
@@ -46,12 +41,6 @@ import {
   RefreshCw,
   X,
   Loader2,
-  Building2,
-  Award,
-  MapPin,
-  DollarSign,
-  Globe,
-  Trash2,
 } from "lucide-react";
 import {
   NATIONALITIES,
@@ -60,6 +49,7 @@ import {
 } from "@/constants/employee";
 import { AFRICAN_COUNTRIES } from "@/constants/countries";
 import EmployeeForm from "./employee-form"; // Importez le composant EmployeeForm
+import EmployeeCard from "@/components/ui/employee-card"; // Import the new EmployeeCard
 
 // --- INTERFACES ---
 interface Employee {
@@ -717,171 +707,28 @@ export default function EmployeeManagement({
           ) : (
             <div className="divide-y divide-gray-100">
               {filteredEmployees.map((employee) => (
-                <div
+                <EmployeeCard
                   key={employee.id}
-                  className="p-6 hover:bg-gray-50 transition-all duration-200 group"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4">
-                      <Avatar className="h-16 w-16 border-4 border-white shadow-lg">
-                        <AvatarImage
-                          src={
-                            employee.image ||
-                            "/placeholder.svg?height=64&width=64&query=employee-avatar"
-                          }
-                          alt={employee.name}
-                        />
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-lg font-bold">
-                          {getInitials(employee.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-xl font-bold text-gray-900 truncate">
-                            {employee.name}
-                          </h3>
-                          <Badge className={getRoleBadgeColor(employee.role)}>
-                            {getRoleLabel(employee.role)}
-                          </Badge>
-                          {getStatusBadge(employee.status)}
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm text-gray-600">
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-blue-500" />
-                            <span className="truncate">{employee.email}</span>
-                          </div>
-                          {formatPhone(employee) && (
-                            <div className="flex items-center gap-2">
-                              <Phone className="h-4 w-4 text-green-500" />
-                              <span>{formatPhone(employee)}</span>
-                            </div>
-                          )}
-                          {employee.department && (
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4 text-purple-500" />
-                              <span>
-                                {getDepartmentName(employee.department)}
-                              </span>
-                            </div>
-                          )}
-                          {employee.position && (
-                            <div className="flex items-center gap-2">
-                              <Award className="h-4 w-4 text-yellow-500" />
-                              <span>{employee.position}</span>
-                            </div>
-                          )}
-                          {employee.nationality && (
-                            <div className="flex items-center gap-2">
-                              <Globe className="h-4 w-4 text-indigo-500" />
-                              <span>
-                                {getNationalityName(employee.nationality)}
-                              </span>
-                            </div>
-                          )}
-                          {employee.hireDate && (
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-orange-500" />
-                              <span>
-                                Embauché le {formatDate(employee.hireDate)}
-                              </span>
-                            </div>
-                          )}
-                          {employee.salary && (
-                            <div className="flex items-center gap-2">
-                              <DollarSign className="h-4 w-4 text-green-500" />
-                              <span>
-                                {employee.salary.toLocaleString()} FCFA
-                              </span>
-                            </div>
-                          )}
-                          {employee.address && (
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4 text-red-500" />
-                              <span className="truncate">
-                                {employee.address}
-                              </span>
-                            </div>
-                          )}
-                          {employee.city && (
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4 text-blue-500" />
-                              <span>{employee.city}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleGenerateCode(employee)}
-                        disabled={isGenerating === employee.id}
-                        className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-all duration-200"
-                      >
-                        {isGenerating === employee.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Key className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Dialog
-                        open={isEditDialogOpen}
-                        onOpenChange={setIsEditDialogOpen}
-                      >
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleOpenEditDialog(employee.id)}
-                            className="hover:bg-yellow-50 hover:border-yellow-300 hover:text-yellow-700 transition-all duration-200"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        {selectedEmployeeId === employee.id && ( // Only render content for the selected employee
-                          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
-                            <div className="bg-gradient-to-r from-yellow-500 to-orange-500 p-6 text-white">
-                              <div className="flex items-center gap-3">
-                                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                                  <Edit className="h-6 w-6" />
-                                </div>
-                                <DialogTitle className="text-2xl font-bold">
-                                  Modifier l'employé
-                                </DialogTitle>
-                              </div>
-                            </div>
-                            <EmployeeForm
-                              companyId={companyId}
-                              employeeId={selectedEmployeeId}
-                              mode="edit"
-                              onSuccess={() => {
-                                setIsEditDialogOpen(false);
-                                fetchEmployees();
-                              }}
-                              onCancel={() => setIsEditDialogOpen(false)}
-                            />
-                          </DialogContent>
-                        )}
-                      </Dialog>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleConfirmDelete(employee)}
-                        className="hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-all duration-200"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                  employee={employee}
+                  companyId={companyId}
+                  onGenerateCode={handleGenerateCode}
+                  onEdit={handleOpenEditDialog}
+                  onDelete={handleDeleteEmployee}
+                  isGenerating={isGenerating}
+                  generatedCode={generatedCode}
+                  showCodeDialog={showCodeDialog}
+                  setShowCodeDialog={setShowCodeDialog}
+                  onSuccessEdit={() => {
+                    setIsEditDialogOpen(false);
+                    fetchEmployees();
+                  }}
+                  onCancelEdit={() => setIsEditDialogOpen(false)}
+                  isEditDialogOpen={
+                    isEditDialogOpen && selectedEmployeeId === employee.id
+                  }
+                  setIsEditDialogOpen={setIsEditDialogOpen}
+                  onConfirmDelete={handleConfirmDelete}
+                />
               ))}
             </div>
           )}

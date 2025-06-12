@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: { id: employeeId } }: { params: { id: string } }
 ) {
   try {
     // Attendre la session avant d'utiliser les paramètres
@@ -27,7 +27,6 @@ export async function POST(
     }
 
     // Utiliser params.id de manière sûre (params est déjà disponible, pas besoin d'attendre)
-    const employeeId = params.id;
     console.log(`Generating code for employee ID: ${employeeId}`);
 
     // Récupérer l'employé avec ses informations
@@ -61,7 +60,7 @@ export async function POST(
       // Vérifier que l'entreprise appartient au patron
       const company = await prisma.company.findFirst({
         where: {
-          id: employee.companyId!,
+          id: employee.companyId as string,
           ownerId: session.user.id,
         },
       });
@@ -218,9 +217,9 @@ export async function POST(
 }
 
 // Endpoint pour mettre à jour le téléphone d'un employé
-export async function PUT(
+export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: { id: employeeId } }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -234,7 +233,6 @@ export async function PUT(
       return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
     }
 
-    const employeeId = params.id;
     const body = await request.json();
 
     if (!body || !body.phone || !body.countryCode) {
@@ -269,7 +267,7 @@ export async function PUT(
       // Vérifier que l'entreprise appartient au patron
       const company = await prisma.company.findFirst({
         where: {
-          id: employee.companyId!,
+          id: employee.companyId as string,
           ownerId: session.user.id,
         },
       });
@@ -304,7 +302,7 @@ export async function PUT(
         description: `Téléphone mis à jour pour ${employee.name}`,
         status: "SUCCESS",
         userId: session.user.id,
-        companyId: employee.companyId!,
+        companyId: employee.companyId,
         metadata: {
           employeeId: employee.id,
           updatedFields: ["phone", "countryCode"],
