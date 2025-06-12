@@ -40,18 +40,18 @@ export async function GET(request: NextRequest) {
     const routes = await prisma.route.findMany({
       where: {
         companyId: companyId,
-        status: "ACTIVE",
       },
-      select: {
-        id: true,
-        name: true,
-        departureLocation: true,
-        arrivalLocation: true,
-        distance: true,
-        estimatedDuration: true,
-        basePrice: true,
-        status: true,
-        createdAt: true,
+      include: {
+        stops: {
+          orderBy: {
+            order: "asc",
+          },
+        },
+        _count: {
+          select: {
+            trips: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",

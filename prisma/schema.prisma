@@ -556,6 +556,7 @@ model Activity {
 
 enum ActivityType {
  USER_LOGIN
+ USER_UPDATED
  USER_LOGOUT
  RESERVATION_CREATED
  RESERVATION_CANCELLED
@@ -615,7 +616,7 @@ model Bus {
  color       String?
  fuelType    FuelType @default(DIESEL)
  features    String[] @default([])
-
+ busType     BusType @default(CAR)
  // Maintenance and documents
  lastMaintenance         DateTime? @default(now())
  nextMaintenance         DateTime?
@@ -647,6 +648,14 @@ enum BusStatus {
  RETIRED
  SOLD
  RENTED
+}
+
+enum BusType {
+ BUS
+ COACH
+ MINIBUS
+ VAN
+ CAR
 }
 
 enum FuelType {

@@ -1,461 +1,473 @@
 "use client";
 
-import type React from "react";
-
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRouter } from "next/navigation";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import {
-  User,
-  Mail,
-  Phone,
-  CreditCard,
-  AlertCircle,
-  CheckCircle,
-} from "lucide-react";
-import { toast } from "sonner";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { toast } from "@/components/ui/use-toast";
+import { Loader2 } from "lucide-react";
 
-interface Trip {
-  id: string;
-  departureCity: string;
-  arrivalCity: string;
-  departureTime: string;
-  arrivalTime: string;
-  price: number;
-  availableSeats: number;
-  company: {
-    name: string;
-  };
-  bus: {
-    model: string;
-    brand?: string;
-  };
-}
+const bookingFormSchema = z.object({
+  passengerName: z
+    .string()
+    .min(3, "Le nom doit contenir au moins 3 caractères"),
+  passengerEmail: z.string().email("Email invalide"),
+  passengerPhone: z.string().min(8, "Numéro de téléphone invalide"),
+  countryCode: z.string().default("+221"),
+  numberOfSeats: z.coerce.number().int().min(1).max(10),
+  paymentMethod: z.enum(["CASH", "MOBILE_MONEY", "CARD"]),
+  emergencyContact: z.string().optional(),
+  emergencyPhone: z.string().optional(),
+  specialRequests: z.string().optional(),
+});
+
+type BookingFormValues = z.infer<typeof bookingFormSchema>;
 
 interface GuestBookingFormProps {
-  trip: Trip;
-  onBookingComplete: (bookingData: any) => void;
+  trip: any;
+  departureCity: string;
+  arrivalCity: string;
 }
 
 export default function GuestBookingForm({
   trip,
-  onBookingComplete,
+  departureCity,
+  arrivalCity,
 }: GuestBookingFormProps) {
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    // Passenger Info
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    countryCode: "+221",
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookingComplete, setBookingComplete] = useState(false);
+  const [bookingDetails, setBookingDetails] = useState<any>(null);
+  const router = useRouter();
 
-    // Additional Info
-    emergencyContact: "",
-    emergencyPhone: "",
-    specialRequests: "",
-
-    // Booking Details
-    numberOfSeats: 1,
-    paymentMethod: "CASH", // CASH, MOBILE_MONEY, CARD
+  const form = useForm<BookingFormValues>({
+    resolver: zodResolver(bookingFormSchema),
+    defaultValues: {
+      passengerName: "",
+      passengerEmail: "",
+      passengerPhone: "",
+      countryCode: "+221",
+      numberOfSeats: 1,
+      paymentMethod: "CASH",
+      emergencyContact: "",
+      emergencyPhone: "",
+      specialRequests: "",
+    },
   });
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  async function onSubmit(data: BookingFormValues) {
+    setIsSubmitting(true);
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = "Le prénom est requis";
-    }
-    if (!formData.lastName.trim()) {
-      newErrors.lastName = "Le nom est requis";
-    }
-    if (!formData.email.trim()) {
-      newErrors.email = "L'email est requis";
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "Format d'email invalide";
-    }
-    if (!formData.phone.trim()) {
-      newErrors.phone = "Le téléphone est requis";
-    }
-    if (formData.numberOfSeats > trip.availableSeats) {
-      newErrors.numberOfSeats = `Maximum ${trip.availableSeats} places disponibles`;
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleInputChange = (field: string, value: string | number) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: "" }));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      toast.error("Veuillez corriger les erreurs dans le formulaire");
-      return;
-    }
-
-    setLoading(true);
     try {
-      const bookingData = {
-        tripId: trip.id,
-        passengerName: `${formData.firstName} ${formData.lastName}`,
-        passengerEmail: formData.email,
-        passengerPhone: formData.phone,
-        countryCode: formData.countryCode,
-        numberOfSeats: formData.numberOfSeats,
-        totalAmount: trip.price * formData.numberOfSeats,
-        paymentMethod: formData.paymentMethod,
-        emergencyContact: formData.emergencyContact,
-        emergencyPhone: formData.emergencyPhone,
-        specialRequests: formData.specialRequests,
-      };
+      const totalAmount = trip.currentPrice * data.numberOfSeats;
 
       const response = await fetch("/api/bookings/guest", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(bookingData),
+        body: JSON.stringify({
+          ...data,
+          tripId: trip.id,
+          totalAmount,
+        }),
       });
 
       const result = await response.json();
 
-      if (response.ok) {
-        toast.success("Réservation créée avec succès !");
-        onBookingComplete(result);
-      } else {
-        toast.error(result.error || "Erreur lors de la réservation");
+      if (!response.ok) {
+        throw new Error(result.error || "Une erreur s'est produite");
       }
-    } catch (error) {
-      console.error("Booking error:", error);
-      toast.error("Erreur de connexion");
+
+      setBookingDetails(result);
+      setBookingComplete(true);
+      toast({
+        title: "Réservation réussie",
+        description: "Votre réservation a été enregistrée avec succès.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description:
+          error.message || "Une erreur s'est produite lors de la réservation",
+      });
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
-  };
+  }
 
-  const totalPrice = trip.price * formData.numberOfSeats;
-
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Trip Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-green-600" />
-            Récapitulatif du voyage
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-600">Trajet</p>
-              <p className="font-semibold">
-                {trip.departureCity} → {trip.arrivalCity}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Compagnie</p>
-              <p className="font-semibold">{trip.company.name}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Horaire</p>
-              <p className="font-semibold">
-                {trip.departureTime} - {trip.arrivalTime}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Véhicule</p>
-              <p className="font-semibold">
-                {trip.bus.brand} {trip.bus.model}
-              </p>
-            </div>
+  if (bookingComplete && bookingDetails) {
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 text-green-600 mb-4">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-8 w-8"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
           </div>
-        </CardContent>
-      </Card>
+          <h2 className="text-2xl font-bold text-green-800">
+            Réservation confirmée !
+          </h2>
+          <p className="text-green-600 mt-2">
+            Votre réservation a été enregistrée avec succès.
+          </p>
+        </div>
 
-      {/* Booking Form */}
-      <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Passenger Information */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Informations du passager
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="firstName">Prénom *</Label>
-                    <Input
-                      id="firstName"
-                      value={formData.firstName}
-                      onChange={(e) =>
-                        handleInputChange("firstName", e.target.value)
-                      }
-                      className={errors.firstName ? "border-red-500" : ""}
-                    />
-                    {errors.firstName && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors.firstName}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName">Nom *</Label>
-                    <Input
-                      id="lastName"
-                      value={formData.lastName}
-                      onChange={(e) =>
-                        handleInputChange("lastName", e.target.value)
-                      }
-                      className={errors.lastName ? "border-red-500" : ""}
-                    />
-                    {errors.lastName && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors.lastName}
-                      </p>
-                    )}
-                  </div>
-                </div>
+        <div className="bg-white rounded-lg p-6 mb-6 shadow-sm">
+          <h3 className="font-semibold text-lg mb-4 text-gray-800">
+            Détails de la réservation
+          </h3>
 
-                <div>
-                  <Label htmlFor="email">Email *</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="email"
-                      type="email"
-                      className={`pl-10 ${
-                        errors.email ? "border-red-500" : ""
-                      }`}
-                      value={formData.email}
-                      onChange={(e) =>
-                        handleInputChange("email", e.target.value)
-                      }
-                    />
-                  </div>
-                  {errors.email && (
-                    <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="phone">Téléphone *</Label>
-                  <div className="flex gap-2">
-                    <Select
-                      value={formData.countryCode}
-                      onValueChange={(value) =>
-                        handleInputChange("countryCode", value)
-                      }
-                    >
-                      <SelectTrigger className="w-24">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="+221">🇸🇳 +221</SelectItem>
-                        <SelectItem value="+225">🇨🇮 +225</SelectItem>
-                        <SelectItem value="+228">🇹🇬 +228</SelectItem>
-                        <SelectItem value="+229">🇧🇯 +229</SelectItem>
-                        <SelectItem value="+226">🇧🇫 +226</SelectItem>
-                        <SelectItem value="+223">🇲🇱 +223</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <div className="relative flex-1">
-                      <Phone className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="phone"
-                        className={`pl-10 ${
-                          errors.phone ? "border-red-500" : ""
-                        }`}
-                        value={formData.phone}
-                        onChange={(e) =>
-                          handleInputChange("phone", e.target.value)
-                        }
-                      />
-                    </div>
-                  </div>
-                  {errors.phone && (
-                    <p className="text-red-500 text-sm mt-1">{errors.phone}</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Emergency Contact */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5" />
-                  Contact d'urgence (optionnel)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="emergencyContact">Nom du contact</Label>
-                    <Input
-                      id="emergencyContact"
-                      value={formData.emergencyContact}
-                      onChange={(e) =>
-                        handleInputChange("emergencyContact", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="emergencyPhone">Téléphone</Label>
-                    <Input
-                      id="emergencyPhone"
-                      value={formData.emergencyPhone}
-                      onChange={(e) =>
-                        handleInputChange("emergencyPhone", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="specialRequests">Demandes spéciales</Label>
-                  <Textarea
-                    id="specialRequests"
-                    placeholder="Allergies, besoins spéciaux, etc."
-                    value={formData.specialRequests}
-                    onChange={(e) =>
-                      handleInputChange("specialRequests", e.target.value)
-                    }
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Booking Summary */}
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Détails de la réservation
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="numberOfSeats">Nombre de places</Label>
-                  <Select
-                    value={formData.numberOfSeats.toString()}
-                    onValueChange={(value) =>
-                      handleInputChange("numberOfSeats", Number.parseInt(value))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from(
-                        { length: Math.min(trip.availableSeats, 10) },
-                        (_, i) => i + 1
-                      ).map((num) => (
-                        <SelectItem key={num} value={num.toString()}>
-                          {num} place{num > 1 ? "s" : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.numberOfSeats && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.numberOfSeats}
-                    </p>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Prix unitaire</span>
-                    <span>{trip.price.toLocaleString()} FCFA</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Nombre de places</span>
-                    <span>{formData.numberOfSeats}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between font-bold text-lg">
-                    <span>Total</span>
-                    <span className="text-green-600">
-                      {totalPrice.toLocaleString()} FCFA
-                    </span>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div>
-                  <Label>Mode de paiement</Label>
-                  <Select
-                    value={formData.paymentMethod}
-                    onValueChange={(value) =>
-                      handleInputChange("paymentMethod", value)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CASH">Paiement à la gare</SelectItem>
-                      <SelectItem value="MOBILE_MONEY">Mobile Money</SelectItem>
-                      <SelectItem value="CARD">Carte bancaire</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {formData.paymentMethod === "CASH" && (
-                  <div className="bg-blue-50 p-3 rounded-lg">
-                    <p className="text-sm text-blue-800">
-                      💡 Vous devrez payer à la gare avant le départ. Présentez
-                      votre code de réservation.
-                    </p>
-                  </div>
-                )}
-
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-blue-600 to-green-600"
-                  disabled={loading}
-                  size="lg"
-                >
-                  {loading
-                    ? "Réservation en cours..."
-                    : "Confirmer la réservation"}
-                </Button>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <p className="text-sm text-gray-500">Numéro de réservation</p>
+              <p className="font-medium">
+                {bookingDetails.reservation.reservationNumber}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Passager</p>
+              <p className="font-medium">
+                {bookingDetails.reservation.passengerName}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Trajet</p>
+              <p className="font-medium">
+                {bookingDetails.trip.departureCity} →{" "}
+                {bookingDetails.trip.arrivalCity}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Compagnie</p>
+              <p className="font-medium">{bookingDetails.trip.company}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Montant total</p>
+              <p className="font-medium text-primary">
+                {bookingDetails.reservation.totalAmount.toLocaleString()} FCFA
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Mode de paiement</p>
+              <p className="font-medium">
+                {bookingDetails.reservation.paymentMethod === "CASH"
+                  ? "Espèces (à la gare)"
+                  : bookingDetails.reservation.paymentMethod === "MOBILE_MONEY"
+                  ? "Mobile Money"
+                  : "Carte bancaire"}
+              </p>
+            </div>
           </div>
         </div>
+
+        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+          <h3 className="font-semibold text-blue-800 mb-2">Instructions</h3>
+          {bookingDetails.reservation.paymentMethod === "CASH" ? (
+            <p className="text-blue-700">
+              Veuillez vous présenter à la gare au moins 30 minutes avant le
+              départ avec votre numéro de réservation pour effectuer le paiement
+              et récupérer votre ticket.
+            </p>
+          ) : bookingDetails.reservation.paymentMethod === "MOBILE_MONEY" ? (
+            <p className="text-blue-700">
+              Vous recevrez bientôt une notification pour effectuer le paiement
+              par Mobile Money. Votre réservation sera confirmée après réception
+              du paiement.
+            </p>
+          ) : (
+            <p className="text-blue-700">
+              Votre paiement est en cours de traitement. Vous recevrez une
+              confirmation par email une fois le paiement validé.
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/")}
+            className="flex-1 sm:flex-initial"
+          >
+            Retour à l'accueil
+          </Button>
+          <Button
+            onClick={() => router.push("/search")}
+            className="flex-1 sm:flex-initial"
+          >
+            Rechercher d'autres voyages
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <FormField
+            control={form.control}
+            name="passengerName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nom complet</FormLabel>
+                <FormControl>
+                  <Input placeholder="Entrez votre nom complet" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="passengerEmail"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input
+                    type="email"
+                    placeholder="votre@email.com"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="passengerPhone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Téléphone</FormLabel>
+                <FormControl>
+                  <div className="flex">
+                    <div className="bg-gray-100 border border-r-0 rounded-l-md px-3 flex items-center text-gray-600">
+                      +221
+                    </div>
+                    <Input
+                      className="rounded-l-none"
+                      placeholder="77 123 45 67"
+                      {...field}
+                    />
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="numberOfSeats"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nombre de places</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={10}
+                    {...field}
+                    onChange={(e) => {
+                      const value = Number.parseInt(e.target.value);
+                      if (value > 0 && value <= 10) {
+                        field.onChange(value);
+                      }
+                    }}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="border-t border-gray-200 pt-6">
+          <h3 className="font-medium text-gray-800 mb-4">
+            Contact d'urgence (optionnel)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormField
+              control={form.control}
+              name="emergencyContact"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nom du contact</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Nom du contact d'urgence" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="emergencyPhone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Téléphone du contact</FormLabel>
+                  <FormControl>
+                    <div className="flex">
+                      <div className="bg-gray-100 border border-r-0 rounded-l-md px-3 flex items-center text-gray-600">
+                        +221
+                      </div>
+                      <Input
+                        className="rounded-l-none"
+                        placeholder="77 123 45 67"
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        <FormField
+          control={form.control}
+          name="specialRequests"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Demandes spéciales (optionnel)</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Indiquez toute demande particulière (assistance, bagages spéciaux, etc.)"
+                  className="resize-none"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="border-t border-gray-200 pt-6">
+          <h3 className="font-medium text-gray-800 mb-4">Mode de paiement</h3>
+          <FormField
+            control={form.control}
+            name="paymentMethod"
+            render={({ field }) => (
+              <FormItem className="space-y-3">
+                <FormControl>
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    className="flex flex-col space-y-1"
+                  >
+                    <div className="flex items-center space-x-2 bg-white border rounded-md p-4 hover:bg-gray-50 cursor-pointer">
+                      <RadioGroupItem value="CASH" id="cash" />
+                      <FormLabel
+                        htmlFor="cash"
+                        className="flex-1 cursor-pointer"
+                      >
+                        <div className="font-medium">Paiement à la gare</div>
+                        <div className="text-sm text-gray-500">
+                          Payez en espèces au guichet avant le départ
+                        </div>
+                      </FormLabel>
+                    </div>
+                    <div className="flex items-center space-x-2 bg-white border rounded-md p-4 hover:bg-gray-50 cursor-pointer">
+                      <RadioGroupItem value="MOBILE_MONEY" id="mobile" />
+                      <FormLabel
+                        htmlFor="mobile"
+                        className="flex-1 cursor-pointer"
+                      >
+                        <div className="font-medium">Mobile Money</div>
+                        <div className="text-sm text-gray-500">
+                          Orange Money, Wave, Free Money, etc.
+                        </div>
+                      </FormLabel>
+                    </div>
+                    <div className="flex items-center space-x-2 bg-white border rounded-md p-4 hover:bg-gray-50 cursor-pointer">
+                      <RadioGroupItem value="CARD" id="card" />
+                      <FormLabel
+                        htmlFor="card"
+                        className="flex-1 cursor-pointer"
+                      >
+                        <div className="font-medium">Carte bancaire</div>
+                        <div className="text-sm text-gray-500">
+                          Visa, Mastercard, etc.
+                        </div>
+                      </FormLabel>
+                    </div>
+                  </RadioGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="border-t border-gray-200 pt-6">
+          <div className="flex flex-col md:flex-row justify-between items-center mb-6">
+            <div className="mb-4 md:mb-0">
+              <p className="text-sm text-gray-500">Prix total</p>
+              <p className="text-2xl font-bold text-primary">
+                {(
+                  trip.currentPrice * form.watch("numberOfSeats")
+                ).toLocaleString()}{" "}
+                FCFA
+              </p>
+              <p className="text-xs text-gray-500">
+                {form.watch("numberOfSeats")}{" "}
+                {form.watch("numberOfSeats") > 1 ? "places" : "place"} x{" "}
+                {trip.currentPrice.toLocaleString()} FCFA
+              </p>
+            </div>
+            <Button
+              type="submit"
+              size="lg"
+              disabled={isSubmitting}
+              className="w-full md:w-auto"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Traitement en cours...
+                </>
+              ) : (
+                "Confirmer la réservation"
+              )}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-500 text-center">
+            En confirmant cette réservation, vous acceptez les conditions
+            générales de vente et la politique de confidentialité.
+          </p>
+        </div>
       </form>
-    </div>
+    </Form>
   );
 }

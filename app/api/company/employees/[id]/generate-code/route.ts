@@ -1,36 +1,34 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { EmployeeAuthService } from "@/lib/employee-auth";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
 
-    // Vérifier l'authentification
-    if (!session || !session.user) {
+    if (!session || session.user.role !== "PATRON") {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    // Vérifier le rôle (seuls les patrons peuvent générer des codes)
-    if (session.user.role !== "PATRON") {
-      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
-    }
+    const employeeId = params.id;
 
-    // Awaiter les params avant d'accéder à id
-    const { id: employeeId } = await params;
-
-    console.log("Generating code for employee:", employeeId);
-
-    // Vérifier que l'employé existe
-    const employee = await prisma.user.findUnique({
-      where: { id: employeeId },
-      include: {
-        employeeAt: true,
+    // Récupérer l'employé avec ses informations
+    const employee = await prisma.user.findFirst({
+      where: {
+        id: employeeId,
+        role: { in: ["GESTIONNAIRE", "CAISSIER"] },
+        companyId: session.user.companyId,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        countryCode: true,
+        companyId: true,
       },
     });
 
@@ -41,86 +39,64 @@ export async function POST(
       );
     }
 
-    console.log(
-      "Employee found:",
-      employee.name,
-      "Company:",
-      employee.companyId
-    );
-
-    // Vérifier que l'employé appartient à une entreprise du patron
-    if (!employee.companyId) {
+    if (!employee.phone || !employee.countryCode) {
       return NextResponse.json(
-        { error: "L'employé n'est associé à aucune entreprise" },
+        {
+          error:
+            "L'employé doit avoir un numéro de téléphone et un indicatif pays pour générer un code",
+        },
         { status: 400 }
       );
     }
 
-    const company = await prisma.company.findFirst({
+    // Supprimer les anciens codes non utilisés
+    await prisma.employeeAuthCode.deleteMany({
       where: {
-        id: employee.companyId,
-        ownerId: session.user.id,
+        employeeId: employeeId,
+        OR: [{ expiresAt: { lt: new Date() } }, { isUsed: true }],
       },
     });
 
-    if (!company) {
-      return NextResponse.json(
-        { error: "Cet employé n'appartient pas à l'une de vos entreprises" },
-        { status: 403 }
-      );
-    }
+    // Générer un nouveau code à 6 chiffres
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 heures
 
-    // Générer un nouveau code
-    const code = await EmployeeAuthService.generateEmployeeCode(
-      employeeId,
-      employee.companyId
-    );
-    console.log("Generated code:", code);
-
-    // Stocker le code dans la table Activity
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 jours
-
-    // Enregistrer l'activité avec le code - inclure l'ID de l'employé dans la description
-    const activity = await prisma.activity.create({
+    // Créer le nouveau code d'authentification
+    const authCode = await prisma.employeeAuthCode.create({
       data: {
-        type: "EMPLOYEE_ADDED", // Utiliser un type plus approprié
-        description: `Code d'authentification généré: ${code} pour employé ${
-          employee.id
-        } (${employee.name}) - expire le ${expiresAt.toLocaleDateString()}`,
+        code,
+        phone: employee.phone,
+        countryCode: employee.countryCode,
+        employeeId: employee.id,
+        expiresAt,
+      },
+    });
+
+    // Enregistrer l'activité
+    await prisma.activity.create({
+      data: {
+        type: "EMPLOYEE_ADDED",
+        description: `Code d'accès généré pour ${employee.name}`,
         status: "SUCCESS",
-        userId: employee.id, // Associer à l'employé, pas au patron
+        userId: session.user.id,
         companyId: employee.companyId,
         metadata: {
-          code: code,
           employeeId: employee.id,
+          codeGenerated: true,
           expiresAt: expiresAt.toISOString(),
-          generatedBy: session.user.id,
         },
       },
     });
 
-    console.log("Activity created:", activity.id);
-
     return NextResponse.json({
       success: true,
-      code,
-      expiresAt,
-      employee: {
-        id: employee.id,
-        name: employee.name,
-        phone: employee.phone,
-        countryCode: employee.countryCode,
-      },
-      message: "Code généré avec succès",
+      code: authCode.code,
+      expiresAt: authCode.expiresAt,
+      phone: `${employee.countryCode} ${employee.phone}`,
+      message: `Code généré pour ${employee.name}. Valide pendant 8 heures.`,
     });
   } catch (error) {
-    console.error("Erreur lors de la génération du code:", error);
-    return NextResponse.json(
-      {
-        error: "Erreur lors de la génération du code",
-        details: error instanceof Error ? error.message : "Erreur inconnue",
-      },
-      { status: 500 }
-    );
+    console.error("Error generating employee code:", error);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,9 +41,17 @@ import {
   RouteIcon,
   Globe,
   Calculator,
+  Navigation,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AFRICAN_COUNTRIES } from "@/constants/countries";
+import {
+  calculateRoute,
+  calculateEstimatedPrice,
+  calculateEstimatedDuration,
+  formatDuration,
+} from "@/lib/openstreetmap";
 
 interface Route {
   id: string;
@@ -91,15 +98,116 @@ const initialFormData: RouteFormData = {
   status: "ACTIVE",
 };
 
-export default function RouteManagement() {
+interface EnhancedRouteManagementProps {
+  companyId: string;
+}
+
+export default function EnhancedRouteManagement({
+  companyId,
+}: EnhancedRouteManagementProps) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRoute, setEditingRoute] = useState<Route | null>(null);
   const [formData, setFormData] = useState<RouteFormData>(initialFormData);
   const [submitting, setSubmitting] = useState(false);
+  const [calculating, setCalculating] = useState(false);
 
-  // Memoized input change handler to prevent re-renders
+  // Get cities for selected country
+  const getDepartureCities = useCallback(() => {
+    const country = AFRICAN_COUNTRIES.find(
+      (c) => c.code === formData.departureCountry
+    );
+    return country?.cities || [];
+  }, [formData.departureCountry]);
+
+  const getArrivalCities = useCallback(() => {
+    const country = AFRICAN_COUNTRIES.find(
+      (c) => c.code === formData.arrivalCountry
+    );
+    return country?.cities || [];
+  }, [formData.arrivalCountry]);
+
+  // Auto-calculate route when cities change
+  const handleCityChange = useCallback(
+    async (field: "departureCity" | "arrivalCity", value: string) => {
+      console.log(`Selecting ${field}:`, value);
+      setFormData((prev) => ({ ...prev, [field]: value }));
+
+      // Auto-calculate if both cities are selected
+      if (
+        (field === "departureCity" && value && formData.arrivalCity) ||
+        (field === "arrivalCity" && value && formData.departureCity)
+      ) {
+        const departureCity =
+          field === "departureCity" ? value : formData.departureCity;
+        const arrivalCity =
+          field === "arrivalCity" ? value : formData.arrivalCity;
+
+        console.log("Auto-calculating route for:", {
+          departureCity,
+          arrivalCity,
+        });
+        await calculateRouteData(departureCity, arrivalCity);
+      }
+    },
+    [formData.departureCity, formData.arrivalCity]
+  );
+
+  const calculateRouteData = async (
+    departureCity: string,
+    arrivalCity: string
+  ) => {
+    if (!departureCity || !arrivalCity) return;
+
+    setCalculating(true);
+    try {
+      const departureCountryName =
+        AFRICAN_COUNTRIES.find((c) => c.code === formData.departureCountry)
+          ?.name || "";
+      const arrivalCountryName =
+        AFRICAN_COUNTRIES.find((c) => c.code === formData.arrivalCountry)
+          ?.name || "";
+
+      const routeData = await calculateRoute(
+        departureCity,
+        arrivalCity,
+        departureCountryName,
+        arrivalCountryName
+      );
+
+      if (routeData) {
+        const distanceKm = Math.round(routeData.distance / 1000);
+        const estimatedDuration = calculateEstimatedDuration(
+          routeData.duration,
+          formData.isInternational
+        );
+        const estimatedPrice = calculateEstimatedPrice(distanceKm);
+
+        setFormData((prev) => ({
+          ...prev,
+          distance: distanceKm,
+          estimatedDuration,
+          basePrice: estimatedPrice,
+          name: prev.name || `${departureCity} - ${arrivalCity}`,
+        }));
+
+        toast.success(
+          `Route calculée: ${distanceKm} km, ${formatDuration(
+            estimatedDuration
+          )}`
+        );
+      } else {
+        toast.error("Impossible de calculer la route automatiquement");
+      }
+    } catch (error) {
+      console.error("Route calculation error:", error);
+      toast.error("Erreur lors du calcul de la route");
+    } finally {
+      setCalculating(false);
+    }
+  };
+
   const handleInputChange = useCallback(
     (field: keyof RouteFormData, value: string | number | boolean) => {
       setFormData((prev) => {
@@ -109,6 +217,13 @@ export default function RouteManagement() {
         if (field === "departureCountry" || field === "arrivalCountry") {
           newData.isInternational =
             newData.departureCountry !== newData.arrivalCountry;
+
+          // Reset cities when country changes
+          if (field === "departureCountry") {
+            newData.departureCity = "";
+          } else {
+            newData.arrivalCity = "";
+          }
         }
 
         return newData;
@@ -139,12 +254,21 @@ export default function RouteManagement() {
     fetchRoutes();
   }, []);
 
+  // Reset cities when countries change
+  useEffect(() => {
+    setFormData((prev) => ({ ...prev, departureCity: "" }));
+  }, [formData.departureCountry]);
+
+  useEffect(() => {
+    setFormData((prev) => ({ ...prev, arrivalCity: "" }));
+  }, [formData.arrivalCountry]);
+
   const fetchRoutes = async () => {
     try {
-      const response = await fetch("/api/patron/routes");
+      const response = await fetch(`/api/patron/routes?companyId=${companyId}`);
       if (response.ok) {
         const data = await response.json();
-        setRoutes(data.routes || []);
+        setRoutes(data || []);
       } else {
         toast.error("Erreur lors du chargement des routes");
       }
@@ -178,7 +302,12 @@ export default function RouteManagement() {
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          companyId,
+          origin: formData.departureCity,
+          destination: formData.arrivalCity,
+        }),
       });
 
       if (response.ok) {
@@ -259,7 +388,9 @@ export default function RouteManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Gestion des Routes</h2>
-          <p className="text-gray-600">Gérez les itinéraires de vos voyages</p>
+          <p className="text-gray-600">
+            Gérez les itinéraires de vos voyages avec calcul automatique
+          </p>
         </div>
         <Dialog
           open={isDialogOpen}
@@ -276,7 +407,8 @@ export default function RouteManagement() {
           </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Navigation className="h-5 w-5" />
                 {editingRoute
                   ? "Modifier la route"
                   : "Créer une nouvelle route"}
@@ -295,7 +427,7 @@ export default function RouteManagement() {
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="name">Nom de la route *</Label>
+                      <Label htmlFor="name">Nom de la route **</Label>
                       <Input
                         id="name"
                         value={formData.name}
@@ -349,12 +481,15 @@ export default function RouteManagement() {
                 </CardContent>
               </Card>
 
-              {/* Itinerary */}
+              {/* Itinerary with Auto-calculation */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <MapPin className="h-5 w-5" />
                     Itinéraire
+                    {calculating && (
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -385,14 +520,30 @@ export default function RouteManagement() {
 
                       <div>
                         <Label htmlFor="departureCity">Ville de départ *</Label>
-                        <Input
-                          id="departureCity"
+                        <Select
                           value={formData.departureCity}
-                          onChange={(e) =>
-                            handleInputChange("departureCity", e.target.value)
+                          onValueChange={(value) =>
+                            handleCityChange("departureCity", value)
                           }
-                          placeholder="Sélectionnez une ville"
-                        />
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionnez une ville" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getDepartureCities().length > 0 ? (
+                              getDepartureCities().map((city) => (
+                                <SelectItem key={city.name} value={city.name}>
+                                  <MapPin className="h-4 w-4 mr-2 inline" />
+                                  {city.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="" disabled>
+                                Aucune ville disponible
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
 
@@ -422,14 +573,30 @@ export default function RouteManagement() {
 
                       <div>
                         <Label htmlFor="arrivalCity">Ville d'arrivée *</Label>
-                        <Input
-                          id="arrivalCity"
+                        <Select
                           value={formData.arrivalCity}
-                          onChange={(e) =>
-                            handleInputChange("arrivalCity", e.target.value)
+                          onValueChange={(value) =>
+                            handleCityChange("arrivalCity", value)
                           }
-                          placeholder="Sélectionnez une ville"
-                        />
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionnez une ville" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getArrivalCities().length > 0 ? (
+                              getArrivalCities().map((city) => (
+                                <SelectItem key={city.name} value={city.name}>
+                                  <MapPin className="h-4 w-4 mr-2 inline" />
+                                  {city.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="" disabled>
+                                Aucune ville disponible
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   </div>
@@ -442,7 +609,49 @@ export default function RouteManagement() {
                       }
                     />
                     <Label>Route internationale</Label>
+                    {formData.isInternational && (
+                      <Badge variant="secondary" className="ml-2">
+                        <Globe className="h-3 w-3 mr-1" />
+                        International
+                      </Badge>
+                    )}
                   </div>
+
+                  {calculating && (
+                    <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg">
+                      <Loader2 className="h-4 w-4 animate-spin text-yellow-600" />
+                      <span className="text-yellow-800">
+                        Calcul de la route en cours...
+                      </span>
+                    </div>
+                  )}
+
+                  {formData.departureCity && formData.arrivalCity && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        calculateRouteData(
+                          formData.departureCity,
+                          formData.arrivalCity
+                        )
+                      }
+                      disabled={calculating}
+                      className="w-full"
+                    >
+                      {calculating ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Calcul en cours...
+                        </>
+                      ) : (
+                        <>
+                          <Calculator className="h-4 w-4 mr-2" />
+                          Recalculer la route
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
 
@@ -452,6 +661,9 @@ export default function RouteManagement() {
                   <CardTitle className="flex items-center gap-2">
                     <Calculator className="h-5 w-5" />
                     Détails du voyage
+                    <Badge variant="outline" className="ml-2">
+                      Auto-calculé
+                    </Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -466,6 +678,7 @@ export default function RouteManagement() {
                         onChange={(e) =>
                           handleInputChange("distance", Number(e.target.value))
                         }
+                        className={calculating ? "bg-yellow-50" : ""}
                       />
                     </div>
                     <div>
@@ -483,6 +696,7 @@ export default function RouteManagement() {
                             Number(e.target.value)
                           )
                         }
+                        className={calculating ? "bg-yellow-50" : ""}
                       />
                     </div>
                     <div>
@@ -495,6 +709,7 @@ export default function RouteManagement() {
                         onChange={(e) =>
                           handleInputChange("basePrice", Number(e.target.value))
                         }
+                        className={calculating ? "bg-yellow-50" : ""}
                       />
                     </div>
                   </div>
@@ -510,9 +725,7 @@ export default function RouteManagement() {
                       </div>
                       <div className="text-2xl font-bold text-blue-600">
                         {formData.estimatedDuration > 0
-                          ? `${Math.floor(formData.estimatedDuration / 60)}h ${
-                              formData.estimatedDuration % 60
-                            }min`
+                          ? formatDuration(formData.estimatedDuration)
                           : "0h 0min"}
                       </div>
                     </div>
@@ -552,13 +765,19 @@ export default function RouteManagement() {
                 <Button
                   type="submit"
                   className="bg-gradient-to-r from-blue-600 to-green-600"
-                  disabled={submitting}
+                  disabled={submitting || calculating}
                 >
-                  {submitting
-                    ? "Enregistrement..."
-                    : editingRoute
-                    ? "Modifier la route"
-                    : "Créer la route"}
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Enregistrement...
+                    </>
+                  ) : (
+                    <>
+                      <Navigation className="h-4 w-4 mr-2" />
+                      {editingRoute ? "Modifier la route" : "Créer la route"}
+                    </>
+                  )}
                 </Button>
               </div>
             </form>
@@ -631,8 +850,7 @@ export default function RouteManagement() {
                     </TableCell>
                     <TableCell>{route.distance} km</TableCell>
                     <TableCell>
-                      {Math.floor(route.estimatedDuration / 60)}h{" "}
-                      {route.estimatedDuration % 60}min
+                      {formatDuration(route.estimatedDuration)}
                     </TableCell>
                     <TableCell>
                       {route.basePrice.toLocaleString()} FCFA

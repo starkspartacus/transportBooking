@@ -64,7 +64,7 @@ export default function SearchPage() {
     date: "",
     minPrice: "",
     maxPrice: "",
-    company: "",
+    company: "all",
     sortBy: "price",
   });
 
@@ -81,7 +81,12 @@ export default function SearchPage() {
     setLoading(true);
     try {
       const queryParams = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
+      const effectiveFilters = {
+        ...filters,
+        company: filters.company === "all" ? "" : filters.company,
+      };
+
+      Object.entries(effectiveFilters).forEach(([key, value]) => {
         if (value) queryParams.append(key, value);
       });
 
@@ -114,6 +119,19 @@ export default function SearchPage() {
   };
 
   const handleSearch = () => {
+    fetchTrips();
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      from: "",
+      to: "",
+      date: "",
+      minPrice: "",
+      maxPrice: "",
+      company: "all",
+      sortBy: "price",
+    });
     fetchTrips();
   };
 
@@ -244,7 +262,7 @@ export default function SearchPage() {
                       <SelectValue placeholder="Toutes les compagnies" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Toutes les compagnies</SelectItem>
+                      <SelectItem value="all">Toutes les compagnies</SelectItem>
                       {companies.map((company) => (
                         <SelectItem key={company.id} value={company.id}>
                           {company.name}
@@ -266,27 +284,40 @@ export default function SearchPage() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Trier par" />
+                      <SelectValue placeholder="Trier par prix croissant" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="price">Prix croissant</SelectItem>
                       <SelectItem value="price_desc">
                         Prix décroissant
                       </SelectItem>
-                      <SelectItem value="departure">Heure de départ</SelectItem>
-                      <SelectItem value="duration">Durée du voyage</SelectItem>
+                      <SelectItem value="departure">
+                        Heure de départ (tôt → tard)
+                      </SelectItem>
+                      <SelectItem value="duration">
+                        Durée (court → long)
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <Button
-                  onClick={handleSearch}
-                  className="w-full"
-                  disabled={loading}
-                >
-                  <Search className="h-4 w-4 mr-2" />
-                  {loading ? "Recherche..." : "Rechercher"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSearch}
+                    className="flex-1"
+                    disabled={loading}
+                  >
+                    <Search className="h-4 w-4 mr-2" />
+                    {loading ? "Recherche..." : "Rechercher"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={resetFilters}
+                    disabled={loading}
+                  >
+                    Réinitialiser
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -327,19 +358,7 @@ export default function SearchPage() {
                   <p className="text-gray-600 mb-4">
                     Essayez de modifier vos critères de recherche
                   </p>
-                  <Button
-                    onClick={() =>
-                      setFilters({
-                        from: "",
-                        to: "",
-                        date: "",
-                        minPrice: "",
-                        maxPrice: "",
-                        company: "",
-                        sortBy: "price",
-                      })
-                    }
-                  >
+                  <Button onClick={resetFilters}>
                     Réinitialiser les filtres
                   </Button>
                 </CardContent>

@@ -35,7 +35,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Voyage non trouvé" }, { status: 404 });
     }
 
-    if (trip.status !== "ACTIVE") {
+    // Vérifier si le voyage est disponible (SCHEDULED ou ACTIVE)
+    if (trip.status !== "SCHEDULED" && trip.status !== "BOARDING") {
       return NextResponse.json(
         { error: "Ce voyage n'est plus disponible" },
         { status: 400 }
@@ -49,8 +50,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate unique reservation code
-    const reservationCode = `RES-${Date.now()}-${Math.random()
+    // Generate unique reservation number
+    const reservationNumber = `RES-${Date.now()}-${Math.random()
       .toString(36)
       .substr(2, 9)
       .toUpperCase()}`;
@@ -58,10 +59,10 @@ export async function POST(request: NextRequest) {
     // Create reservation
     const reservation = await prisma.reservation.create({
       data: {
+        reservationNumber: reservationNumber,
         passengerName: validatedData.passengerName,
         passengerEmail: validatedData.passengerEmail,
         passengerPhone: validatedData.passengerPhone,
-        countryCode: validatedData.countryCode,
         tripId: validatedData.tripId,
         companyId: trip.companyId,
         seatNumbers: [], // Will be assigned later
@@ -70,10 +71,8 @@ export async function POST(request: NextRequest) {
         paymentStatus:
           validatedData.paymentMethod === "CASH" ? "PENDING" : "PENDING",
         paymentMethod: validatedData.paymentMethod,
-        reservationCode,
-        emergencyContact: validatedData.emergencyContact,
-        emergencyPhone: validatedData.emergencyPhone,
-        specialRequests: validatedData.specialRequests,
+        emergencyContact: validatedData.emergencyContact || null,
+        specialRequests: validatedData.specialRequests || null,
         userId: null, // Guest booking
       },
     });
@@ -108,20 +107,24 @@ export async function POST(request: NextRequest) {
       console.warn("Failed to log reservation activity:", logError);
     }
 
+    // Déterminer les villes de départ et d'arrivée
+    const departureCity = trip.route?.departureLocation || "N/A";
+    const arrivalCity = trip.route?.arrivalLocation || "N/A";
+
     return NextResponse.json({
       success: true,
       message: "Réservation créée avec succès",
       reservation: {
         id: reservation.id,
-        reservationCode: reservation.reservationCode,
+        reservationNumber: reservation.reservationNumber,
         passengerName: reservation.passengerName,
         totalAmount: reservation.totalAmount,
         paymentMethod: reservation.paymentMethod,
         status: reservation.status,
       },
       trip: {
-        departureCity: trip.route?.departureLocation || "",
-        arrivalCity: trip.route?.arrivalLocation || "",
+        departureCity: departureCity,
+        arrivalCity: arrivalCity,
         departureTime: trip.departureTime,
         company: trip.company.name,
       },
