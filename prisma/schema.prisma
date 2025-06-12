@@ -74,7 +74,14 @@ model User {
  salary        Float?
  emergencyContact String?
  emergencyPhone   String?
+ emergencyRelation String?
  employeeNotes    String?
+ education     String?
+ skills        String[]
+ languages     String[]
+ bankName      String?
+ bankAccountNumber String?
+ bankAccountName String?
 
  // Preferences
  language      String?   @default("fr")
@@ -88,6 +95,7 @@ model User {
 
  // Add this line in the User model relations section
  employeeAuthCodes EmployeeAuthCode[] @relation("EmployeeAuthCodes")
+ subscriptionTransactions SubscriptionTransaction[]
 
  // Company relations - Updated for multi-company support
  ownedCompanies Company[]  @relation("CompanyOwner")
@@ -157,6 +165,33 @@ model EmployeeAuthCode {
   @@index([code])
   @@index([phone, countryCode])
   @@index([expiresAt])
+}
+
+model SubscriptionTransaction {
+  id            String   @id @default(cuid())
+  transactionId String   @unique
+  userId        String
+  companyId     String
+  planId        String
+  period        String   @default("monthly")
+  amount        Float
+  currency      String   @default("XOF")
+  status        String   @default("PENDING")
+  paymentMethod String
+  processorId   String?
+  paidAt        DateTime?
+  metadata      Json?
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model PasswordHistory {
@@ -426,6 +461,7 @@ model Company {
  payments    Payment[]
  refunds     Refund[]
  documents   CompanyDocument[]
+ subscriptionTransactions SubscriptionTransaction[]
 
  // Subscription
  subscriptionTier SubscriptionTier @default(BASIC)
@@ -581,7 +617,6 @@ model Activity {
 enum ActivityType {
  USER_LOGIN
  USER_LOGOUT
- USER_REGISTRATION
  USER_UPDATED
  RESERVATION_CREATED
  RESERVATION_CANCELLED
@@ -591,7 +626,6 @@ enum ActivityType {
  BUS_ADDED
  ROUTE_CREATED
  EMPLOYEE_ADDED
- EMPLOYEE_CODE_GENERATED
  SYSTEM_UPDATE
  COMPANY_CREATED
  COMPANY_UPDATED
@@ -618,6 +652,12 @@ enum ActivityType {
  TICKET_GENERATED
  TICKET_VALIDATED
  TICKET_SALE
+ SUBSCRIPTION_UPGRADE_FAILED
+ SUBSCRIPTION_UPGRADED
+ EMPLOYEE_CODE_GENERATED
+ EMPLOYEE_CREATED
+ EMPLOYEE_UPDATED
+ EMPLOYEE_DELETED
 }
 
 enum ActivityStatus {

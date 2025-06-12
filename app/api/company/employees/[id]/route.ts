@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -13,7 +13,7 @@ export async function GET(
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    const { id: employeeId } = await params;
+    const employeeId = params.id;
 
     const employee = await prisma.user.findFirst({
       where: {
@@ -29,12 +29,35 @@ export async function GET(
         phone: true,
         countryCode: true,
         role: true,
+        status: true,
+        nationality: true,
+        department: true,
+        position: true,
+        salary: true,
+        hireDate: true,
         country: true,
         city: true,
         commune: true,
         createdAt: true,
         lastLogin: true,
         companyId: true,
+        image: true,
+        address: true,
+        dateOfBirth: true,
+        gender: true,
+        idNumber: true,
+        idType: true,
+        idExpiryDate: true,
+        emergencyContact: true,
+        emergencyPhone: true,
+        emergencyRelation: true,
+        employeeNotes: true,
+        education: true,
+        skills: true,
+        languages: true,
+        bankName: true,
+        bankAccountNumber: true,
+        bankAccountName: true,
       },
     });
 
@@ -57,7 +80,10 @@ export async function GET(
       if (!company) {
         return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
       }
-    } else if (session.user.companyId !== employee.companyId) {
+    } else if (
+      session.user.role === "GESTIONNAIRE" &&
+      session.user.companyId !== employee.companyId
+    ) {
       return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
     }
 
@@ -73,7 +99,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -84,7 +110,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    const { id: employeeId } = await params;
+    const employeeId = params.id;
     const body = await request.json();
 
     // Vérifier que l'employé existe
@@ -114,18 +140,126 @@ export async function PATCH(
       if (!company) {
         return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
       }
+    } else if (
+      session.user.role === "GESTIONNAIRE" &&
+      session.user.companyId !== employee.companyId
+    ) {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
     }
 
-    // Supprimer les champs qui ne sont pas dans le schéma
-    const { age, employeeRole, ...validData } = body;
+    // Traiter les données de mise à jour
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      countryCode,
+      role,
+      status,
+      nationality,
+      department,
+      position,
+      salary,
+      hireDate,
+      image,
+      address,
+      country,
+      city,
+      commune,
+      dateOfBirth,
+      gender,
+      idNumber,
+      idType,
+      idExpiryDate,
+      education,
+      skills,
+      languages,
+      bankName,
+      bankAccountNumber,
+      bankAccountName,
+      emergencyContact,
+      emergencyPhone,
+      emergencyRelation,
+      employeeNotes,
+    } = body;
+
+    // Préparer les données pour la mise à jour
+    const updateData: any = {};
+
+    // Informations de base
+    if (firstName && lastName) {
+      updateData.name = `${firstName} ${lastName}`;
+      updateData.firstName = firstName;
+      updateData.lastName = lastName;
+    } else if (firstName) {
+      updateData.firstName = firstName;
+      updateData.name = `${firstName} ${employee.lastName || ""}`.trim();
+    } else if (lastName) {
+      updateData.lastName = lastName;
+      updateData.name = `${employee.firstName || ""} ${lastName}`.trim();
+    }
+
+    if (email) updateData.email = email;
+    if (phone !== undefined) updateData.phone = phone || null;
+    if (countryCode !== undefined) updateData.countryCode = countryCode || null;
+    if (role) updateData.role = role;
+    if (status) updateData.status = status;
+    if (nationality !== undefined) updateData.nationality = nationality || null;
+    if (department !== undefined)
+      updateData.department = department === "none" ? null : department;
+    if (position !== undefined) updateData.position = position || null;
+    if (salary !== undefined)
+      updateData.salary = salary ? Number.parseFloat(salary.toString()) : null;
+    if (hireDate !== undefined)
+      updateData.hireDate = hireDate ? new Date(hireDate) : null;
+
+    // Informations personnelles
+    if (image !== undefined) updateData.image = image || null;
+    if (address !== undefined) updateData.address = address || null;
+    if (country !== undefined) updateData.country = country || null;
+    if (city !== undefined) updateData.city = city || null;
+    if (commune !== undefined) updateData.commune = commune || null;
+    if (dateOfBirth !== undefined)
+      updateData.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+    if (gender !== undefined) updateData.gender = gender || null;
+    if (idNumber !== undefined) updateData.idNumber = idNumber || null;
+    if (idType !== undefined) updateData.idType = idType || null;
+    if (idExpiryDate !== undefined)
+      updateData.idExpiryDate = idExpiryDate ? new Date(idExpiryDate) : null;
+
+    // Informations professionnelles
+    if (education !== undefined) updateData.education = education || null;
+    if (skills !== undefined)
+      updateData.skills = Array.isArray(skills) ? skills : [];
+    if (languages !== undefined)
+      updateData.languages = Array.isArray(languages) ? languages : [];
+
+    // Informations bancaires
+    if (bankName !== undefined) updateData.bankName = bankName || null;
+    if (bankAccountNumber !== undefined)
+      updateData.bankAccountNumber = bankAccountNumber || null;
+    if (bankAccountName !== undefined)
+      updateData.bankAccountName = bankAccountName || null;
+
+    // Contact d'urgence
+    if (emergencyContact !== undefined)
+      updateData.emergencyContact = emergencyContact || null;
+    if (emergencyPhone !== undefined)
+      updateData.emergencyPhone = emergencyPhone || null;
+    if (emergencyRelation !== undefined)
+      updateData.emergencyRelation = emergencyRelation || null;
+
+    // Notes
+    if (employeeNotes !== undefined)
+      updateData.employeeNotes = employeeNotes || null;
+
+    // Ajouter la date de mise à jour
+    updateData.updatedAt = new Date();
 
     // Mettre à jour l'employé
     const updatedEmployee = await prisma.user.update({
       where: { id: employeeId },
-      data: {
-        ...validData,
-        updatedAt: new Date(),
-      },
+      data: updateData,
       select: {
         id: true,
         name: true,
@@ -135,15 +269,57 @@ export async function PATCH(
         phone: true,
         countryCode: true,
         role: true,
+        status: true,
+        nationality: true,
+        department: true,
+        position: true,
+        salary: true,
+        hireDate: true,
         country: true,
         city: true,
         commune: true,
         createdAt: true,
         updatedAt: true,
+        companyId: true,
+        image: true,
+        address: true,
+        dateOfBirth: true,
+        gender: true,
+        idNumber: true,
+        idType: true,
+        idExpiryDate: true,
+        emergencyContact: true,
+        emergencyPhone: true,
+        emergencyRelation: true,
+        employeeNotes: true,
+        education: true,
+        skills: true,
+        languages: true,
+        bankName: true,
+        bankAccountNumber: true,
+        bankAccountName: true,
       },
     });
 
-    return NextResponse.json(updatedEmployee);
+    // Enregistrer l'activité
+    await prisma.activity.create({
+      data: {
+        type: "EMPLOYEE_UPDATED",
+        description: `Employé mis à jour: ${updatedEmployee.name} (${updatedEmployee.role})`,
+        userId: session.user.id,
+        companyId: employee.companyId || undefined,
+        metadata: {
+          employeeId: updatedEmployee.id,
+          employeeName: updatedEmployee.name,
+          employeeRole: updatedEmployee.role,
+        },
+      },
+    });
+
+    return NextResponse.json({
+      message: "Employé mis à jour avec succès",
+      employee: updatedEmployee,
+    });
   } catch (error) {
     console.error("Error updating employee:", error);
     return NextResponse.json(
@@ -155,7 +331,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -163,7 +339,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    const { id: employeeId } = await params;
+    const employeeId = params.id;
 
     // Vérifier que l'employé existe
     const employee = await prisma.user.findFirst({
@@ -193,6 +369,21 @@ export async function DELETE(
         return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
       }
     }
+
+    // Enregistrer l'activité avant de supprimer l'employé
+    await prisma.activity.create({
+      data: {
+        type: "EMPLOYEE_DELETED",
+        description: `Employé supprimé: ${employee.name} (${employee.role})`,
+        userId: session.user.id,
+        companyId: employee.companyId || undefined,
+        metadata: {
+          employeeId: employee.id,
+          employeeName: employee.name,
+          employeeRole: employee.role,
+        },
+      },
+    });
 
     // Supprimer l'employé
     await prisma.user.delete({

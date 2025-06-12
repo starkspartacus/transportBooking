@@ -30,6 +30,21 @@ interface CinetPayResponse {
   };
 }
 
+interface CinetPayWebhookData {
+  cpm_site_id: string;
+  cpm_trans_id: string;
+  cpm_amount: string;
+  cpm_currency: string;
+  cpm_payid: string;
+  cpm_payment_date: string;
+  cpm_payment_time: string;
+  cpm_error_message?: string;
+  cpm_result: string;
+  cpm_trans_status: string;
+  cpm_custom?: string;
+  signature: string;
+}
+
 class CinetPayService {
   private config: CinetPayConfig;
 
@@ -64,7 +79,7 @@ class CinetPayService {
         customer_state: "",
         customer_zip_code: "",
         return_url: request.returnUrl,
-        notify_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payments/mobile-money/callback`,
+        notify_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/subscription/callback`,
         cancel_url: request.cancelUrl,
         channels: request.channels,
         metadata: JSON.stringify(request.metadata || {}),
@@ -89,10 +104,26 @@ class CinetPayService {
     }
   }
 
-  generateTransactionId(prefix = "TXN"): string {
+  generateTransactionId(prefix = "SUB"): string {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     return `${prefix}-${timestamp}-${random}`;
+  }
+
+  verifySignature(webhookData: CinetPayWebhookData): boolean {
+    try {
+      // Générer la signature attendue selon la documentation CinetPay
+      const dataToSign = `${webhookData.cpm_site_id}${webhookData.cpm_trans_id}${webhookData.cpm_amount}${this.config.secretKey}`;
+      const expectedSignature = crypto
+        .createHash("sha256")
+        .update(dataToSign)
+        .digest("hex");
+
+      return webhookData.signature === expectedSignature;
+    } catch (error) {
+      console.error("Signature verification error:", error);
+      return false;
+    }
   }
 
   validateWebhookSignature(payload: any, signature: string): boolean {

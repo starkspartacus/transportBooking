@@ -55,6 +55,11 @@ interface NotificationPreferences {
   };
 }
 
+// Define types for the keys of each category
+type EmailKeys = keyof NotificationPreferences["email"];
+type PushKeys = keyof NotificationPreferences["push"];
+type SmsKeys = keyof NotificationPreferences["sms"];
+
 export default function NotificationSettings() {
   const { data: session } = useSession();
   const [preferences, setPreferences] = useState<NotificationPreferences>({
@@ -183,6 +188,22 @@ export default function NotificationSettings() {
     },
   ];
 
+  // Create a comprehensive type mapping for each category to its specific keys
+  type CategoryKeys = {
+    email: keyof NotificationPreferences["email"];
+    push: keyof NotificationPreferences["push"];
+    sms: keyof NotificationPreferences["sms"];
+    sound: keyof NotificationPreferences["sound"];
+    quietHours: keyof NotificationPreferences["quietHours"];
+  };
+
+  // Type guard to ensure category.id is a valid key of NotificationPreferences
+  function isValidCategoryKey(
+    key: string
+  ): key is keyof NotificationPreferences {
+    return ["email", "push", "sms", "sound", "quietHours"].includes(key);
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -233,11 +254,12 @@ export default function NotificationSettings() {
                     className={`bg-gradient-to-r ${category.color} text-white border-0 px-3 py-1`}
                   >
                     {
-                      category.settings.filter(
-                        (setting) =>
-                          preferences[
-                            category.id as keyof NotificationPreferences
-                          ][setting.key as any]
+                      category.settings.filter((setting) =>
+                        isValidCategoryKey(category.id)
+                          ? preferences[category.id as keyof CategoryKeys][
+                              setting.key as CategoryKeys[typeof category.id]
+                            ]
+                          : false
                       ).length
                     }
                     /{category.settings.length}
@@ -267,9 +289,11 @@ export default function NotificationSettings() {
                       </div>
                       <Switch
                         checked={
-                          preferences[
-                            category.id as keyof NotificationPreferences
-                          ][setting.key as any]
+                          isValidCategoryKey(category.id)
+                            ? preferences[category.id as keyof CategoryKeys][
+                                setting.key as CategoryKeys[typeof category.id]
+                              ]
+                            : false
                         }
                         onCheckedChange={(checked) =>
                           updatePreference(
