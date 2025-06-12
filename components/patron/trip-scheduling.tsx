@@ -818,7 +818,7 @@ export default function TripScheduling() {
                 <SelectValue placeholder="Tous les statuts" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tous les statuts</SelectItem>
+                <SelectItem value="all_statuses">Tous les statuts</SelectItem>
                 {TRIP_STATUSES.map((status) => (
                   <SelectItem key={status.value} value={status.value}>
                     {status.label}
@@ -837,7 +837,7 @@ export default function TripScheduling() {
                 <SelectValue placeholder="Toutes les routes" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Toutes les routes</SelectItem>
+                <SelectItem value="all_routes">Toutes les routes</SelectItem>
                 {routes.map((route) => (
                   <SelectItem key={route.id} value={route.id}>
                     {route.name}

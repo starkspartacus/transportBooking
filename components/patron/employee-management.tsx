@@ -207,11 +207,11 @@ export default function EmployeeManagement({
     try {
       const payload = {
         ...formData,
+        name: `${formData.firstName} ${formData.lastName}`,
         salary: formData.salary
           ? Number.parseFloat(formData.salary)
           : undefined,
         companyId,
-        // Ne pas envoyer department et position s'ils sont vides ou "none"
         department:
           formData.department === "none" ? undefined : formData.department,
         position: !formData.position ? undefined : formData.position,

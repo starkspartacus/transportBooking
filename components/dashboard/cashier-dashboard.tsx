@@ -59,6 +59,8 @@ interface Trip {
     departureLocation: string;
     arrivalLocation: string;
     price: number;
+    departureCountry: string;
+    arrivalCountry: string;
   };
   bus: {
     plateNumber: string;
@@ -81,6 +83,9 @@ interface Trip {
     pendingReservations: number;
     revenue: number;
     occupancyRate: number;
+  };
+  company: {
+    name: string;
   };
 }
 
@@ -271,6 +276,79 @@ export default function CashierDashboard() {
     }
   };
 
+  const printTicket = (reservation: Reservation) => {
+    const printContent = `
+    BILLET DE TRANSPORT
+    ==================
+    Code: ${reservation.code}
+    Passager: ${reservation.user.name}
+    De: ${reservation.trip.route.departureLocation}
+    À: ${reservation.trip.route.arrivalLocation}
+    Départ: ${new Date(reservation.trip.departureTime).toLocaleString()}
+    Siège(s): ${reservation.seatNumbers.join(", ")}
+    Montant: ${reservation.totalAmount} FCFA
+    ==================
+    Caissier: ${session?.user?.name}
+    Date: ${new Date().toLocaleString()}
+  `;
+
+    console.log("Impression:", printContent);
+    toast.success("Billet imprimé!");
+  };
+
+  const getAvailableSeats = (trip: Trip) => {
+    const occupiedSeats = trip.reservations.flatMap((r) => r.seatNumbers);
+    const allSeats = Array.from({ length: trip.bus.capacity }, (_, i) => i + 1);
+    return allSeats.filter((seatNumber) => !occupiedSeats.includes(seatNumber));
+  };
+
+  const initiateMobilePayment = async () => {
+    if (
+      !selectedTrip ||
+      !saleForm.customerName ||
+      !saleForm.customerPhone ||
+      !saleForm.selectedSeat
+    ) {
+      toast.error("Veuillez remplir tous les champs obligatoires");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const response = await fetch("/api/payments/mobile-money/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tripId: selectedTrip.id,
+          customerName: saleForm.customerName,
+          customerPhone: saleForm.customerPhone,
+          customerEmail: saleForm.customerEmail,
+          seatNumber: saleForm.selectedSeat,
+          amount: selectedTrip.route.price,
+          returnUrl: `${window.location.origin}/payment/success`,
+          cancelUrl: `${window.location.origin}/payment/cancel`,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.paymentUrl) {
+        // Ouvrir la page de paiement CinetPay
+        window.open(result.paymentUrl, "_blank");
+        toast.success("Page de paiement ouverte. Attendez la confirmation...");
+      } else {
+        toast.error(
+          result.error || "Erreur lors de l'initialisation du paiement"
+        );
+      }
+    } catch (error) {
+      console.error("Mobile payment error:", error);
+      toast.error("Erreur lors du paiement mobile");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const sellDirectTicket = async () => {
     if (
       !selectedTrip ||
@@ -295,6 +373,10 @@ export default function CashierDashboard() {
           seatNumber: saleForm.selectedSeat,
           paymentMethod,
           amountPaid: saleForm.amountPaid || selectedTrip.route.price,
+          change:
+            saleForm.amountPaid > selectedTrip.route.price
+              ? saleForm.amountPaid - selectedTrip.route.price
+              : 0,
           cashierId: session?.user?.id,
         }),
       });
@@ -303,6 +385,9 @@ export default function CashierDashboard() {
 
       if (response.ok) {
         toast.success("Billet vendu avec succès!");
+
+        // Imprimer automatiquement le ticket
+        await printTicketWithQR(result.ticket);
 
         // Reset form
         setSaleForm({
@@ -336,30 +421,119 @@ export default function CashierDashboard() {
     }
   };
 
-  const printTicket = (reservation: Reservation) => {
-    const printContent = `
-    BILLET DE TRANSPORT
-    ==================
-    Code: ${reservation.code}
-    Passager: ${reservation.user.name}
-    De: ${reservation.trip.route.departureLocation}
-    À: ${reservation.trip.route.arrivalLocation}
-    Départ: ${new Date(reservation.trip.departureTime).toLocaleString()}
-    Siège(s): ${reservation.seatNumbers.join(", ")}
-    Montant: ${reservation.totalAmount} FCFA
-    ==================
-    Caissier: ${session?.user?.name}
-    Date: ${new Date().toLocaleString()}
-  `;
+  const printTicketWithQR = async (ticket: any) => {
+    try {
+      // Générer le QR Code
+      const qrResponse = await fetch("/api/tickets/generate-qr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticketId: ticket.id }),
+      });
 
-    console.log("Impression:", printContent);
-    toast.success("Billet imprimé!");
-  };
+      const qrData = await qrResponse.json();
 
-  const getAvailableSeats = (trip: Trip) => {
-    const occupiedSeats = trip.reservations.flatMap((r) => r.seatNumbers);
-    const allSeats = Array.from({ length: trip.bus.capacity }, (_, i) => i + 1);
-    return allSeats.filter((seatNumber) => !occupiedSeats.includes(seatNumber));
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Billet de Transport</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+              .ticket { max-width: 300px; margin: 0 auto; border: 2px dashed #333; padding: 20px; }
+              .header { text-align: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+              .company { font-size: 18px; font-weight: bold; }
+              .title { font-size: 14px; margin: 5px 0; }
+              .section { margin: 10px 0; }
+              .label { font-weight: bold; }
+              .value { margin-left: 10px; }
+              .qr-section { text-align: center; margin: 15px 0; }
+              .qr-code { width: 120px; height: 120px; }
+              .footer { border-top: 1px solid #333; padding-top: 10px; margin-top: 15px; text-align: center; font-size: 12px; }
+              .instructions { background: #f5f5f5; padding: 10px; margin: 10px 0; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="ticket">
+              <div class="header">
+                <div class="company">${
+                  selectedTrip?.company?.name || "Transport Company"
+                }</div>
+                <div class="title">BILLET DE TRANSPORT</div>
+              </div>
+              
+              <div class="section">
+                <div><span class="label">Numéro:</span><span class="value">${
+                  ticket.ticketNumber
+                }</span></div>
+                <div><span class="label">Passager:</span><span class="value">${
+                  ticket.passengerName
+                }</span></div>
+                <div><span class="label">Téléphone:</span><span class="value">${
+                  ticket.passengerPhone
+                }</span></div>
+              </div>
+              
+              <div class="section">
+                <div><span class="label">De:</span><span class="value">${
+                  selectedTrip?.route.departureLocation
+                }</span></div>
+                <div><span class="label">À:</span><span class="value">${
+                  selectedTrip?.route.arrivalLocation
+                }</span></div>
+                <div><span class="label">Départ:</span><span class="value">${new Date(
+                  selectedTrip?.departureTime || ""
+                ).toLocaleString()}</span></div>
+              </div>
+              
+              <div class="section">
+                <div><span class="label">Bus:</span><span class="value">${
+                  selectedTrip?.bus.plateNumber
+                }</span></div>
+                <div><span class="label">Siège:</span><span class="value">${
+                  ticket.seatNumber
+                }</span></div>
+                <div><span class="label">Prix:</span><span class="value">${ticket.price.toLocaleString()} FCFA</span></div>
+              </div>
+              
+              <div class="qr-section">
+                <img src="${qrData.qrCodeUrl}" alt="QR Code" class="qr-code" />
+                <div style="font-size: 12px; margin-top: 5px;">Scannez pour validation</div>
+              </div>
+              
+              <div class="instructions">
+                <strong>Instructions importantes:</strong><br/>
+                • Présentez-vous 30 min avant le départ<br/>
+                • Gardez ce billet pendant tout le voyage<br/>
+                • En cas de perte, contactez notre service<br/>
+                • Siège: ${ticket.seatNumber} - Ne changez pas de place
+              </div>
+              
+              <div class="footer">
+                <div>Caissier: ${session?.user?.name}</div>
+                <div>Date d'émission: ${new Date().toLocaleString()}</div>
+                <div style="margin-top: 5px; font-size: 10px;">
+                  Merci de voyager avec nous!
+                </div>
+              </div>
+            </div>
+          </body>
+          </html>
+        `);
+
+        printWindow.document.close();
+        printWindow.focus();
+
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 500);
+      }
+    } catch (error) {
+      console.error("Print error:", error);
+      toast.error("Erreur lors de l'impression");
+    }
   };
 
   if (isLoading) {
@@ -650,7 +824,14 @@ export default function CashierDashboard() {
                       {trip.stats.availableSeats > 0 && (
                         <Button
                           size="sm"
-                          onClick={() => setSelectedTrip(trip)}
+                          onClick={() => {
+                            setSelectedTrip(trip);
+                            // Auto-switch to sell tab
+                            const sellTab = document.querySelector(
+                              '[value="sell"]'
+                            ) as HTMLElement;
+                            if (sellTab) sellTab.click();
+                          }}
                           className="w-full"
                         >
                           <Plus className="h-4 w-4 mr-2" />
@@ -922,18 +1103,36 @@ export default function CashierDashboard() {
                   <div className="space-y-6">
                     <div className="bg-blue-50 p-4 rounded-lg">
                       <h3 className="font-medium mb-2">Voyage sélectionné</h3>
-                      <p>
-                        {selectedTrip.route.departureLocation} →{" "}
-                        {selectedTrip.route.arrivalLocation}
-                      </p>
-                      <p>
-                        Départ:{" "}
-                        {new Date(selectedTrip.departureTime).toLocaleString()}
-                      </p>
-                      <p>Prix: {selectedTrip.route.price} FCFA</p>
-                      <p>
-                        Sièges disponibles: {selectedTrip.stats.availableSeats}
-                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p>
+                            <strong>Trajet:</strong>{" "}
+                            {selectedTrip.route.departureLocation} →{" "}
+                            {selectedTrip.route.arrivalLocation}
+                          </p>
+                          <p>
+                            <strong>Départ:</strong>{" "}
+                            {new Date(
+                              selectedTrip.departureTime
+                            ).toLocaleString()}
+                          </p>
+                          <p>
+                            <strong>Bus:</strong> {selectedTrip.bus.plateNumber}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-blue-600">
+                            {selectedTrip.route.price.toLocaleString()} FCFA
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Prix du billet
+                          </p>
+                          <p>
+                            <strong>Sièges disponibles:</strong>{" "}
+                            {selectedTrip.stats.availableSeats}
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1008,76 +1207,155 @@ export default function CashierDashboard() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div>
-                        <Label>Mode de paiement</Label>
-                        <Select
-                          value={paymentMethod}
-                          onValueChange={(value: any) =>
-                            setPaymentMethod(value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="CASH">Espèces</SelectItem>
-                            <SelectItem value="CARD">Carte bancaire</SelectItem>
-                            <SelectItem value="MOBILE_MONEY">
-                              Mobile Money
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="amountPaid">Montant payé (FCFA)</Label>
-                        <Input
-                          id="amountPaid"
-                          type="number"
-                          value={
-                            saleForm.amountPaid || selectedTrip.route.price
-                          }
-                          onChange={(e) =>
-                            setSaleForm((prev) => ({
-                              ...prev,
-                              amountPaid: Number(e.target.value),
-                            }))
-                          }
-                          min={selectedTrip.route.price}
-                        />
+                    </div>
+
+                    <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+                      <h3 className="font-medium">Paiement</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <Label>Mode de paiement</Label>
+                          <Select
+                            value={paymentMethod}
+                            onValueChange={(value: any) =>
+                              setPaymentMethod(value)
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="CASH">Espèces</SelectItem>
+                              <SelectItem value="CARD">
+                                Carte bancaire
+                              </SelectItem>
+                              <SelectItem value="MOBILE_MONEY">
+                                Mobile Money
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="amountPaid">
+                            Montant encaissé (FCFA) *
+                          </Label>
+                          <Input
+                            id="amountPaid"
+                            type="number"
+                            value={saleForm.amountPaid || ""}
+                            onChange={(e) =>
+                              setSaleForm((prev) => ({
+                                ...prev,
+                                amountPaid: Number(e.target.value),
+                              }))
+                            }
+                            placeholder={selectedTrip.route.price.toString()}
+                            min={selectedTrip.route.price}
+                          />
+                        </div>
+                        <div>
+                          <Label>Monnaie à rendre</Label>
+                          <div className="p-2 bg-white border rounded">
+                            {saleForm.amountPaid > selectedTrip.route.price
+                              ? `${(
+                                  saleForm.amountPaid - selectedTrip.route.price
+                                ).toLocaleString()} FCFA`
+                              : "0 FCFA"}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
                     <div className="flex gap-4">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button disabled={isProcessing} className="flex-1">
-                            <DollarSign className="h-4 w-4 mr-2" />
-                            {isProcessing
-                              ? "Traitement..."
-                              : "Vendre le billet"}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Confirmer la vente
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Vous êtes sur le point de vendre un billet à{" "}
-                              {saleForm.customerName} pour le montant de{" "}
-                              {saleForm.amountPaid || selectedTrip.route.price}{" "}
-                              FCFA. Cette vente sera enregistrée dans le système
-                              de sécurité.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Annuler</AlertDialogCancel>
-                            <AlertDialogAction onClick={sellDirectTicket}>
-                              Confirmer la vente
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      {paymentMethod === "MOBILE_MONEY" ? (
+                        <Button
+                          disabled={
+                            isProcessing ||
+                            !saleForm.customerName ||
+                            !saleForm.customerPhone ||
+                            !saleForm.selectedSeat
+                          }
+                          className="flex-1"
+                          onClick={initiateMobilePayment}
+                        >
+                          <Smartphone className="h-4 w-4 mr-2" />
+                          {isProcessing
+                            ? "Traitement..."
+                            : "Payer via Mobile Money"}
+                        </Button>
+                      ) : (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              disabled={
+                                isProcessing ||
+                                !saleForm.customerName ||
+                                !saleForm.customerPhone ||
+                                !saleForm.selectedSeat ||
+                                !saleForm.amountPaid ||
+                                saleForm.amountPaid < selectedTrip.route.price
+                              }
+                              className="flex-1"
+                            >
+                              <DollarSign className="h-4 w-4 mr-2" />
+                              {isProcessing
+                                ? "Traitement..."
+                                : "Vendre le billet"}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Confirmer la vente
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                <div className="space-y-2">
+                                  <p>
+                                    Client:{" "}
+                                    <strong>{saleForm.customerName}</strong>
+                                  </p>
+                                  <p>
+                                    Siège:{" "}
+                                    <strong>{saleForm.selectedSeat}</strong>
+                                  </p>
+                                  <p>
+                                    Prix:{" "}
+                                    <strong>
+                                      {selectedTrip.route.price.toLocaleString()}{" "}
+                                      FCFA
+                                    </strong>
+                                  </p>
+                                  <p>
+                                    Encaissé:{" "}
+                                    <strong>
+                                      {saleForm.amountPaid?.toLocaleString()}{" "}
+                                      FCFA
+                                    </strong>
+                                  </p>
+                                  {saleForm.amountPaid >
+                                    selectedTrip.route.price && (
+                                    <p>
+                                      Monnaie:{" "}
+                                      <strong>
+                                        {(
+                                          saleForm.amountPaid -
+                                          selectedTrip.route.price
+                                        ).toLocaleString()}{" "}
+                                        FCFA
+                                      </strong>
+                                    </p>
+                                  )}
+                                </div>
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Annuler</AlertDialogCancel>
+                              <AlertDialogAction onClick={sellDirectTicket}>
+                                Confirmer la vente
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                       <Button
                         variant="outline"
                         onClick={() => setSelectedTrip(null)}
@@ -1093,6 +1371,16 @@ export default function CashierDashboard() {
                       Sélectionnez un voyage dans l'onglet "Voyages du Jour"
                       pour commencer la vente
                     </p>
+                    <Button
+                      onClick={() => {
+                        const tripsTab = document.querySelector(
+                          '[value="trips"]'
+                        ) as HTMLElement;
+                        if (tripsTab) tripsTab.click();
+                      }}
+                    >
+                      Voir les voyages
+                    </Button>
                   </div>
                 )}
               </CardContent>

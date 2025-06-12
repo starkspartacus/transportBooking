@@ -40,25 +40,58 @@ export async function GET(request: NextRequest) {
     const buses = await prisma.bus.findMany({
       where: {
         companyId: companyId,
-        status: "ACTIVE",
       },
       select: {
         id: true,
         plateNumber: true,
         model: true,
+        brand: true,
         capacity: true,
         status: true,
+        mileage: true,
+        year: true,
         lastMaintenance: true,
         nextMaintenance: true,
-        mileage: true,
+        insuranceExpiry: true,
+        technicalControlExpiry: true,
+        features: true,
         createdAt: true,
+        updatedAt: true,
       },
       orderBy: {
-        createdAt: "desc",
+        plateNumber: "asc",
       },
     });
 
-    return NextResponse.json(buses);
+    // Format the data for the frontend
+    const formattedBuses = buses.map((bus) => ({
+      id: bus.id,
+      plateNumber: bus.plateNumber,
+      model: bus.model,
+      brand: bus.brand || "Non spécifié",
+      capacity: bus.capacity,
+      status: bus.status || "ACTIVE",
+      lastMaintenance:
+        bus.lastMaintenance?.toISOString() || new Date().toISOString(),
+      nextMaintenance:
+        bus.nextMaintenance?.toISOString() ||
+        new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+      mileage: bus.mileage || 0,
+      year: bus.year || new Date().getFullYear(),
+      color: "Non spécifié",
+      fuelType: "DIESEL",
+      features: bus.features || [],
+      insuranceExpiry: bus.insuranceExpiry?.toISOString(),
+      technicalControlExpiry: bus.technicalControlExpiry?.toISOString(),
+      // Calculer les propriétés booléennes à partir des features
+      hasAC: bus.features?.includes("AC") || false,
+      hasWifi: bus.features?.includes("WIFI") || false,
+      hasTV: bus.features?.includes("TV") || false,
+      hasToilet: bus.features?.includes("TOILET") || false,
+      hasUSB: bus.features?.includes("USB") || false,
+    }));
+
+    return NextResponse.json(formattedBuses);
   } catch (error) {
     console.error("Error fetching buses:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
@@ -121,16 +154,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Conversion et validation des données numériques
+    const capacity = Number.parseInt(data.capacity);
+    const year = data.year ? Number.parseInt(data.year) : null;
+    const mileage = data.mileage ? Number.parseInt(data.mileage.toString()) : 0;
+
+    if (isNaN(capacity) || capacity <= 0) {
+      return NextResponse.json(
+        { error: "La capacité doit être un nombre positif" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      year &&
+      (isNaN(year) || year < 1900 || year > new Date().getFullYear() + 1)
+    ) {
+      return NextResponse.json(
+        { error: "L'année doit être valide" },
+        { status: 400 }
+      );
+    }
+
+    if (mileage < 0) {
+      return NextResponse.json(
+        { error: "Le kilométrage ne peut pas être négatif" },
+        { status: 400 }
+      );
+    }
+
     // Créer le bus
     const bus = await prisma.bus.create({
       data: {
         plateNumber: data.plateNumber,
         model: data.model,
         brand: data.brand || null,
-        capacity: Number.parseInt(data.capacity),
-        year: data.year ? Number.parseInt(data.year) : null,
+        capacity: capacity,
+        year: year,
         status: data.status || "ACTIVE",
-        mileage: data.mileage || 0,
+        mileage: mileage,
         features: data.equipment || [],
         lastMaintenance: data.lastMaintenance
           ? new Date(data.lastMaintenance)
@@ -149,15 +211,20 @@ export async function POST(request: NextRequest) {
     });
 
     // Enregistrer l'activité
-    await prisma.activity.create({
-      data: {
-        type: "BUS_ADDED",
-        description: `Bus ${bus.plateNumber} ajouté à la flotte`,
-        status: "SUCCESS",
-        userId: session.user.id,
-        companyId: data.companyId,
-      },
-    });
+    try {
+      await prisma.activity.create({
+        data: {
+          type: "BUS_ADDED",
+          description: `Bus ${bus.plateNumber} ajouté à la flotte`,
+          status: "SUCCESS",
+          userId: session.user.id,
+          companyId: data.companyId,
+        },
+      });
+    } catch (activityError) {
+      console.warn("Failed to log activity:", activityError);
+      // Continue même si le log d'activité échoue
+    }
 
     return NextResponse.json({
       id: bus.id,

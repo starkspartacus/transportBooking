@@ -1,753 +1,154 @@
 "use client";
 
-import type React from "react";
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { User, Building, Eye, EyeOff, Chrome } from "lucide-react";
-import { signIn } from "next-auth/react";
-import {
-  AFRICAN_COUNTRIES,
-  getCitiesByCountryCode,
-  getCommunesByCity,
-} from "@/constants/countries";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Confetti } from "@/components/ui/confetti";
+import { User, Building, CheckCircle, AlertCircle } from "lucide-react";
+import { ClientRegistrationTab } from "./client-registration-tab";
+import { CompanyRegistrationTab } from "./company-registration-tab";
+
+interface FormErrors {
+  [key: string]: string;
+}
 
 export default function RegistrationForm() {
   const [activeTab, setActiveTab] = useState("client");
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [successMessage, setSuccessMessage] = useState("");
 
-  // Form states
-  const [clientForm, setClientForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    password: "",
-    confirmPassword: "",
-    country: "",
-    city: "",
-    commune: "",
-    address: "",
-  });
+  const clearErrors = () => setErrors({});
+  const clearSuccess = () => setSuccessMessage("");
 
-  const [companyForm, setCompanyForm] = useState({
-    // Owner info
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    password: "",
-    confirmPassword: "",
-    country: "",
-    city: "",
-    commune: "",
-    address: "",
-    // Company info
-    companyName: "",
-    companyDescription: "",
-    companyEmail: "",
-    companyPhone: "",
-    companyAddress: "",
-    licenseNumber: "",
-  });
-
-  const [selectedCountry, setSelectedCountry] = useState<string>("");
-  const [availableCities, setAvailableCities] = useState<string[]>([]);
-  const [availableCommunes, setAvailableCommunes] = useState<string[]>([]);
-
-  const handleCountryChange = (
-    countryCode: string,
-    formType: "client" | "company"
-  ) => {
-    const country = AFRICAN_COUNTRIES.find((c) => c.code === countryCode);
-    if (country) {
-      setSelectedCountry(countryCode);
-      const cities = getCitiesByCountryCode(countryCode);
-      setAvailableCities(cities.map((city) => city.name));
-      setAvailableCommunes([]);
-
-      if (formType === "client") {
-        setClientForm((prev) => ({
-          ...prev,
-          country: countryCode,
-          city: "",
-          commune: "",
-        }));
-      } else {
-        setCompanyForm((prev) => ({
-          ...prev,
-          country: countryCode,
-          city: "",
-          commune: "",
-        }));
-      }
-    }
+  const handleSuccess = (message: string) => {
+    setSuccessMessage(message);
+    setShowConfetti(true);
+    setTimeout(() => setShowConfetti(false), 5000);
+    clearErrors();
   };
 
-  const handleCityChange = (city: string, formType: "client" | "company") => {
-    const communes = getCommunesByCity(selectedCountry, city);
-    setAvailableCommunes(communes);
-
-    if (formType === "client") {
-      setClientForm((prev) => ({ ...prev, city, commune: "" }));
-    } else {
-      setCompanyForm((prev) => ({ ...prev, city, commune: "" }));
-    }
-  };
-
-  const getSelectedCountryPrefix = () => {
-    const country = AFRICAN_COUNTRIES.find((c) => c.code === selectedCountry);
-    return country?.phonePrefix || "+XXX";
-  };
-
-  const handleClientSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (clientForm.password !== clientForm.confirmPassword) {
-      alert("Les mots de passe ne correspondent pas");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const selectedCountryData = AFRICAN_COUNTRIES.find(
-        (c) => c.code === clientForm.country
-      );
-
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...clientForm,
-          role: "CLIENT",
-          countryCode: selectedCountryData?.phonePrefix,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        alert("Inscription réussie! Vous pouvez maintenant vous connecter.");
-        // Redirect to login
-      } else {
-        alert(result.error || "Erreur lors de l'inscription");
-      }
-    } catch (error) {
-      console.error("Registration error:", error);
-      alert("Erreur lors de l'inscription");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleCompanySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (companyForm.password !== companyForm.confirmPassword) {
-      alert("Les mots de passe ne correspondent pas");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const selectedCountryData = AFRICAN_COUNTRIES.find(
-        (c) => c.code === companyForm.country
-      );
-
-      const response = await fetch("/api/auth/register-company", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...companyForm,
-          role: "PATRON",
-          countryCode: selectedCountryData?.phonePrefix,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        alert("Inscription de l'entreprise réussie! En attente de validation.");
-        // Redirect to login
-      } else {
-        alert(result.error || "Erreur lors de l'inscription");
-      }
-    } catch (error) {
-      console.error("Company registration error:", error);
-      alert("Erreur lors de l'inscription de l'entreprise");
-    } finally {
-      setIsLoading(false);
-    }
+  const handleError = (newErrors: FormErrors) => {
+    setErrors(newErrors);
+    clearSuccess();
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-4xl">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-2 sm:p-4 lg:p-6">
+      {showConfetti && <Confetti />}
+
+      <Card className="w-full max-w-6xl shadow-2xl border-0 bg-white/80 backdrop-blur-sm mx-auto">
+        <CardHeader className="text-center space-y-4 px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-r from-blue-600 to-green-600 rounded-full flex items-center justify-center">
+            <User className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+          </div>
+          <CardTitle className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
             Créer un compte
           </CardTitle>
-          <p className="text-gray-600">Choisissez votre type de compte</p>
+          <p className="text-sm sm:text-base text-gray-600 max-w-md mx-auto">
+            Choisissez votre type de compte pour commencer votre aventure
+          </p>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="px-4 sm:px-6 lg:px-8 pb-6 sm:pb-8">
+          {/* Success Message */}
+          {successMessage && (
+            <Alert className="mb-4 sm:mb-6 border-green-200 bg-green-50 animate-in slide-in-from-top-2">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800 text-sm sm:text-base">
+                {successMessage}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* General Error */}
+          {errors.general && (
+            <Alert className="mb-4 sm:mb-6 border-red-200 bg-red-50 animate-in slide-in-from-top-2">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800 text-sm sm:text-base">
+                {errors.general}
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Tabs
             value={activeTab}
             onValueChange={setActiveTab}
-            className="space-y-6"
+            className="space-y-4 sm:space-y-6"
           >
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="client" className="flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Client / Voyageur
+            <TabsList className="grid w-full grid-cols-2 bg-gray-100 p-1 rounded-lg h-auto">
+              <TabsTrigger
+                value="client"
+                className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200 py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm"
+              >
+                <User className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="text-center">
+                  <span className="block sm:inline">Client</span>
+                  <span className="hidden sm:inline"> / </span>
+                  <span className="block sm:inline">Voyageur</span>
+                </span>
               </TabsTrigger>
-              <TabsTrigger value="company" className="flex items-center gap-2">
-                <Building className="h-4 w-4" />
-                Entreprise de Transport
+              <TabsTrigger
+                value="company"
+                className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200 py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm"
+              >
+                <Building className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="text-center">
+                  <span className="block sm:inline">Entreprise</span>
+                  <span className="hidden sm:inline"> de </span>
+                  <span className="block sm:inline">Transport</span>
+                </span>
               </TabsTrigger>
             </TabsList>
 
             {/* Client Registration */}
-            <TabsContent value="client">
-              <form onSubmit={handleClientSubmit} className="space-y-6">
-                <div className="text-center mb-6">
-                  <Badge
-                    variant="outline"
-                    className="bg-blue-50 text-blue-700 border-blue-200"
-                  >
-                    <User className="h-3 w-3 mr-1" />
-                    Compte Client
-                  </Badge>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Réservez et achetez vos billets de transport
-                  </p>
-                </div>
+            <TabsContent value="client" className="space-y-4 sm:space-y-6">
+              <div className="text-center mb-4 sm:mb-6">
+                <Badge
+                  variant="outline"
+                  className="bg-blue-50 text-blue-700 border-blue-200 px-3 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm"
+                >
+                  <User className="h-3 w-3 mr-1 sm:mr-2" />
+                  Compte Client
+                </Badge>
+                <p className="text-xs sm:text-sm text-gray-600 mt-2 max-w-md mx-auto">
+                  Réservez et achetez vos billets de transport en toute
+                  simplicité
+                </p>
+              </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="firstName">Prénom *</Label>
-                    <Input
-                      id="firstName"
-                      value={clientForm.firstName}
-                      onChange={(e) =>
-                        setClientForm((prev) => ({
-                          ...prev,
-                          firstName: e.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName">Nom *</Label>
-                    <Input
-                      id="lastName"
-                      value={clientForm.lastName}
-                      onChange={(e) =>
-                        setClientForm((prev) => ({
-                          ...prev,
-                          lastName: e.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={clientForm.email}
-                    onChange={(e) =>
-                      setClientForm((prev) => ({
-                        ...prev,
-                        email: e.target.value,
-                      }))
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label>Pays *</Label>
-                    <Select
-                      onValueChange={(value) =>
-                        handleCountryChange(value, "client")
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choisir le pays" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {AFRICAN_COUNTRIES.map((country) => (
-                          <SelectItem key={country.id} value={country.code}>
-                            <div className="flex items-center gap-2">
-                              <span>{country.flag}</span>
-                              <span>{country.name}</span>
-                              <span className="text-gray-500">
-                                ({country.phonePrefix})
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="phone">Téléphone *</Label>
-                    <div className="flex">
-                      <div className="flex items-center px-3 bg-gray-100 border border-r-0 rounded-l-md">
-                        <span className="text-sm">
-                          {getSelectedCountryPrefix()}
-                        </span>
-                      </div>
-                      <Input
-                        id="phone"
-                        className="rounded-l-none"
-                        value={clientForm.phone}
-                        onChange={(e) =>
-                          setClientForm((prev) => ({
-                            ...prev,
-                            phone: e.target.value,
-                          }))
-                        }
-                        placeholder="77 123 45 67"
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Ville *</Label>
-                    <Select
-                      value={clientForm.city}
-                      onValueChange={(value) =>
-                        handleCityChange(value, "client")
-                      }
-                      disabled={!clientForm.country}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choisir la ville" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableCities.map((city) => (
-                          <SelectItem key={city} value={city}>
-                            {city}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Commune</Label>
-                    <Select
-                      value={clientForm.commune}
-                      onValueChange={(value) =>
-                        setClientForm((prev) => ({ ...prev, commune: value }))
-                      }
-                      disabled={!clientForm.city}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choisir la commune" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableCommunes.map((commune) => (
-                          <SelectItem key={commune} value={commune}>
-                            {commune}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="address">Adresse</Label>
-                  <Input
-                    id="address"
-                    value={clientForm.address}
-                    onChange={(e) =>
-                      setClientForm((prev) => ({
-                        ...prev,
-                        address: e.target.value,
-                      }))
-                    }
-                    placeholder="Adresse complète"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="password">Mot de passe *</Label>
-                    <div className="relative">
-                      <Input
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        value={clientForm.password}
-                        onChange={(e) =>
-                          setClientForm((prev) => ({
-                            ...prev,
-                            password: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="confirmPassword">
-                      Confirmer le mot de passe *
-                    </Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={clientForm.confirmPassword}
-                      onChange={(e) =>
-                        setClientForm((prev) => ({
-                          ...prev,
-                          confirmPassword: e.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading
-                      ? "Inscription en cours..."
-                      : "Créer mon compte client"}
-                  </Button>
-
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-white px-2 text-gray-500">Ou</span>
-                    </div>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => signIn("google")}
-                  >
-                    <Chrome className="h-4 w-4 mr-2" />
-                    Continuer avec Google
-                  </Button>
-                </div>
-              </form>
+              <ClientRegistrationTab
+                onSuccess={handleSuccess}
+                onError={handleError}
+                errors={errors}
+                clearErrors={clearErrors}
+              />
             </TabsContent>
 
             {/* Company Registration */}
-            <TabsContent value="company">
-              <form onSubmit={handleCompanySubmit} className="space-y-6">
-                <div className="text-center mb-6">
-                  <Badge
-                    variant="outline"
-                    className="bg-green-50 text-green-700 border-green-200"
-                  >
-                    <Building className="h-3 w-3 mr-1" />
-                    Compte Entreprise
-                  </Badge>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Gérez votre flotte et vendez vos billets en ligne
-                  </p>
-                </div>
+            <TabsContent value="company" className="space-y-4 sm:space-y-6">
+              <div className="text-center mb-4 sm:mb-6">
+                <Badge
+                  variant="outline"
+                  className="bg-green-50 text-green-700 border-green-200 px-3 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm"
+                >
+                  <Building className="h-3 w-3 mr-1 sm:mr-2" />
+                  Compte Entreprise
+                </Badge>
+                <p className="text-xs sm:text-sm text-gray-600 mt-2 max-w-md mx-auto">
+                  Gérez votre flotte et vendez vos billets en ligne avec notre
+                  plateforme
+                </p>
+              </div>
 
-                {/* Owner Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b pb-2">
-                    Informations du responsable
-                  </h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="ownerFirstName">
-                        Prénom du responsable *
-                      </Label>
-                      <Input
-                        id="ownerFirstName"
-                        value={companyForm.firstName}
-                        onChange={(e) =>
-                          setCompanyForm((prev) => ({
-                            ...prev,
-                            firstName: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="ownerLastName">
-                        Nom du responsable *
-                      </Label>
-                      <Input
-                        id="ownerLastName"
-                        value={companyForm.lastName}
-                        onChange={(e) =>
-                          setCompanyForm((prev) => ({
-                            ...prev,
-                            lastName: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="ownerEmail">Email du responsable *</Label>
-                    <Input
-                      id="ownerEmail"
-                      type="email"
-                      value={companyForm.email}
-                      onChange={(e) =>
-                        setCompanyForm((prev) => ({
-                          ...prev,
-                          email: e.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label>Pays *</Label>
-                      <Select
-                        onValueChange={(value) =>
-                          handleCountryChange(value, "company")
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Choisir le pays" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {AFRICAN_COUNTRIES.map((country) => (
-                            <SelectItem key={country.id} value={country.code}>
-                              <div className="flex items-center gap-2">
-                                <span>{country.flag}</span>
-                                <span>{country.name}</span>
-                                <span className="text-gray-500">
-                                  ({country.phonePrefix})
-                                </span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="ownerPhone">
-                        Téléphone du responsable *
-                      </Label>
-                      <div className="flex">
-                        <div className="flex items-center px-3 bg-gray-100 border border-r-0 rounded-l-md">
-                          <span className="text-sm">
-                            {getSelectedCountryPrefix()}
-                          </span>
-                        </div>
-                        <Input
-                          id="ownerPhone"
-                          className="rounded-l-none"
-                          value={companyForm.phone}
-                          onChange={(e) =>
-                            setCompanyForm((prev) => ({
-                              ...prev,
-                              phone: e.target.value,
-                            }))
-                          }
-                          placeholder="77 123 45 67"
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Company Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b pb-2">
-                    Informations de l'entreprise
-                  </h3>
-
-                  <div>
-                    <Label htmlFor="companyName">Nom de l'entreprise *</Label>
-                    <Input
-                      id="companyName"
-                      value={companyForm.companyName}
-                      onChange={(e) =>
-                        setCompanyForm((prev) => ({
-                          ...prev,
-                          companyName: e.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="companyDescription">
-                      Description de l'entreprise
-                    </Label>
-                    <Textarea
-                      id="companyDescription"
-                      value={companyForm.companyDescription}
-                      onChange={(e) =>
-                        setCompanyForm((prev) => ({
-                          ...prev,
-                          companyDescription: e.target.value,
-                        }))
-                      }
-                      placeholder="Décrivez votre entreprise de transport..."
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="companyEmail">
-                        Email de l'entreprise *
-                      </Label>
-                      <Input
-                        id="companyEmail"
-                        type="email"
-                        value={companyForm.companyEmail}
-                        onChange={(e) =>
-                          setCompanyForm((prev) => ({
-                            ...prev,
-                            companyEmail: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="licenseNumber">Numéro de licence *</Label>
-                      <Input
-                        id="licenseNumber"
-                        value={companyForm.licenseNumber}
-                        onChange={(e) =>
-                          setCompanyForm((prev) => ({
-                            ...prev,
-                            licenseNumber: e.target.value,
-                          }))
-                        }
-                        placeholder="Numéro de licence de transport"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="companyAddress">
-                      Adresse de l'entreprise *
-                    </Label>
-                    <Input
-                      id="companyAddress"
-                      value={companyForm.companyAddress}
-                      onChange={(e) =>
-                        setCompanyForm((prev) => ({
-                          ...prev,
-                          companyAddress: e.target.value,
-                        }))
-                      }
-                      placeholder="Adresse complète de l'entreprise"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Password */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="companyPassword">Mot de passe *</Label>
-                    <div className="relative">
-                      <Input
-                        id="companyPassword"
-                        type={showPassword ? "text" : "password"}
-                        value={companyForm.password}
-                        onChange={(e) =>
-                          setCompanyForm((prev) => ({
-                            ...prev,
-                            password: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="companyConfirmPassword">
-                      Confirmer le mot de passe *
-                    </Label>
-                    <Input
-                      id="companyConfirmPassword"
-                      type="password"
-                      value={companyForm.confirmPassword}
-                      onChange={(e) =>
-                        setCompanyForm((prev) => ({
-                          ...prev,
-                          confirmPassword: e.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </div>
-                </div>
-
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading
-                    ? "Inscription en cours..."
-                    : "Créer mon compte entreprise"}
-                </Button>
-              </form>
+              <CompanyRegistrationTab
+                onSuccess={handleSuccess}
+                onError={handleError}
+                errors={errors}
+                clearErrors={clearErrors}
+              />
             </TabsContent>
           </Tabs>
         </CardContent>

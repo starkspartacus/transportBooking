@@ -76,6 +76,24 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Log successful registration (optional, don't fail if it doesn't work)
+    try {
+      await prisma.activity.create({
+        data: {
+          type: "USER_REGISTRATION",
+          description: `Nouvel utilisateur inscrit: ${user.email}`,
+          metadata: {
+            userId: user.id,
+            userRole: user.role,
+            registrationMethod: "EMAIL",
+          },
+          companyId: null, // No company for regular user registration
+        },
+      });
+    } catch (logError) {
+      console.warn("Failed to log registration activity:", logError);
+    }
+
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
 

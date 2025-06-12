@@ -7,7 +7,8 @@ declare global {
     type ActivityTypeExtended =
       | Prisma.ActivityTypeCreateInput["type"]
       | "COMPANY_SWITCHED"
-      | "EMPLOYEE_TRANSFERRED";
+      | "EMPLOYEE_TRANSFERRED"
+      | "USER_REGISTRATION";
   }
 }
 

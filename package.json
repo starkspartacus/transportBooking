@@ -67,6 +67,7 @@
     "pnpm": "^10.12.1",
     "prisma": "latest",
     "react": "^19",
+    "react-confetti": "^6.4.0",
     "react-day-picker": "8.10.1",
     "react-dom": "^19",
     "react-dropzone": "^14.3.8",
