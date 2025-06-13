@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 interface PhoneInputProps {
   value: string;
   onChange: (value: string) => void;
+  onCountryCodeChange?: (code: string) => void;
   prefix: string;
   error?: string;
   required?: boolean;
@@ -18,6 +19,7 @@ interface PhoneInputProps {
 export function PhoneInput({
   value,
   onChange,
+  onCountryCodeChange,
   prefix,
   error,
   required = false,

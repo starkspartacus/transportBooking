@@ -135,14 +135,31 @@ export function CashierDashboard({ initialStats }: CashierDashboardProps) {
     if (socket && companyId) {
       socket.emit("join-company", companyId);
 
-      const handleNewReservation = (data: ReservationWithRelations) => {
-        if (data.trip?.route) {
+      const handleNewReservation = (data: any) => {
+        // data will now contain reservation and tickets
+        if (
+          data.reservation &&
+          data.reservation.trip &&
+          data.reservation.trip.route
+        ) {
           toast({
             title: "Nouvelle réservation !",
-            description: `Une nouvelle réservation a été enregistrée pour le voyage ${data.trip.route.departureLocation} - ${data.trip.route.arrivalLocation}.`,
+            description: `Une nouvelle réservation a été enregistrée pour le voyage ${data.reservation.trip.route.departureLocation} - ${data.reservation.trip.route.arrivalLocation}.`,
             duration: 5000,
           });
-          fetchStats();
+          fetchStats(); // Refresh stats
+          // Optionally, update the trips list to reflect available seats
+          setTrips((prevTrips) =>
+            prevTrips.map((trip) =>
+              trip.id === data.reservation.tripId
+                ? {
+                    ...trip,
+                    availableSeats:
+                      trip.availableSeats - data.reservation.seatNumbers.length,
+                  }
+                : trip
+            )
+          );
         }
       };
 

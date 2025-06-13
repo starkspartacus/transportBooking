@@ -12,7 +12,9 @@ declare module "next-auth" {
       companyId?: string;
       ownedCompanies?: any[];
       employeeAt?: any;
-    };
+      phone?: string | null;
+      countryCode?: string | null;
+    } & DefaultSession["user"];
   }
 
   interface User {
@@ -24,6 +26,8 @@ declare module "next-auth" {
     companyId?: string;
     ownedCompanies?: any[];
     employeeAt?: any;
+    phone?: string | null;
+    countryCode?: string | null;
   }
 }
 
@@ -37,5 +41,7 @@ declare module "next-auth/jwt" {
     companyId?: string;
     ownedCompanies?: any[];
     employeeAt?: any;
+    phone?: string | null;
+    countryCode?: string | null;
   }
 }

@@ -224,7 +224,7 @@ export interface Trip extends PrismaTrip {
   company?: PrismaCompany;
   reservations?: PrismaReservation[];
   tickets?: PrismaTicket[];
-  promotions?: PrismaPromotionTrip[];
+  promotions?: PromotionTrip[];
   // Assuming driver and conductor are Users with EmployeeRole
   driver?: PrismaUser | null;
   conductor?: PrismaUser | null;
@@ -236,7 +236,7 @@ export interface Trip extends PrismaTrip {
 export interface Promotion extends PrismaPromotion {
   company?: PrismaCompany;
   targetRoutes?: PrismaRoute[];
-  targetTrips?: PrismaPromotionTrip[];
+  targetTrips?: PromotionTrip[];
 }
 
 export interface PromotionTrip extends PrismaPromotionTrip {
@@ -250,14 +250,14 @@ export interface Reservation extends PrismaReservation {
   company?: PrismaCompany;
   tickets?: PrismaTicket[];
   payments?: PrismaPayment[];
-  refunds?: PrismaRefund[];
+  refunds?: Refund[];
 }
 
 export interface Payment extends PrismaPayment {
   user?: PrismaUser | null;
   company?: PrismaCompany;
   reservation?: PrismaReservation | null;
-  refunds?: PrismaRefund[];
+  refunds?: Refund[];
 }
 
 export interface Refund extends PrismaRefund {
@@ -751,8 +751,8 @@ export type TripWithDetails = Prisma.TripGetPayload<{
         distance: true;
         estimatedDuration: true;
         basePrice: true;
-        departureCoordinates: true; // Changed from coordinates
-        arrivalCoordinates: true; // Added
+        departureCoordinates: true;
+        arrivalCoordinates: true;
       };
     };
     bus: {
@@ -763,7 +763,6 @@ export type TripWithDetails = Prisma.TripGetPayload<{
         brand: true;
         capacity: true;
         features: true;
-        // Removed 'type' as it's not in schema
       };
     };
     company: {
@@ -772,6 +771,16 @@ export type TripWithDetails = Prisma.TripGetPayload<{
         name: true;
         logo: true;
         rating: true;
+      };
+    };
+    reservations: {
+      // ADDED: Include reservations to get occupied seats
+      select: {
+        seatNumbers: true;
+        status: true;
+      };
+      where: {
+        status: { in: ["PENDING", "CONFIRMED", "CHECKED_IN"] }; // Only active reservations
       };
     };
     _count: {

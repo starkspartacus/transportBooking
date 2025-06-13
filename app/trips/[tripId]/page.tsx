@@ -76,6 +76,16 @@ async function getTripDetails(tripId: string): Promise<TripWithDetails | null> {
             arrivalCoordinates: true, // Ensure arrivalCoordinates are fetched
           },
         },
+        reservations: {
+          // ADDED: Include reservations to get occupied seats
+          select: {
+            seatNumbers: true,
+            status: true,
+          },
+          where: {
+            status: { in: ["PENDING", "CONFIRMED", "CHECKED_IN"] }, // Only active reservations
+          },
+        },
         _count: {
           select: {
             reservations: true,

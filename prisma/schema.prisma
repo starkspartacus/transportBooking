@@ -2,1417 +2,1417 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
- provider = "prisma-client-js"
+provider = "prisma-client-js"
 }
 
 datasource db {
- provider = "postgresql"
- url      = env("DATABASE_URL")
+provider = "postgresql"
+url      = env("DATABASE_URL")
 }
 
 model Account {
- id                String  @id @default(cuid())
- userId            String
- type              String
- provider          String
- providerAccountId String
- refresh_token     String? @db.Text
- access_token      String? @db.Text
- expires_at        Int?
- token_type        String?
- scope             String?
- id_token          String? @db.Text
- session_state     String?
+id                String  @id @default(cuid())
+userId            String
+type              String
+provider          String
+providerAccountId String
+refresh_token     String? @db.Text
+access_token      String? @db.Text
+expires_at        Int?
+token_type        String?
+scope             String?
+id_token          String? @db.Text
+session_state     String?
 
- user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
- @@unique([provider, providerAccountId])
+@@unique([provider, providerAccountId])
 }
 
 model Session {
- id           String   @id @default(cuid())
- sessionToken String   @unique
- userId       String
- expires      DateTime
- user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+id           String   @id @default(cuid())
+sessionToken String   @unique
+userId       String
+expires      DateTime
+user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model User {
- id            String    @id @default(cuid())
- name          String?
- email         String?   @unique
- emailVerified DateTime?
- image         String?
- phone         String?   @unique
- countryCode   String?
- password      String?
- role          UserRole  @default(CLIENT)
- status        UserStatus @default(ACTIVE)
+id            String    @id @default(cuid())
+name          String?
+email         String?   @unique
+emailVerified DateTime?
+image         String?
+phone         String?   @unique
+countryCode   String?
+password      String?
+role          UserRole  @default(CLIENT)
+status        UserStatus @default(ACTIVE)
 
- // Password reset fields
- resetToken        String?
- resetTokenExpiry  DateTime?
+// Password reset fields
+resetToken        String?
+resetTokenExpiry  DateTime?
 
- // Personal Info
- firstName     String?
- lastName      String?
- country       String?
- city          String?
- commune       String?
- address       String?
- dateOfBirth   DateTime?
- gender        Gender?
- nationality   String?
- idNumber      String?
- idType        IdentificationType?
- idExpiryDate  DateTime?
+// Personal Info
+firstName     String?
+lastName      String?
+country       String?
+city          String?
+commune       String?
+address       String?
+dateOfBirth   DateTime?
+gender        Gender?
+nationality   String?
+idNumber      String?
+idType        IdentificationType?
+idExpiryDate  DateTime?
 
- // Employee Info
- department    EmployeeDepartment?
- position      EmployeePosition?
- hireDate      DateTime?
- salary        Float?
- emergencyContact String?
- emergencyPhone   String?
- emergencyRelation String?
- employeeNotes    String?
- education     String?
- skills        String[]
- languages     String[]
- bankName      String?
- bankAccountNumber String?
- bankAccountName String?
+// Employee Info
+department    EmployeeDepartment?
+position      EmployeePosition?
+hireDate      DateTime?
+salary        Float?
+emergencyContact String?
+emergencyPhone   String?
+emergencyRelation String?
+employeeNotes    String?
+education     String?
+skills        String[]
+languages     String[]
+bankName      String?
+bankAccountNumber String?
+bankAccountName String?
 
- // Preferences
- language      String?   @default("fr")
- theme         String?   @default("light")
- currency      String?   @default("XOF")
- notificationPreferences NotificationPreference[]
+// Preferences
+language      String?   @default("fr")
+theme         String?   @default("light")
+currency      String?   @default("XOF")
+notificationPreferences NotificationPreference[]
 
- // Relations
- accounts      Account[]
- sessions      Session[]
+// Relations
+accounts      Account[]
+sessions      Session[]
 
- // Add this line in the User model relations section
- employeeAuthCodes EmployeeAuthCode[] @relation("EmployeeAuthCodes")
- subscriptionTransactions SubscriptionTransaction[]
+// Add this line in the User model relations section
+employeeAuthCodes EmployeeAuthCode[] @relation("EmployeeAuthCodes")
+subscriptionTransactions SubscriptionTransaction[]
 
- // Company relations - Updated for multi-company support
- ownedCompanies Company[]  @relation("CompanyOwner")
- employeeAt    Company?  @relation("CompanyEmployee", fields: [companyId], references: [id])
- companyId     String?
- activeCompany Company? @relation("ActiveCompany", fields: [activeCompanyId], references: [id])
- activeCompanyId String?
- employeeRole  EmployeeRole?
+// Company relations - Updated for multi-company support
+ownedCompanies Company[]  @relation("CompanyOwner")
+employeeAt    Company?  @relation("CompanyEmployee", fields: [companyId], references: [id])
+companyId     String?
+activeCompany Company? @relation("ActiveCompany", fields: [activeCompanyId], references: [id])
+activeCompanyId String?
+employeeRole  EmployeeRole?
 
- // Client relations
- reservations  Reservation[]
- tickets       Ticket[]
- notifications Notification[]
- reviews       Review[]
- favorites     FavoriteRoute[]
- payments      Payment[]
- refunds       Refund[]
+// Client relations
+reservations  Reservation[]
+tickets       Ticket[]
+notifications Notification[]
+reviews       Review[]
+favorites     FavoriteRoute[]
+payments      Payment[]
+refunds       Refund[]
 
- // Subscription relations
- subscriptions Subscription[]
+// Subscription relations
+subscriptions Subscription[]
 
- // Activity tracking
- lastLogin     DateTime?
- loginCount    Int       @default(0)
- deviceTokens  DeviceToken[]
- activityLogs  ActivityLog[]
- activities    Activity[]
- loginHistory  LoginHistory[]
+// Activity tracking
+lastLogin     DateTime?
+loginCount    Int       @default(0)
+deviceTokens  DeviceToken[]
+activityLogs  ActivityLog[]
+activities    Activity[]
+loginHistory  LoginHistory[]
 
- // Marketing
- marketingConsent Boolean @default(false)
- referralCode    String?  @unique
- referredBy      String?
- referralCount   Int      @default(0)
+// Marketing
+marketingConsent Boolean @default(false)
+referralCode    String?  @unique
+referredBy      String?
+referralCount   Int      @default(0)
 
- // Security
- twoFactorEnabled Boolean @default(false)
- twoFactorSecret  String?
- securityQuestions SecurityQuestion[]
- passwordHistory  PasswordHistory[]
+// Security
+twoFactorEnabled Boolean @default(false)
+twoFactorSecret  String?
+securityQuestions SecurityQuestion[]
+passwordHistory  PasswordHistory[]
 
- createdAt     DateTime  @default(now())
- updatedAt     DateTime  @updatedAt
+createdAt     DateTime  @default(now())
+updatedAt     DateTime  @updatedAt
 
- @@unique([phone, countryCode])
- @@index([email])
- @@index([phone, countryCode])
- @@index([role])
+@@unique([phone, countryCode])
+@@index([email])
+@@index([phone, countryCode])
+@@index([role])
 }
 
 model EmployeeAuthCode {
-  id         String   @id @default(cuid())
-  code       String
-  phone      String
-  countryCode String
-  isUsed     Boolean  @default(false)
-  expiresAt  DateTime
-  usedAt     DateTime?
-  
-  employee   User     @relation("EmployeeAuthCodes", fields: [employeeId], references: [id], onDelete: Cascade)
-  employeeId String
+id         String   @id @default(cuid())
+code       String
+phone      String
+countryCode String
+isUsed     Boolean  @default(false)
+expiresAt  DateTime
+usedAt     DateTime?
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+employee   User     @relation("EmployeeAuthCodes", fields: [employeeId], references: [id], onDelete: Cascade)
+employeeId String
 
-  @@index([employeeId])
-  @@index([code])
-  @@index([phone, countryCode])
-  @@index([expiresAt])
+createdAt  DateTime @default(now())
+updatedAt  DateTime @updatedAt
+
+@@index([employeeId])
+@@index([code])
+@@index([phone, countryCode])
+@@index([expiresAt])
 }
 
 model SubscriptionTransaction {
-  id            String   @id @default(cuid())
-  transactionId String   @unique
-  userId        String
-  companyId     String
-  planId        String
-  period        String   @default("monthly")
-  amount        Float
-  currency      String   @default("XOF")
-  status        String   @default("PENDING")
-  paymentMethod String
-  processorId   String?
-  paidAt        DateTime?
-  metadata      Json?
+id            String   @id @default(cuid())
+transactionId String   @unique
+userId        String
+companyId     String
+planId        String
+period        String   @default("monthly")
+amount        Float
+currency      String   @default("XOF")
+status        String   @default("PENDING")
+paymentMethod String
+processorId   String?
+paidAt        DateTime?
+metadata      Json?
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+createdAt     DateTime @default(now())
+updatedAt     DateTime @updatedAt
 
-  @@index([userId])
-  @@index([companyId])
-  @@index([status])
-  @@index([createdAt])
+@@index([userId])
+@@index([companyId])
+@@index([status])
+@@index([createdAt])
 }
 
 model PasswordHistory {
- id        String   @id @default(cuid())
- password  String
- createdAt DateTime @default(now())
- 
- user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- userId    String
+id        String   @id @default(cuid())
+password  String
+createdAt DateTime @default(now())
 
- @@index([userId])
+user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+userId    String
+
+@@index([userId])
 }
 
 model SecurityQuestion {
- id        String   @id @default(cuid())
- question  String
- answer    String
- 
- user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- userId    String
+id        String   @id @default(cuid())
+question  String
+answer    String
 
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+userId    String
 
- @@index([userId])
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+@@index([userId])
 }
 
 model LoginHistory {
- id        String   @id @default(cuid())
- ipAddress String?
- device    String?
- browser   String?
- location  String?
- success   Boolean  @default(true)
- 
- user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- userId    String
+id        String   @id @default(cuid())
+ipAddress String?
+device    String?
+browser   String?
+location  String?
+success   Boolean  @default(true)
 
- createdAt DateTime @default(now())
+user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+userId    String
 
- @@index([userId])
- @@index([createdAt])
+createdAt DateTime @default(now())
+
+@@index([userId])
+@@index([createdAt])
 }
 
 model VerificationToken {
- identifier String
- token      String   @unique
- expires    DateTime
+identifier String
+token      String   @unique
+expires    DateTime
 
- @@unique([identifier, token])
+@@unique([identifier, token])
 }
 
 enum UserRole {
- ADMIN
- PATRON
- GESTIONNAIRE
- CAISSIER
- CLIENT
+ADMIN
+PATRON
+GESTIONNAIRE // Corrected typo here
+CAISSIER
+CLIENT
 }
 
 enum UserStatus {
- ACTIVE
- SUSPENDED
- PENDING
- DEACTIVATED
+ACTIVE
+SUSPENDED
+PENDING
+DEACTIVATED
 }
 
 enum Gender {
- MALE
- FEMALE
- OTHER
+MALE
+FEMALE
+OTHER
 }
 
 enum IdentificationType {
- PASSPORT
- NATIONAL_ID
- DRIVERS_LICENSE
- OTHER
+PASSPORT
+NATIONAL_ID
+DRIVERS_LICENSE
+OTHER
 }
 
 enum EmployeeRole {
- MANAGER
- CASHIER
- DRIVER
- CUSTOMER_SERVICE
- MAINTENANCE
- ADMIN
+MANAGER
+CASHIER
+DRIVER
+CUSTOMER_SERVICE
+MAINTENANCE
+ADMIN
 }
 
 enum EmployeeDepartment {
- TRANSPORT
- OPERATIONS
- MAINTENANCE
- COMMERCIAL
- FINANCE
- RESSOURCES_HUMAINES
- LOGISTIQUE
- SECURITE
- INFORMATIQUE
- DIRECTION
- MARKETING
- SERVICE_CLIENT
+TRANSPORT
+OPERATIONS
+MAINTENANCE
+COMMERCIAL
+FINANCE
+RESSOURCES_HUMAINES
+LOGISTIQUE
+SECURITE
+INFORMATIQUE
+DIRECTION
+MARKETING
+SERVICE_CLIENT
 }
 
 enum LoyaltyProgram {
- POINTS
- CASHBACK
- DISCOUNT
+POINTS
+CASHBACK
+DISCOUNT
 }
 
 enum EmployeePosition {
- CHAUFFEUR
- CHAUFFEUR_SENIOR
- SUPERVISEUR_TRANSPORT
- DIRECTEUR_TRANSPORT
- AGENT_OPERATIONS
- COORDINATEUR_OPERATIONS
- CHEF_OPERATIONS
- DIRECTEUR_OPERATIONS
- MECANICIEN
- TECHNICIEN_MAINTENANCE
- CHEF_ATELIER
- DIRECTEUR_MAINTENANCE
- AGENT_COMMERCIAL
- RESPONSABLE_COMMERCIAL
- DIRECTEUR_COMMERCIAL
- COMPTABLE
- CONTROLEUR_GESTION
- DIRECTEUR_FINANCIER
- ASSISTANT_RH
- RESPONSABLE_RH
- DIRECTEUR_RH
- AGENT_LOGISTIQUE
- RESPONSABLE_LOGISTIQUE
- DIRECTEUR_LOGISTIQUE
- AGENT_SECURITE
- RESPONSABLE_SECURITE
- TECHNICIEN_IT
- DEVELOPPEUR
- RESPONSABLE_IT
- DIRECTEUR_IT
- ASSISTANT_DIRECTION
- DIRECTEUR_GENERAL
- PDG
- CHARGE_MARKETING
- RESPONSABLE_MARKETING
- DIRECTEUR_MARKETING
- AGENT_SERVICE_CLIENT
- SUPERVISEUR_SERVICE_CLIENT
- RESPONSABLE_SERVICE_CLIENT
+CHAUFFEUR
+CHAUFFEUR_SENIOR
+SUPERVISEUR_TRANSPORT
+DIRECTEUR_TRANSPORT
+AGENT_OPERATIONS
+COORDINATEUR_OPERATIONS
+CHEF_OPERATIONS
+DIRECTEUR_OPERATIONS
+MECANICIEN
+TECHNICIEN_MAINTENANCE
+CHEF_ATELIER
+DIRECTEUR_MAINTENANCE
+AGENT_COMMERCIAL
+RESPONSABLE_COMMERCIAL
+DIRECTEUR_COMMERCIAL
+COMPTABLE
+CONTROLEUR_GESTION
+DIRECTEUR_FINANCIER
+ASSISTANT_RH
+RESPONSABLE_RH
+DIRECTEUR_RH
+AGENT_LOGISTIQUE
+RESPONSABLE_LOGISTIQUE
+DIRECTEUR_LOGISTIQUE
+AGENT_SECURITE
+RESPONSABLE_SECURITE
+TECHNICIEN_IT
+DEVELOPPEUR
+RESPONSABLE_IT
+DIRECTEUR_IT
+ASSISTANT_DIRECTION
+DIRECTEUR_GENERAL
+PDG
+CHARGE_MARKETING
+RESPONSABLE_MARKETING
+DIRECTEUR_MARKETING
+AGENT_SERVICE_CLIENT
+SUPERVISEUR_SERVICE_CLIENT
+RESPONSABLE_SERVICE_CLIENT
 }
 
 model NotificationPreference {
- id        String   @id @default(cuid())
- type      NotificationType
- email     Boolean  @default(true)
- push      Boolean  @default(true)
- sms       Boolean  @default(false)
- inApp     Boolean  @default(true)
+id        String   @id @default(cuid())
+type      NotificationType
+email     Boolean  @default(true)
+push      Boolean  @default(true)
+sms       Boolean  @default(false)
+inApp     Boolean  @default(true)
 
- user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- userId    String
+user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+userId    String
 
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
 
- @@unique([userId, type])
- @@index([userId])
+@@unique([userId, type])
+@@index([userId])
 }
 
 model DeviceToken {
- id        String   @id @default(cuid())
- token     String   @unique
- device    String?
- platform  String?
- appVersion String?
- lastUsed  DateTime?
+id        String   @id @default(cuid())
+token     String   @unique
+device    String?
+platform  String?
+appVersion String?
+lastUsed  DateTime?
 
- user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- userId    String
+user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+userId    String
 
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
 
- @@index([userId])
- @@index([token])
+@@index([userId])
+@@index([token])
 }
 
 model Company {
- id          String   @id @default(cuid())
- name        String
- description String?
- logo        String?
- coverImage  String?
+id          String   @id @default(cuid())
+name        String
+description String?
+logo        String?
+coverImage  String?
 
- // Contact Info
- email       String   @unique
- phone       String
- countryCode String
- address     String
- country     String
- city        String
- commune     String?
- website     String?
- postalCode  String?
+// Contact Info
+email       String   @unique
+phone       String
+countryCode String
+address     String
+country     String
+city        String
+commune     String?
+website     String?
+postalCode  String?
 
- // Business Info
- licenseNumber String @unique
- taxId       String?
- foundedYear Int?
- size        CompanySize @default(SMALL)
- isVerified  Boolean @default(false)
- isActive    Boolean @default(true)
- status      CompanyStatus @default(PENDING)
- 
- // Conserver les champs existants
- isArchived  Boolean @default(false)
- tripCount   Int     @default(0)
+// Business Info
+licenseNumber String @unique
+taxId       String?
+foundedYear Int?
+size        CompanySize @default(SMALL)
+isVerified  Boolean @default(false)
+isActive    Boolean @default(true)
+status      CompanyStatus @default(PENDING)
 
- // Enhanced business information
- operatingCountries String[] @default([])
- primaryRoutes      Json?
- services          String[] @default([])
- vehicleTypes      String[] @default([])
- businessHours     Json?
- socialMedia       Json?
- certifications    String[] @default([])
- 
- // Operational settings
- bookingSettings   Json?
- paymentMethods    String[] @default([])
- cancellationPolicy String?
- refundPolicy      String?
- termsAndConditions String?
- 
- // Performance metrics
- rating            Float?   @default(0)
- totalTrips        Int      @default(0)
- totalRevenue      Float    @default(0)
- customerCount     Int      @default(0)
- completedTrips    Int      @default(0)
- cancelledTrips    Int      @default(0)
- 
- // Legal and compliance
- legalStatus       String?
- insuranceProvider String?
- insurancePolicy   String?
- insuranceExpiry   DateTime?
- safetyRating      Int?     @default(0)
- 
- // Banking information
- bankName          String?
- bankAccountNumber String?
- bankAccountName   String?
- bankCode          String?
- swiftCode         String?
+// Conserver les champs existants
+isArchived  Boolean @default(false)
+tripCount   Int     @default(0)
 
- // Relations
- owner       User     @relation("CompanyOwner", fields: [ownerId], references: [id])
- ownerId     String
- employees   User[]   @relation("CompanyEmployee")
- activeForUsers User[] @relation("ActiveCompany")
+// Enhanced business information
+operatingCountries String[] @default([])
+primaryRoutes      Json?
+services          String[] @default([])
+vehicleTypes      String[] @default([])
+businessHours     Json?
+socialMedia       Json?
+certifications    String[] @default([])
 
- buses       Bus[]
- routes      Route[]
- stations    Station[]
- trips       Trip[]
- reservations Reservation[]
- tickets     Ticket[]
- reviews     Review[]
- activities  Activity[]
- promotions  Promotion[]
- payments    Payment[]
- refunds     Refund[]
- documents   CompanyDocument[]
- subscriptionTransactions SubscriptionTransaction[]
+// Operational settings
+bookingSettings   Json?
+paymentMethods    String[] @default([])
+cancellationPolicy String?
+refundPolicy      String?
+termsAndConditions String?
 
- // Subscription
- subscriptionTier SubscriptionTier @default(BASIC)
- subscriptionStatus String? @default("PENDING")
- subscriptionExpiry DateTime?
- subscriptionHistory SubscriptionHistory[]
- subscriptions Subscription[]
+// Performance metrics
+rating            Float?   @default(0)
+totalTrips        Int      @default(0)
+totalRevenue      Float    @default(0)
+customerCount     Int      @default(0)
+completedTrips    Int      @default(0)
+cancelledTrips    Int      @default(0)
 
- createdAt   DateTime @default(now())
- updatedAt   DateTime @updatedAt
+// Legal and compliance
+legalStatus       String?
+insuranceProvider String?
+insurancePolicy   String?
+insuranceExpiry   DateTime?
+safetyRating      Int?     @default(0)
 
- @@unique([phone, countryCode])
- @@index([status])
- @@index([ownerId])
- @@index([country])
+// Banking information
+bankName          String?
+bankAccountNumber String?
+bankAccountName   String?
+bankCode          String?
+swiftCode         String?
+
+// Relations
+owner       User     @relation("CompanyOwner", fields: [ownerId], references: [id])
+ownerId     String
+employees   User[]   @relation("CompanyEmployee")
+activeForUsers User[] @relation("ActiveCompany")
+
+buses       Bus[]
+routes      Route[]
+stations    Station[]
+trips       Trip[]
+reservations Reservation[]
+tickets     Ticket[]
+reviews     Review[]
+activities  Activity[]
+promotions  Promotion[]
+payments    Payment[]
+refunds     Refund[]
+documents   CompanyDocument[]
+subscriptionTransactions SubscriptionTransaction[]
+
+// Subscription
+subscriptionTier SubscriptionTier @default(BASIC)
+subscriptionStatus String? @default("PENDING")
+subscriptionExpiry DateTime?
+subscriptionHistory SubscriptionHistory[]
+subscriptions Subscription[]
+
+createdAt   DateTime @default(now())
+updatedAt   DateTime @updatedAt
+
+@@unique([phone, countryCode])
+@@index([status])
+@@index([ownerId])
+@@index([country])
 }
 
 model Subscription {
- id          String   @id @default(cuid())
- tier        SubscriptionTier @default(BASIC)
- status      SubscriptionStatus @default(PENDING)
- startDate   DateTime @default(now())
- endDate     DateTime?
- amount      Float    @default(0)
- currency    String   @default("XOF")
- period      String   @default("monthly") // monthly, yearly
- 
- // Payment information
- paymentMethod    String?
- paymentDate      DateTime?
- paymentReference String?
- transactionId    String? @unique
- 
- // Relations
- company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
- companyId   String
- user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- userId      String
+id          String   @id @default(cuid())
+tier        SubscriptionTier @default(BASIC)
+status      SubscriptionStatus @default(PENDING)
+startDate   DateTime @default(now())
+endDate     DateTime?
+amount      Float    @default(0)
+currency    String   @default("XOF")
+period      String   @default("monthly") // monthly, yearly
 
- createdAt   DateTime @default(now())
- updatedAt   DateTime @updatedAt
+// Payment information
+paymentMethod    String?
+paymentDate      DateTime?
+paymentReference String?
+transactionId    String? @unique
 
- @@index([companyId])
- @@index([userId])
- @@index([status])
- @@index([transactionId])
+// Relations
+company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+companyId   String
+user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+userId      String
+
+createdAt   DateTime @default(now())
+updatedAt   DateTime @updatedAt
+
+@@index([companyId])
+@@index([userId])
+@@index([status])
+@@index([transactionId])
 }
 
 enum SubscriptionStatus {
- PENDING
- ACTIVE
- EXPIRED
- CANCELLED
- FAILED
+PENDING
+ACTIVE
+EXPIRED
+CANCELLED
+FAILED
 }
 
 model CompanyDocument {
- id          String   @id @default(cuid())
- name        String
- type        DocumentType
- fileUrl     String
- fileSize    Int?
- mimeType    String?
- isVerified  Boolean  @default(false)
- verifiedAt  DateTime?
- verifiedBy  String?
- expiryDate  DateTime?
- 
- company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
- companyId   String
+id          String   @id @default(cuid())
+name        String
+type        DocumentType
+fileUrl     String
+fileSize    Int?
+mimeType    String?
+isVerified  Boolean  @default(false)
+verifiedAt  DateTime?
+verifiedBy  String?
+expiryDate  DateTime?
 
- createdAt   DateTime @default(now())
- updatedAt   DateTime @updatedAt
+company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+companyId   String
 
- @@index([companyId])
- @@index([type])
+createdAt   DateTime @default(now())
+updatedAt   DateTime @updatedAt
+
+@@index([companyId])
+@@index([type])
 }
 
 enum DocumentType {
- LICENSE
- REGISTRATION
- INSURANCE
- TAX
- PERMIT
- CERTIFICATE
- OTHER
+LICENSE
+REGISTRATION
+INSURANCE
+TAX
+PERMIT
+CERTIFICATE
+OTHER
 }
 
 model SubscriptionHistory {
- id          String   @id @default(cuid())
- tier        SubscriptionTier
- startDate   DateTime
- endDate     DateTime
- amount      Float
- paymentId   String?
- status      SubscriptionStatus @default(ACTIVE)
- 
- company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
- companyId   String
+id          String   @id @default(cuid())
+tier        SubscriptionTier
+startDate   DateTime
+endDate     DateTime
+amount      Float
+paymentId   String?
+status      SubscriptionStatus @default(ACTIVE)
 
- createdAt   DateTime @default(now())
- updatedAt   DateTime @updatedAt
+company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+companyId   String
 
- @@index([companyId])
- @@index([status])
+createdAt   DateTime @default(now())
+updatedAt   DateTime @updatedAt
+
+@@index([companyId])
+@@index([status])
 }
 
 enum CompanySize {
- SMALL
- MEDIUM
- LARGE
- ENTERPRISE
+SMALL
+MEDIUM
+LARGE
+ENTERPRISE
 }
 
 enum CompanyStatus {
- PENDING
- APPROVED
- REJECTED
- SUSPENDED
- ARCHIVED
+PENDING
+APPROVED
+REJECTED
+SUSPENDED
+ARCHIVED
 }
 
 enum SubscriptionTier {
- BASIC
- STANDARD
- PREMIUM
- ENTERPRISE
+BASIC
+STANDARD
+PREMIUM
+ENTERPRISE
 }
 
 model Activity {
- id          String       @id @default(cuid())
- type        ActivityType
- description String
- status      ActivityStatus @default(INFO)
- metadata    Json?
- ipAddress   String?
- userAgent   String?
+id          String       @id @default(cuid())
+type        ActivityType
+description String
+status      ActivityStatus @default(INFO)
+metadata    Json?
+ipAddress   String?
+userAgent   String?
 
- user        User?        @relation(fields: [userId], references: [id])
- userId      String?
- company     Company?     @relation(fields: [companyId], references: [id])
- companyId   String?
+user        User?        @relation(fields: [userId], references: [id])
+userId      String?
+company     Company?     @relation(fields: [companyId], references: [id])
+companyId   String?
 
- createdAt   DateTime     @default(now())
- updatedAt   DateTime     @updatedAt
+createdAt   DateTime     @default(now())
+updatedAt   DateTime     @updatedAt
 
- @@index([userId])
- @@index([companyId])
- @@index([type])
- @@index([createdAt])
+@@index([userId])
+@@index([companyId])
+@@index([type])
+@@index([createdAt])
 }
 
 enum ActivityType {
- USER_LOGIN
- USER_LOGOUT
- USER_UPDATED
- RESERVATION_CREATED
- RESERVATION_CANCELLED
- PAYMENT_COMPLETED
- TRIP_CREATED
- TRIP_UPDATED
- BUS_ADDED
- ROUTE_CREATED
- EMPLOYEE_ADDED
- SYSTEM_UPDATE
- COMPANY_CREATED
- COMPANY_UPDATED
- COMPANY_VERIFIED
- COMPANY_SUSPENDED
- BUS_MAINTENANCE
- ROUTE_UPDATED
- TRIP_CANCELLED
- TRIP_ARCHIVED
- TICKET_ISSUED
- PAYMENT_FAILED
- REFUND_PROCESSED
- REVIEW_SUBMITTED
- PROMOTION_CREATED
- EMPLOYEE_ROLE_CHANGED
- SUBSCRIPTION_INITIATED
- SUBSCRIPTION_ACTIVATED
- SUBSCRIPTION_FAILED
- SUBSCRIPTION_EXPIRED
- SUBSCRIPTION_CANCELLED
- PAYMENT_INITIATED
- MOBILE_MONEY_PAYMENT
- CASH_PAYMENT
- CARD_PAYMENT
- TICKET_GENERATED
- TICKET_VALIDATED
- TICKET_SALE
- SUBSCRIPTION_UPGRADE_FAILED
- SUBSCRIPTION_UPGRADED
- EMPLOYEE_CODE_GENERATED
- EMPLOYEE_CREATED
- EMPLOYEE_UPDATED
- EMPLOYEE_DELETED
+USER_LOGIN
+USER_LOGOUT
+USER_UPDATED
+RESERVATION_CREATED
+RESERVATION_CANCELLED
+PAYMENT_COMPLETED
+TRIP_CREATED
+TRIP_UPDATED
+BUS_ADDED
+ROUTE_CREATED
+EMPLOYEE_ADDED
+SYSTEM_UPDATE
+COMPANY_CREATED
+COMPANY_UPDATED
+COMPANY_VERIFIED
+COMPANY_SUSPENDED
+BUS_MAINTENANCE
+ROUTE_UPDATED
+TRIP_CANCELLED
+TRIP_ARCHIVED
+TICKET_ISSUED
+PAYMENT_FAILED
+REFUND_PROCESSED
+REVIEW_SUBMITTED
+PROMOTION_CREATED
+EMPLOYEE_ROLE_CHANGED
+SUBSCRIPTION_INITIATED
+SUBSCRIPTION_ACTIVATED
+SUBSCRIPTION_FAILED
+SUBSCRIPTION_EXPIRED
+SUBSCRIPTION_CANCELLED
+PAYMENT_INITIATED
+MOBILE_MONEY_PAYMENT
+CASH_PAYMENT
+CARD_PAYMENT
+TICKET_GENERATED
+TICKET_VALIDATED
+TICKET_SALE
+SUBSCRIPTION_UPGRADE_FAILED
+SUBSCRIPTION_UPGRADED
+EMPLOYEE_CODE_GENERATED
+EMPLOYEE_CREATED
+EMPLOYEE_UPDATED
+EMPLOYEE_DELETED
 }
 
 enum ActivityStatus {
- INFO
- SUCCESS
- WARNING
- ERROR
- PENDING
- FAILED
+INFO
+SUCCESS
+WARNING
+ERROR
+PENDING
+FAILED
 }
 
 model Bus {
- id          String   @id @default(cuid())
- plateNumber String   @unique
- model       String
- brand       String?
- capacity    Int
- year        Int?
- status      BusStatus @default(ACTIVE)
- mileage     Int?     @default(0)
- color       String?
- fuelType    FuelType @default(DIESEL)
- features    String[] @default([])
+id          String   @id @default(cuid())
+plateNumber String   @unique
+model       String
+brand       String?
+capacity    Int
+year        Int?
+status      BusStatus @default(ACTIVE)
+mileage     Int?     @default(0)
+color       String?
+fuelType    FuelType @default(DIESEL)
+features    String[] @default([])
 
- // Maintenance and documents
- lastMaintenance         DateTime? @default(now())
- nextMaintenance         DateTime?
- insuranceExpiry         DateTime?
- technicalControlExpiry  DateTime?
- registrationExpiry      DateTime?
- purchaseDate            DateTime?
- purchasePrice           Float?
+// Maintenance and documents
+lastMaintenance         DateTime? @default(now())
+nextMaintenance         DateTime?
+insuranceExpiry         DateTime?
+technicalControlExpiry  DateTime?
+registrationExpiry      DateTime?
+purchaseDate            DateTime?
+purchasePrice           Float?
 
- // Relations
- company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
- companyId   String
- trips       Trip[]
+// Relations
+company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+companyId   String
+trips       Trip[]
 
- isActive    Boolean  @default(true)
- createdAt   DateTime @default(now())
- updatedAt   DateTime @updatedAt
+isActive    Boolean  @default(true)
+createdAt   DateTime @default(now())
+updatedAt   DateTime @updatedAt
 
- @@index([companyId])
- @@index([status])
- @@index([plateNumber])
+@@index([companyId])
+@@index([status])
+@@index([plateNumber])
 }
 
 enum BusStatus {
- ACTIVE
- MAINTENANCE
- OUT_OF_SERVICE
- INSPECTION
- RETIRED
- SOLD
- RENTED
+ACTIVE
+MAINTENANCE
+OUT_OF_SERVICE
+INSPECTION
+RETIRED
+SOLD
+RENTED
 }
 
 enum FuelType {
- DIESEL
- GASOLINE
- ELECTRIC
- HYBRID
- CNG
- LPG
+DIESEL
+GASOLINE
+ELECTRIC
+HYBRID
+CNG
+LPG
 }
 
 model Route {
- id                String   @id @default(cuid())
- name              String
- departureLocation String
- arrivalLocation   String
- departureCountry  String
- arrivalCountry    String
- distance          Float    @default(0)
- estimatedDuration Int      // en minutes
- basePrice         Float
- description       String?
- isInternational   Boolean  @default(false)
- status            RouteStatus @default(ACTIVE)
+id                String   @id @default(cuid())
+name              String
+departureLocation String
+arrivalLocation   String
+departureCountry  String
+arrivalCountry    String
+distance          Float    @default(0)
+estimatedDuration Int      // en minutes
+basePrice         Float
+description       String?
+isInternational   Boolean  @default(false)
+status            RouteStatus @default(ACTIVE)
 
- // Enhanced route information
- routeType         RouteType @default(DOMESTIC)
- difficulty        String?   @default("EASY")
- scenicRating      Int?      @default(3)
- roadCondition     String?   @default("GOOD")
- 
- // Pricing strategy
- dynamicPricing    Boolean   @default(false)
- peakSeasonMultiplier Float? @default(1.0)
- weekendMultiplier Float?    @default(1.0)
- holidayMultiplier Float?    @default(1.2)
- 
- // Operational settings
- minimumBookingTime Int?     @default(30) // minutes before departure
- maximumBookingDays Int?     @default(30) // days in advance
- 
- // Route details
- waypoints         Json[]    @default([])
- tollFees          Float?    @default(0)
- borderCrossings   String[]  @default([])
- 
- // Popularity metrics
- popularityScore   Float?    @default(0)
- searchCount       Int       @default(0)
- bookingCount      Int       @default(0)
- 
- // Geographical data
- departureCoordinates Json?
- arrivalCoordinates   Json?
- routePath            Json?   // GeoJSON for route visualization
+// Enhanced route information
+routeType         RouteType @default(DOMESTIC)
+difficulty        String?   @default("EASY")
+scenicRating      Int?      @default(3)
+roadCondition     String?   @default("GOOD")
 
- // Intermediate stops
- stops             RouteStop[]
+// Pricing strategy
+dynamicPricing    Boolean   @default(false)
+peakSeasonMultiplier Float? @default(1.0)
+weekendMultiplier Float?    @default(1.0)
+holidayMultiplier Float?    @default(1.2)
 
- // Relations
- company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
- companyId         String
- trips             Trip[]
- favorites         FavoriteRoute[]
- promotions        Promotion[]
+// Operational settings
+minimumBookingTime Int?     @default(30) // minutes before departure
+maximumBookingDays Int?     @default(30) // days in advance
 
- createdAt         DateTime @default(now())
- updatedAt         DateTime @updatedAt
+// Route details
+waypoints         Json[]    @default([])
+tollFees          Float?    @default(0)
+borderCrossings   String[]  @default([])
 
- @@index([companyId])
- @@index([departureCountry, arrivalCountry])
- @@index([status])
- @@index([routeType])
+// Popularity metrics
+popularityScore   Float?    @default(0)
+searchCount       Int       @default(0)
+bookingCount      Int       @default(0)
+
+// Geographical data
+departureCoordinates Json?
+arrivalCoordinates   Json?
+routePath            Json?   // GeoJSON for route visualization
+
+// Intermediate stops
+stops             RouteStop[]
+
+// Relations
+company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+companyId         String
+trips             Trip[]
+favorites         FavoriteRoute[]
+promotions        Promotion[]
+
+createdAt         DateTime @default(now())
+updatedAt         DateTime @updatedAt
+
+@@index([companyId])
+@@index([departureCountry, arrivalCountry])
+@@index([status])
+@@index([routeType])
 }
 
 model RouteStop {
- id               String   @id @default(cuid())
- name             String
- country          String
- city             String
- address          String?
- latitude         Float?
- longitude        Float?
- order            Int
- estimatedArrival Int      // minutes depuis le départ
- stopDuration     Int?     @default(10) // minutes d'arrêt
- isOptional       Boolean  @default(false)
- 
- // Additional stop information
- facilities       String[] @default([])
- description      String?
- contactPhone     String?
- isActive         Boolean  @default(true)
- 
- // Pricing adjustments
- priceAdjustment  Float?   @default(0) // Additional cost for boarding/alighting here
+id               String   @id @default(cuid())
+name             String
+country          String
+city             String
+address          String?
+latitude         Float?
+longitude        Float?
+order            Int
+estimatedArrival Int      // minutes depuis le départ
+stopDuration     Int?     @default(10) // minutes d'arrêt
+isOptional       Boolean  @default(false)
 
- route            Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
- routeId          String
+// Additional stop information
+facilities       String[] @default([])
+description      String?
+contactPhone     String?
+isActive         Boolean  @default(true)
 
- createdAt        DateTime @default(now())
- updatedAt        DateTime @updatedAt
+// Pricing adjustments
+priceAdjustment  Float?   @default(0) // Additional cost for boarding/alighting here
 
- @@index([routeId])
- @@index([country, city])
+route            Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+routeId          String
+
+createdAt        DateTime @default(now())
+updatedAt        DateTime @updatedAt
+
+@@index([routeId])
+@@index([country, city])
 }
 
 enum RouteStatus {
- ACTIVE
- INACTIVE
- MAINTENANCE
- SUSPENDED
- SEASONAL
+ACTIVE
+INACTIVE
+MAINTENANCE
+SUSPENDED
+SEASONAL
 }
 
 enum RouteType {
- DOMESTIC
- INTERNATIONAL
- REGIONAL
- EXPRESS
- LUXURY
- ECONOMY
- NIGHT
- SHUTTLE
+DOMESTIC
+INTERNATIONAL
+REGIONAL
+EXPRESS
+LUXURY
+ECONOMY
+NIGHT
+SHUTTLE
 }
 
 model FavoriteRoute {
- id        String   @id @default(cuid())
+id        String   @id @default(cuid())
 
- user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- userId    String
- route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
- routeId   String
+user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+userId    String
+route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+routeId   String
 
- createdAt DateTime @default(now())
+createdAt DateTime @default(now())
 
- @@unique([userId, routeId])
- @@index([userId])
- @@index([routeId])
+@@unique([userId, routeId])
+@@index([userId])
+@@index([routeId])
 }
 
 model Station {
- id          String   @id @default(cuid())
- name        String
- address     String
- city        String
- country     String
- latitude    Float?
- longitude   Float?
- 
- // Station details
- stationType StationType @default(BUS_STOP)
- facilities  String[] @default([])
- isActive    Boolean  @default(true)
- 
- // Contact info
- phone       String?
- email       String?
- manager     String?
- 
- // Operational details
- openingHours Json?
- capacity     Int?
- hasWifi      Boolean @default(false)
- hasRestrooms Boolean @default(false)
- hasWaitingRoom Boolean @default(false)
- hasTicketCounter Boolean @default(true)
- hasCafeteria Boolean @default(false)
- 
- // Images and media
- images      String[] @default([])
- virtualTour String?
+id          String   @id @default(cuid())
+name        String
+address     String
+city        String
+country     String
+latitude    Float?
+longitude   Float?
 
- company     Company  @relation(fields: [companyId], references: [id])
- companyId   String
+// Station details
+stationType StationType @default(BUS_STOP)
+facilities  String[] @default([])
+isActive    Boolean  @default(true)
 
- createdAt   DateTime @default(now())
- updatedAt   DateTime @updatedAt
+// Contact info
+phone       String?
+email       String?
+manager     String?
 
- @@index([companyId])
- @@index([country, city])
- @@index([stationType])
+// Operational details
+openingHours Json?
+capacity     Int?
+hasWifi      Boolean @default(false)
+hasRestrooms Boolean @default(false)
+hasWaitingRoom Boolean @default(false)
+hasTicketCounter Boolean @default(true)
+hasCafeteria Boolean @default(false)
+
+// Images and media
+images      String[] @default([])
+virtualTour String?
+
+company     Company  @relation(fields: [companyId], references: [id])
+companyId   String
+
+createdAt   DateTime @default(now())
+updatedAt   DateTime @updatedAt
+
+@@index([companyId])
+@@index([country, city])
+@@index([stationType])
 }
 
 enum StationType {
- BUS_STOP
- TERMINAL
- DEPOT
- SERVICE_CENTER
- AGENCY
- PARTNER_LOCATION
+BUS_STOP
+TERMINAL
+DEPOT
+SERVICE_CENTER
+AGENCY
+PARTNER_LOCATION
 }
 
 model Trip {
-  id             String        @id @default(cuid())
-  departureTime  DateTime
-  arrivalTime    DateTime
-  basePrice      Float
-  currentPrice   Float
-  availableSeats Int
-  status         TripStatus    @default(SCHEDULED)
-  tripType       TripType      @default(STANDARD)
-  services       String[]      @default([])
-  driverName     String?
-  driverPhone    String?
-  notes          String?
-  isArchived     Boolean       @default(false) // New field for archiving
-  boardingStartTime DateTime? // New field for boarding start time
-  boardingEndTime   DateTime? // New field for boarding end time
+id             String        @id @default(cuid())
+departureTime  DateTime
+arrivalTime    DateTime
+basePrice      Float
+currentPrice   Float
+availableSeats Int
+status         TripStatus    @default(SCHEDULED)
+tripType       TripType      @default(STANDARD)
+services       String[]      @default([])
+driverName     String?
+driverPhone    String?
+notes          String?
+isArchived     Boolean       @default(false) // New field for archiving
+boardingStartTime DateTime? // New field for boarding start time
+boardingEndTime   DateTime? // New field for boarding end time
 
-  routeId   String
-  route     Route         @relation(fields: [routeId], references: [id])
-  busId     String
-  bus       Bus           @relation(fields: [busId], references: [id])
-  companyId String
-  company   Company       @relation(fields: [companyId], references: [id])
+routeId   String
+route     Route         @relation(fields: [routeId], references: [id])
+busId     String
+bus       Bus           @relation(fields: [busId], references: [id])
+companyId String
+company   Company       @relation(fields: [companyId], references: [id])
 
-  reservations Reservation[]
-  tickets      Ticket[]
-  promotions   PromotionTrip[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+reservations Reservation[]
+tickets      Ticket[]
+promotions   PromotionTrip[]
+createdAt    DateTime      @default(now())
+updatedAt    DateTime      @updatedAt
 
-  @@index([companyId])
-  @@index([routeId])
-  @@index([busId])
-  @@index([departureTime])
-  @@index([arrivalTime])
-  @@index([status])
+@@index([companyId])
+@@index([routeId])
+@@index([busId])
+@@index([departureTime])
+@@index([arrivalTime])
+@@index([status])
 }
 
 enum TripStatus {
- SCHEDULED
- BOARDING
- DEPARTING_SOON
- DEPARTED
- IN_TRANSIT
- ARRIVED
- CANCELLED
- DELAYED
- COMPLETED
- MAINTENANCE
+SCHEDULED
+BOARDING
+DEPARTING_SOON // Added new status
+DEPARTED
+IN_TRANSIT
+ARRIVED
+CANCELLED
+DELAYED
+COMPLETED
+MAINTENANCE
 }
 
 enum TripType {
- STANDARD
- EXPRESS
- VIP
- ECONOMIQUE
- NUIT
+STANDARD
+EXPRESS
+VIP
+ECONOMIQUE
+NUIT
 }
 
 enum CancellationReason {
- TECHNICAL_ISSUE
- WEATHER_CONDITIONS
- DRIVER_UNAVAILABLE
- INSUFFICIENT_PASSENGERS
- ROAD_CONDITIONS
- SECURITY_CONCERNS
- ADMINISTRATIVE_ISSUE
- OTHER
+TECHNICAL_ISSUE
+WEATHER_CONDITIONS
+DRIVER_UNAVAILABLE
+INSUFFICIENT_PASSENGERS
+ROAD_CONDITIONS
+SECURITY_CONCERNS
+ADMINISTRATIVE_ISSUE
+OTHER
 }
 
 model Promotion {
- id            String      @id @default(cuid())
- name          String
- description   String?
- code          String      @unique
- discountType  DiscountType @default(PERCENTAGE)
- discountValue Float
- minPurchase   Float?
- maxDiscount   Float?
- startDate     DateTime
- endDate       DateTime
- isActive      Boolean     @default(true)
- 
- // Usage limits
- usageLimit    Int?
- usageCount    Int         @default(0)
- perUserLimit  Int?        @default(1)
- 
- // Targeting
- targetUserType UserRole?
- targetRoutes   Route[]
- targetTrips    PromotionTrip[]
- 
- // Marketing
- image         String?
- termsAndConditions String?
- 
- company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
- companyId     String
+id            String      @id @default(cuid())
+name          String
+description   String?
+code          String      @unique
+discountType  DiscountType @default(PERCENTAGE)
+discountValue Float
+minPurchase   Float?
+maxDiscount   Float?
+startDate     DateTime
+endDate       DateTime
+isActive      Boolean     @default(true)
 
- createdAt     DateTime    @default(now())
- updatedAt     DateTime    @updatedAt
+// Usage limits
+usageLimit    Int?
+usageCount    Int         @default(0)
+perUserLimit  Int?        @default(1)
 
- @@index([companyId])
- @@index([code])
- @@index([isActive])
- @@index([startDate, endDate])
+// Targeting
+targetUserType UserRole?
+targetRoutes   Route[]
+targetTrips    PromotionTrip[]
+
+// Marketing
+image         String?
+termsAndConditions String?
+
+company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+companyId     String
+
+createdAt     DateTime    @default(now())
+updatedAt     DateTime    @updatedAt
+
+@@index([companyId])
+@@index([code])
+@@index([isActive])
+@@index([startDate, endDate])
 }
 
 model PromotionTrip {
- promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
- promotionId String
- trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
- tripId      String
+promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+promotionId String
+trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+tripId      String
 
- @@id([promotionId, tripId])
- @@index([promotionId])
- @@index([tripId])
+@@id([promotionId, tripId])
+@@index([promotionId])
+@@index([tripId])
 }
 
 enum DiscountType {
- PERCENTAGE
- FIXED_AMOUNT
- BUY_ONE_GET_ONE
- FREE_UPGRADE
+PERCENTAGE
+FIXED_AMOUNT
+BUY_ONE_GET_ONE
+FREE_UPGRADE
 }
 
 model Reservation {
- id            String            @id @default(cuid())
- reservationNumber String        @unique @default(cuid())
- passengerName String
- passengerPhone String
- passengerEmail String?
- seatNumbers   Int[]             @default([])
- totalAmount   Float
- status        ReservationStatus @default(PENDING)
- paymentStatus PaymentStatus     @default(PENDING)
- 
- // Payment information
- paymentMethod String?
- paymentReference String?
- paidAmount    Float?            @default(0)
- 
- // Booking details
- bookingSource String?           @default("WEB")
- specialRequests String?
- emergencyContact String?
- 
- // Passenger details
- passengerCount Int              @default(1)
- passengerDetails Json?
- 
- // Cancellation info
- cancellationReason String?
- cancellationDate   DateTime?
- refundAmount      Float?         @default(0)
- refundStatus      RefundStatus?  @default(NONE)
- 
- // Promotion
- promotionCode     String?
- discountAmount    Float?         @default(0)
- 
- // Expiration
- expiresAt     DateTime?
+id            String            @id @default(cuid())
+reservationNumber String        @unique @default(cuid())
+passengerName String? // Changed to optional
+passengerPhone String? // Changed to optional
+seatNumbers   Int[]             @default([])
+totalAmount   Float
+status        ReservationStatus @default(PENDING)
+paymentStatus PaymentStatus     @default(PENDING)
 
- trip          Trip              @relation(fields: [tripId], references: [id])
- tripId        String
- user          User?             @relation(fields: [userId], references: [id])
- userId        String?
- company       Company           @relation(fields: [companyId], references: [id])
- companyId     String
+// Payment information
+paymentMethod String?
+paymentReference String?
+paidAmount    Float?            @default(0)
 
- tickets       Ticket[]
- payments      Payment[]
- refunds       Refund[]
+// Booking details
+bookingSource String?           @default("WEB")
+specialRequests String?
+emergencyContact String?
 
- createdAt     DateTime          @default(now())
- updatedAt     DateTime          @updatedAt
+// Passenger details
+passengerCount Int              @default(1)
+passengerDetails Json?
 
- @@index([userId])
- @@index([tripId])
- @@index([companyId])
- @@index([status])
- @@index([paymentStatus])
- @@index([reservationNumber])
+// Cancellation info
+cancellationReason String?
+cancellationDate   DateTime?
+refundAmount      Float?         @default(0)
+refundStatus      RefundStatus?  @default(NONE)
+
+// Promotion
+promotionCode     String?
+discountAmount    Float?         @default(0)
+
+// Expiration
+expiresAt     DateTime?
+
+trip          Trip              @relation(fields: [tripId], references: [id])
+tripId        String
+user          User?             @relation(fields: [userId], references: [id])
+userId        String?
+company       Company           @relation(fields: [companyId], references: [id])
+companyId     String
+
+tickets       Ticket[]
+payments      Payment[]
+refunds       Refund[]
+
+createdAt     DateTime          @default(now())
+updatedAt     DateTime          @updatedAt
+
+@@index([userId])
+@@index([tripId])
+@@index([companyId])
+@@index([status])
+@@index([paymentStatus])
+@@index([reservationNumber])
 }
 
 model Payment {
- id            String       @id @default(cuid())
- amount        Float
- currency      String       @default("XOF")
- status        PaymentStatus @default(PENDING)
- method        PaymentMethod
- reference     String?      @unique
- 
- // Payment details
- processorId   String?      // ID from payment processor
- processorFee  Float?       @default(0)
- metadata      Json?
- receiptUrl    String?
- 
- // Relations
- user          User?        @relation(fields: [userId], references: [id])
- userId        String?
- company       Company      @relation(fields: [companyId], references: [id])
- companyId     String
- reservation   Reservation? @relation(fields: [reservationId], references: [id])
- reservationId String?
+id            String       @id @default(cuid())
+amount        Float
+currency      String       @default("XOF")
+status        PaymentStatus @default(PENDING)
+method        PaymentMethod
+reference     String?      @unique
 
- refunds       Refund[]
+// Payment details
+processorId   String?      // ID from payment processor
+processorFee  Float?       @default(0)
+metadata      Json?
+receiptUrl    String?
 
- createdAt     DateTime     @default(now())
- updatedAt     DateTime     @updatedAt
+// Relations
+user          User?        @relation(fields: [userId], references: [id])
+userId        String?
+company       Company      @relation(fields: [companyId], references: [id])
+companyId     String
+reservation   Reservation? @relation(fields: [reservationId], references: [id])
+reservationId String?
 
- @@index([userId])
- @@index([companyId])
- @@index([reservationId])
- @@index([status])
- @@index([method])
+refunds       Refund[]
+
+createdAt     DateTime     @default(now())
+updatedAt     DateTime     @updatedAt
+
+@@index([userId])
+@@index([companyId])
+@@index([reservationId])
+@@index([status])
+@@index([method])
 }
 
 enum PaymentMethod {
- CREDIT_CARD
- MOBILE_MONEY
- BANK_TRANSFER
- CASH
- PAYPAL
- CRYPTO
- OTHER
+CREDIT_CARD
+MOBILE_MONEY
+BANK_TRANSFER
+CASH
+PAYPAL
+CRYPTO
+OTHER
 }
 
 model Refund {
- id            String       @id @default(cuid())
- amount        Float
- reason        String
- status        RefundStatus @default(PROCESSING)
- 
- // Refund details
- processorId   String?      // ID from payment processor
- processorFee  Float?       @default(0)
- metadata      Json?
- notes         String?
- 
- // Relations
- user          User         @relation(fields: [userId], references: [id])
- userId        String
- company       Company      @relation(fields: [companyId], references: [id])
- companyId     String
- reservation   Reservation  @relation(fields: [reservationId], references: [id])
- reservationId String
- payment       Payment      @relation(fields: [paymentId], references: [id])
- paymentId     String
+id            String       @id @default(cuid())
+amount        Float
+reason        String
+status        RefundStatus @default(PROCESSING)
 
- createdAt     DateTime     @default(now())
- updatedAt     DateTime     @updatedAt
+// Refund details
+processorId   String?      // ID from payment processor
+processorFee  Float?       @default(0)
+metadata      Json?
+notes         String?
 
- @@index([userId])
- @@index([companyId])
- @@index([reservationId])
- @@index([paymentId])
- @@index([status])
+// Relations
+user          User         @relation(fields: [userId], references: [id])
+userId        String
+company       Company      @relation(fields: [companyId], references: [id])
+companyId     String
+reservation   Reservation  @relation(fields: [reservationId], references: [id])
+reservationId String
+payment       Payment      @relation(fields: [paymentId], references: [id])
+paymentId     String
+
+createdAt     DateTime     @default(now())
+updatedAt     DateTime     @updatedAt
+
+@@index([userId])
+@@index([companyId])
+@@index([reservationId])
+@@index([paymentId])
+@@index([status])
 }
 
 enum ReservationStatus {
- PENDING
- CONFIRMED
- CANCELLED
- COMPLETED
- EXPIRED
- NO_SHOW
- CHECKED_IN
+PENDING
+CONFIRMED
+CANCELLED
+COMPLETED
+EXPIRED
+NO_SHOW
+CHECKED_IN
 }
 
 enum PaymentStatus {
- PENDING
- COMPLETED
- FAILED
- REFUNDED
- PARTIALLY_REFUNDED
- DISPUTED
- EXPIRED
- PAID
+PENDING
+COMPLETED
+FAILED
+REFUNDED
+PARTIALLY_REFUNDED
+DISPUTED
+EXPIRED
+PAID
 }
 
 enum RefundStatus {
- NONE
- REQUESTED
- PROCESSING
- COMPLETED
- REJECTED
- PARTIAL
+NONE
+REQUESTED
+PROCESSING
+COMPLETED
+REJECTED
+PARTIAL
 }
 
 model Ticket {
- id            String       @id @default(cuid())
- ticketNumber  String       @unique
- passengerName String
- passengerPhone String
- passengerEmail String?
- seatNumber    Int
- price         Float
- status        TicketStatus @default(VALID)
- 
- // Ticket details
- qrCode        String?
- qrHash        String?
- barcode       String?
- issueDate     DateTime     @default(now())
- validUntil    DateTime?
- usedAt        DateTime?
- 
- // Verification
- verificationCode String?
- isVerified    Boolean      @default(false)
- verifiedBy    String?
- verifiedAt    DateTime?
- 
- // Passenger details
- passengerType PassengerType @default(ADULT)
- passengerDetails Json?
- 
- // Boarding details
- boardingPoint String?
- alightingPoint String?
- 
- // Additional services
- hasLuggage    Boolean      @default(false)
- luggageDetails Json?
- specialServices String[]   @default([])
+id            String       @id @default(cuid())
+ticketNumber  String       @unique
+passengerName String
+passengerPhone String
+passengerEmail String?
+seatNumber    Int
+price         Float
+status        TicketStatus @default(VALID)
 
- trip          Trip         @relation(fields: [tripId], references: [id])
- tripId        String
- user          User?        @relation(fields: [userId], references: [id])
- userId        String?
- company       Company      @relation(fields: [companyId], references: [id])
- companyId     String
- reservation   Reservation? @relation(fields: [reservationId], references: [id])
- reservationId String?
+// Ticket details
+qrCode        String?
+qrHash        String?
+barcode       String?
+issueDate     DateTime     @default(now())
+validUntil    DateTime?
+usedAt        DateTime?
 
- createdAt     DateTime     @default(now())
- updatedAt     DateTime     @updatedAt
+// Verification
+verificationCode String?
+isVerified    Boolean      @default(false)
+verifiedBy    String?
+verifiedAt    DateTime?
 
- @@index([userId])
- @@index([tripId])
- @@index([companyId])
- @@index([reservationId])
- @@index([status])
- @@index([ticketNumber])
- @@index([qrCode])
- @@index([qrHash])
+// Passenger details
+passengerType PassengerType @default(ADULT)
+passengerDetails Json?
+
+// Boarding details
+boardingPoint String?
+alightingPoint String?
+
+// Additional services
+hasLuggage    Boolean      @default(false)
+luggageDetails Json?
+specialServices String[]   @default([])
+
+trip          Trip         @relation(fields: [tripId], references: [id])
+tripId        String
+user          User?        @relation(fields: [userId], references: [id])
+userId        String?
+company       Company      @relation(fields: [companyId], references: [id])
+companyId     String
+reservation   Reservation? @relation(fields: [reservationId], references: [id])
+reservationId String?
+
+createdAt     DateTime     @default(now())
+updatedAt     DateTime     @updatedAt
+
+@@index([userId])
+@@index([tripId])
+@@index([companyId])
+@@index([reservationId])
+@@index([status])
+@@index([ticketNumber])
+@@index([qrCode])
+@@index([qrHash])
 }
 
 enum PassengerType {
- ADULT
- CHILD
- SENIOR
- STUDENT
- DISABLED
- MILITARY
+ADULT
+CHILD
+SENIOR
+STUDENT
+DISABLED
+MILITARY
 }
 
 enum TicketStatus {
- VALID
- USED
- CANCELLED
- EXPIRED
- REFUNDED
- CHECKED_IN
+VALID
+USED
+CANCELLED
+EXPIRED
+REFUNDED
+CHECKED_IN
+RESERVED
 }
 
 model Review {
- id        String   @id @default(cuid())
- rating    Int      // 1-5
- comment   String?
- 
- // Review details
- serviceRating     Int? // 1-5
- comfortRating     Int? // 1-5
- punctualityRating Int? // 1-5
- driverRating      Int? // 1-5
- 
- // Review metadata
- isVerified Boolean @default(false)
- isPublic   Boolean @default(true)
- helpfulCount Int   @default(0)
- reportCount Int    @default(0)
- 
- // Trip details for context
- tripDate   DateTime?
- routeName  String?
- tripId     String?
- 
- // Response from company
- response   String?
- responseDate DateTime?
- responseBy String?
+id        String   @id @default(cuid())
+rating    Int      // 1-5
+comment   String?
 
- user      User     @relation(fields: [userId], references: [id])
- userId    String
- company   Company  @relation(fields: [companyId], references: [id])
- companyId String
+// Review details
+serviceRating     Int? // 1-5
+comfortRating     Int? // 1-5
+punctualityRating Int? // 1-5
+driverRating      Int? // 1-5
 
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+// Review metadata
+isVerified Boolean @default(false)
+isPublic   Boolean @default(true)
+helpfulCount Int   @default(0)
+reportCount Int    @default(0)
 
- @@index([userId])
- @@index([companyId])
- @@index([rating])
- @@index([createdAt])
+// Trip details for context
+tripDate   DateTime?
+routeName  String?
+tripId     String?
+
+// Response from company
+response   String?
+responseDate DateTime?
+responseBy String?
+
+user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+userId    String
+company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+companyId String
+
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+@@index([userId])
+@@index([companyId])
+@@index([rating])
+@@index([createdAt])
 }
 
 model Notification {
- id        String           @id @default(cuid())
- title     String
- message   String
- type      NotificationType
- isRead    Boolean          @default(false)
- 
- // Notification details
- priority  NotificationPriority @default(NORMAL)
- category  String?
- actionUrl String?
- imageUrl  String?
- 
- // Delivery info
- sentAt    DateTime?
- readAt    DateTime?
- 
- // Metadata
- metadata  Json?
- 
- // Related entities
- relatedEntityType String?
- relatedEntityId   String?
+id        String           @id @default(cuid())
+title     String
+message   String
+type      NotificationType
+isRead    Boolean          @default(false)
 
- user      User             @relation(fields: [userId], references: [id])
- userId    String
+// Notification details
+priority  NotificationPriority @default(NORMAL)
+category  String?
+actionUrl String?
+imageUrl  String?
 
- createdAt DateTime         @default(now())
- updatedAt DateTime         @updatedAt
+// Delivery info
+sentAt    DateTime?
+readAt    DateTime?
 
- @@index([userId])
- @@index([isRead])
- @@index([type])
- @@index([createdAt])
+// Metadata
+metadata  Json?
+
+// Related entities
+relatedEntityType String?
+relatedEntityId   String?
+
+user      User             @relation(fields: [userId], references: [id])
+userId    String
+
+createdAt DateTime         @default(now())
+updatedAt DateTime         @updatedAt
+
+@@index([userId])
+@@index([isRead])
+@@index([type])
+@@index([createdAt])
 }
 
 enum NotificationType {
- TRIP_REMINDER
- PAYMENT_CONFIRMATION
- BOOKING_CONFIRMATION
- TRIP_CANCELLED
- TRIP_DELAYED
- TRIP_STATUS
- MAINTENANCE_ALERT
- SYSTEM_UPDATE
- PROMOTION
- REVIEW_REQUEST
- REFUND_PROCESSED
- ACCOUNT_UPDATE
- PRICE_DROP
- COMPANY_NEWS
+TRIP_REMINDER
+PAYMENT_CONFIRMATION
+BOOKING_CONFIRMATION
+TRIP_CANCELLED
+TRIP_DELAYED
+TRIP_STATUS
+MAINTENANCE_ALERT
+SYSTEM_UPDATE
+PROMOTION
+REVIEW_REQUEST
+REFUND_PROCESSED
+ACCOUNT_UPDATE
+PRICE_DROP
+COMPANY_NEWS
 }
 
 enum NotificationPriority {
- LOW
- NORMAL
- HIGH
- URGENT
+LOW
+NORMAL
+HIGH
+URGENT
 }
 
 model ActivityLog {
- id          String   @id @default(cuid())
- action      String
- description String?
- ipAddress   String?
- userAgent   String?
- 
- // Enhanced logging
- method      String?  // HTTP method
- endpoint    String?  // API endpoint
- statusCode  Int?     // Response status
- duration    Int?     // Request duration in ms
- 
- // Context
- sessionId   String?
- deviceInfo  Json?
- location    Json?
- 
- // Related entity
- entityType  String?
- entityId    String?
+id          String   @id @default(cuid())
+action      String
+description String?
+ipAddress   String?
+userAgent   String?
 
- user        User     @relation(fields: [userId], references: [id])
- userId      String
+// Enhanced logging
+method      String?  // HTTP method
+endpoint    String?  // API endpoint
+statusCode  Int?     // Response status
+duration    Int?     // Request duration in ms
 
- createdAt   DateTime @default(now())
+// Context
+sessionId   String?
+deviceInfo  Json?
+location    Json?
 
- @@index([userId])
- @@index([action])
- @@index([createdAt])
- @@index([entityType, entityId])
+// Related entity
+entityType  String?
+entityId    String?
+
+user        User     @relation(fields: [userId], references: [id])
+userId      String
+
+createdAt   DateTime @default(now())
+
+@@index([userId])
+@@index([action])
+@@index([createdAt])
+@@index([entityType, entityId])
 }
