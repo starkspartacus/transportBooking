@@ -2,284 +2,209 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   MapPin,
   Clock,
   Users,
-  Calendar,
-  DollarSign,
-  Bus,
-  Wifi,
-  Zap,
-  Coffee,
-  Music,
   Tv,
+  Wifi,
+  AirVent,
+  Car,
+  Luggage,
+  Coffee,
 } from "lucide-react";
+import { type TripWithDetails } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { format, intervalToDuration } from "date-fns";
-import { fr } from "date-fns/locale"; // Import French locale
-import type { TripWithDetails } from "@/lib/types";
-import { TripStatus } from "@prisma/client";
-import { useState, useEffect } from "react";
-import { Duration } from "date-fns";
 
 interface TripCardProps {
   trip: TripWithDetails;
-  showBookingButton?: boolean;
 }
 
-export default function TripCard({
-  trip,
-  showBookingButton = true,
-}: TripCardProps) {
-  const [timeRemaining, setTimeRemaining] = useState<Duration | null>(null);
+const FeatureIcon = ({ feature }: { feature: string }) => {
+  switch (feature.toLowerCase()) {
+    case "tv":
+      return <Tv className="mr-1 h-4 w-4" />;
+    case "wifi":
+      return <Wifi className="mr-1 h-4 w-4" />;
+    case "climatisation":
+      return <AirVent className="mr-1 h-4 w-4" />;
+    case "sièges inclinables":
+      return <Car className="mr-1 h-4 w-4" />; // Placeholder, consider better icon
+    case "bagages":
+      return <Luggage className="mr-1 h-4 w-4" />;
+    case "collation":
+      return <Coffee className="mr-1 h-4 w-4" />;
+    default:
+      return null;
+  }
+};
+
+export function TripCard({ trip }: TripCardProps) {
+  const departureTime = new Date(trip.departureTime);
+  const arrivalTime = new Date(trip.arrivalTime);
+
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
+  const [isDepartingSoon, setIsDepartingSoon] = useState(false);
 
   useEffect(() => {
-    const calculateTimeRemaining = () => {
+    const calculateTimeLeft = () => {
       const now = new Date();
-      const departure = new Date(trip.departureTime);
+      const diff = departureTime.getTime() - now.getTime();
 
-      if (trip.status === TripStatus.DEPARTING_SOON && departure > now) {
-        setTimeRemaining(intervalToDuration({ start: now, end: departure }));
+      if (diff > 0 && diff <= 40 * 60 * 1000) {
+        // 40 minutes
+        setIsDepartingSoon(true);
+        const minutes = Math.floor(diff / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${minutes}m ${seconds}s`);
       } else {
-        setTimeRemaining(null);
+        setIsDepartingSoon(false);
+        setTimeLeft(null);
       }
     };
 
-    calculateTimeRemaining(); // Initial calculation
-    const timer = setInterval(calculateTimeRemaining, 1000); // Update every second
+    calculateTimeLeft();
+    const timer = setInterval(calculateTimeLeft, 1000);
 
-    return () => clearInterval(timer); // Cleanup on unmount
-  }, [trip.departureTime, trip.status]);
+    return () => clearInterval(timer);
+  }, [departureTime]);
 
-  const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h${mins > 0 ? mins.toString().padStart(2, "0") : ""}`;
-  };
-
-  const formatDateTime = (dateTime: Date | string) => {
-    const dateObj =
-      typeof dateTime === "string" ? new Date(dateTime) : dateTime;
-    return format(dateObj, "dd MMM yyyy HH:mm", { locale: fr });
-  };
-
-  const formatTime = (dateTime: Date | string) => {
-    const dateObj =
-      typeof dateTime === "string" ? new Date(dateTime) : dateTime;
-    return format(dateObj, "HH:mm");
-  };
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("fr-FR").format(price);
-  };
-
-  const getFeatureIcon = (feature: string) => {
-    const featureLower = feature.toLowerCase();
-    if (featureLower.includes("wifi")) return <Wifi className="h-3 w-3" />;
-    if (featureLower.includes("usb") || featureLower.includes("charge"))
-      return <Zap className="h-3 w-3" />;
-    if (featureLower.includes("cafe") || featureLower.includes("snack"))
-      return <Coffee className="h-3 w-3" />;
-    if (featureLower.includes("music") || featureLower.includes("audio"))
-      return <Music className="h-3 w-3" />;
-    if (featureLower.includes("tv") || featureLower.includes("ecran"))
-      return <Tv className="h-3 w-3" />;
-    return <Bus className="h-3 w-3" />;
-  };
-
-  const getStatusColor = (status: TripStatus) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case TripStatus.SCHEDULED:
-        return "bg-green-100 text-green-800";
-      case TripStatus.DEPARTING_SOON:
-        return "bg-yellow-100 text-yellow-800"; // New color for departing soon
-      case TripStatus.CANCELLED:
-        return "bg-red-100 text-red-800";
-      case TripStatus.DELAYED:
-        return "bg-orange-100 text-orange-800";
-      case TripStatus.IN_TRANSIT:
-        return "bg-blue-100 text-blue-800";
-      case TripStatus.DEPARTED:
-        return "bg-gray-100 text-gray-800"; // Color for departed trips
+      case "SCHEDULED":
+        return <Badge variant="outline">Programmé</Badge>;
+      case "BOARDING":
+        return <Badge className="bg-blue-500 text-white">Embarquement</Badge>;
+      case "DEPARTING_SOON":
+        return (
+          <Badge className="bg-indigo-500 text-white">Départ Bientôt</Badge>
+        );
+      case "DEPARTED":
+        return <Badge className="bg-yellow-500 text-white">Parti</Badge>;
+      case "IN_TRANSIT":
+        return <Badge className="bg-purple-500 text-white">En Transit</Badge>;
+      case "ARRIVED":
+        return <Badge className="bg-gray-500 text-white">Arrivé</Badge>;
+      case "CANCELLED":
+        return <Badge variant="destructive">Annulé</Badge>;
+      case "DELAYED":
+        return <Badge className="bg-orange-500 text-white">Retardé</Badge>;
+      case "COMPLETED":
+        return <Badge className="bg-green-700 text-white">Terminé</Badge>;
+      case "MAINTENANCE":
+        return <Badge className="bg-red-700 text-white">Maintenance</Badge>;
       default:
-        return "bg-blue-100 text-blue-800";
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
-
-  const getStatusText = (status: TripStatus) => {
-    switch (status) {
-      case TripStatus.SCHEDULED:
-        return "Disponible";
-      case TripStatus.DEPARTING_SOON:
-        return "Départ Bientôt";
-      case TripStatus.CANCELLED:
-        return "Annulé";
-      case TripStatus.DELAYED:
-        return "Retardé";
-      case TripStatus.IN_TRANSIT:
-        return "En Transit";
-      case TripStatus.DEPARTED:
-        return "Parti";
-      case TripStatus.ARRIVED:
-        return "Arrivé";
-      case TripStatus.COMPLETED:
-        return "Terminé";
-      default:
-        return status;
-    }
-  };
-
-  const availableSeats =
-    trip.availableSeats !== undefined ? trip.availableSeats : trip.bus.capacity;
-
-  const isBookable = trip.status === TripStatus.SCHEDULED && availableSeats > 0;
 
   return (
-    <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500">
+    <Card className="w-full overflow-hidden rounded-lg shadow-md transition-all hover:shadow-lg">
       <CardContent className="p-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          {/* Trip Info */}
-          <div className="flex-1 space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-blue-600" />
-                  <span className="font-bold text-lg">
-                    {trip.route.departureLocation}
-                  </span>
-                  <span className="text-gray-400 text-xl">→</span>
-                  <span className="font-bold text-lg">
-                    {trip.route.arrivalLocation}
-                  </span>
-                </div>
-              </div>
-              <Badge className={getStatusColor(trip.status)}>
-                {getStatusText(trip.status)}
-              </Badge>
-            </div>
-
-            {/* Company and Bus Info */}
-            <div className="flex items-center gap-4">
-              <Badge variant="secondary" className="font-medium">
-                {trip.company.name} {/* Display company name */}
-              </Badge>
-              <span className="text-sm text-gray-600">
-                {trip.bus.brand} {trip.bus.model}
-              </span>
-            </div>
-
-            {/* Time and Duration */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-gray-500" />
-                <div>
-                  <span className="font-medium">
-                    {formatTime(trip.departureTime)} -{" "}
-                    {formatTime(trip.arrivalTime)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-500" />
-                <span>Départ: {formatDateTime(trip.departureTime)}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-500" />
-                <span>Arrivée: {formatDateTime(trip.arrivalTime)}</span>
-              </div>
-            </div>
-
-            {/* Features */}
-            {trip.bus.features && trip.bus.features.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {trip.bus.features
-                  .slice(0, 5)
-                  .map((feature: string, index: number) => (
-                    <Badge
-                      key={index}
-                      variant="outline"
-                      className="text-xs flex items-center gap-1"
-                    >
-                      {getFeatureIcon(feature)}
-                      {feature}
-                    </Badge>
-                  ))}
-                {trip.bus.features.length > 5 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{trip.bus.features.length - 5} autres
-                  </Badge>
-                )}
-              </div>
-            )}
-
-            {/* Availability Warning / Departing Soon Countdown */}
-            {trip.status === TripStatus.DEPARTING_SOON && timeRemaining && (
-              <div className="flex items-center gap-2 text-yellow-700 text-sm font-semibold">
-                <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
-                Départ dans:{" "}
-                {timeRemaining.hours ? `${timeRemaining.hours}h ` : ""}
-                {timeRemaining.minutes ? `${timeRemaining.minutes}m ` : ""}
-                {timeRemaining.seconds ? `${timeRemaining.seconds}s` : ""}
-              </div>
-            )}
-            {availableSeats <= 5 &&
-              availableSeats > 0 &&
-              trip.status === TripStatus.SCHEDULED && (
-                <div className="flex items-center gap-2 text-orange-600 text-sm">
-                  <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
-                  Plus que {availableSeats} place{availableSeats > 1 ? "s" : ""}{" "}
-                  disponible
-                  {availableSeats > 1 ? "s" : ""} !
-                </div>
-              )}
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-gray-500" />
-              <span>
-                {availableSeats} / {trip.bus.capacity} places
-              </span>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center space-x-3">
+            <MapPin className="h-6 w-6 text-primary" />
+            <div className="text-xl font-semibold text-gray-800">
+              {trip.route.departureLocation} <span className="mx-1">→</span>{" "}
+              {trip.route.arrivalLocation}
             </div>
           </div>
-
-          {/* Price and Action */}
-          <div className="flex flex-col items-end gap-4 min-w-[200px]">
-            <div className="text-right">
-              <div className="flex items-center gap-1 text-3xl font-bold text-green-600">
-                <DollarSign className="h-6 w-6" />
-                {formatPrice(trip.route.basePrice)}
-              </div>
-              <p className="text-sm text-gray-500">FCFA par personne</p>
-              {trip.route.distance && (
-                <p className="text-xs text-gray-400">
-                  {trip.route.distance} km
-                </p>
-              )}
-            </div>
-
-            {showBookingButton && (
-              <div className="w-full">
-                {isBookable ? (
-                  <Link href={`/booking/${trip.id}`} className="block">
-                    <Button
-                      className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 transition-all duration-300"
-                      size="lg"
-                    >
-                      Réserver maintenant
-                    </Button>
-                  </Link>
-                ) : (
-                  <Button disabled className="w-full" size="lg">
-                    {availableSeats === 0
-                      ? "Complet"
-                      : getStatusText(trip.status)}
-                  </Button>
-                )}
-              </div>
+          <div className="flex flex-col items-end">
+            {isDepartingSoon && timeLeft ? (
+              <Badge className="mb-1 bg-indigo-600 text-white">
+                Départ dans {timeLeft}
+              </Badge>
+            ) : (
+              getStatusBadge(trip.status)
             )}
+            <div className="text-2xl font-bold text-green-600">
+              {trip.currentPrice.toLocaleString()} FCFA
+            </div>
+            <p className="text-sm text-gray-500">par personne</p>
           </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-2 text-sm text-gray-600 md:grid-cols-2">
+          <div className="flex items-center">
+            <Clock className="mr-2 h-4 w-4" />
+            <span>
+              Départ:{" "}
+              {departureTime.toLocaleDateString("fr-FR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              })}{" "}
+              à{" "}
+              {departureTime.toLocaleTimeString("fr-FR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+          <div className="flex items-center">
+            <Clock className="mr-2 h-4 w-4" />
+            <span>
+              Arrivée:{" "}
+              {arrivalTime.toLocaleDateString("fr-FR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              })}{" "}
+              à{" "}
+              {arrivalTime.toLocaleTimeString("fr-FR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+          <div className="flex items-center">
+            <Users className="mr-2 h-4 w-4" />
+            <span>{trip.availableSeats} places disponibles</span>
+          </div>
+          <div className="flex items-center">
+            <img
+              src={
+                trip.company.logo ||
+                "/placeholder.svg?height=20&width=20&text=Logo"
+              }
+              alt={trip.company.name}
+              className="mr-2 h-5 w-5 rounded-full object-contain"
+            />
+            <span>{trip.company.name}</span>
+          </div>
+        </div>
+
+        {trip.bus.features && trip.bus.features.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {trip.bus.features.map((feature, index) => (
+              <Badge
+                key={index}
+                variant="secondary"
+                className="flex items-center gap-1"
+              >
+                <FeatureIcon feature={feature} />
+                {feature}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <Link href={`/trips/${trip.id}`} passHref>
+            <Button
+              variant="outline"
+              className="border-primary text-primary hover:bg-primary/10"
+            >
+              Détails
+            </Button>
+          </Link>
+          <Link href={`/booking/${trip.id}`} passHref>
+            <Button className="bg-primary text-white hover:bg-primary/90">
+              Réserver maintenant
+            </Button>
+          </Link>
         </div>
       </CardContent>
     </Card>

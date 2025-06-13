@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import TripCard from "@/components/search/trip-card";
+import { TripCard } from "@/components/search/trip-card";
 import type { TripWithDetails, SearchFilters } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -41,9 +41,15 @@ export default function SearchPage() {
   const [filters, setFilters] = useState<SearchFilters>({
     from: searchParams?.get("from") || "",
     to: searchParams?.get("to") || "",
-    date: searchParams?.get("date") || format(new Date(), "yyyy-MM-dd"),
-    minPrice: searchParams?.get("minPrice") || "",
-    maxPrice: searchParams?.get("maxPrice") || "",
+    date: searchParams?.get("date")
+      ? new Date(searchParams.get("date") as string)
+      : new Date(),
+    minPrice: searchParams?.get("minPrice")
+      ? Number(searchParams.get("minPrice"))
+      : 0,
+    maxPrice: searchParams?.get("maxPrice")
+      ? Number(searchParams.get("maxPrice"))
+      : 0,
     company: searchParams?.get("company") || "all",
     sortBy: searchParams?.get("sortBy") || "departure",
     departureCountry: searchParams?.get("departureCountry") || "",

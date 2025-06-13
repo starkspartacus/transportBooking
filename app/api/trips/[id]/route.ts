@@ -34,6 +34,8 @@ export async function GET(
             estimatedDuration: true,
             departureLocation: true,
             arrivalLocation: true,
+            departureCountry: true,
+            arrivalCountry: true,
           },
         },
       },
@@ -43,11 +45,13 @@ export async function GET(
       return NextResponse.json({ error: "Voyage non trouvé" }, { status: 404 });
     }
 
-    // Ensure we have departure and arrival cities
+    // Ensure we have departure and arrival cities/countries
     const tripData = {
       ...trip,
       departureCity: trip.route?.departureLocation || "",
       arrivalCity: trip.route?.arrivalLocation || "",
+      departureCountry: trip.route?.departureCountry || "",
+      arrivalCountry: trip.route?.arrivalCountry || "",
     };
 
     return NextResponse.json({ trip: tripData });

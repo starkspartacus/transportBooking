@@ -97,7 +97,7 @@ export type {
   PrismaPassengerType as PassengerType,
   PrismaTicketStatus as TicketStatus,
   PrismaNotificationType as NotificationType,
-  PrismaNotificationPriority,
+  PrismaNotificationPriority as NotificationPriority,
   PrismaLoyaltyProgram as LoyaltyProgram,
 };
 
@@ -722,12 +722,13 @@ export interface DashboardStats {
 }
 
 // --- Search and Filter Types (Updated to reflect new schema fields) ---
+
 export interface SearchFilters {
   from?: string; // Corresponds to departureLocation
   to?: string; // Corresponds to arrivalLocation
-  date?: string; // For single date input (YYYY-MM-DD)
-  minPrice?: string;
-  maxPrice?: string;
+  date?: Date; // For single date input (YYYY-MM-DD)
+  minPrice?: number;
+  maxPrice?: number;
   company?: string; // Company ID
   sortBy?: string;
   departureCountry?: string; // New
@@ -745,6 +746,8 @@ export type TripWithDetails = Prisma.TripGetPayload<{
         name: true;
         departureLocation: true;
         arrivalLocation: true;
+        departureCountry: true;
+        arrivalCountry: true;
         distance: true;
         estimatedDuration: true;
         basePrice: true;
@@ -753,17 +756,17 @@ export type TripWithDetails = Prisma.TripGetPayload<{
     bus: {
       select: {
         id: true;
-        plateNumber: true;
         model: true;
+        plateNumber: true;
+        brand: true;
         capacity: true;
-        features: true; // Ensure features are selected
-        brand: true; // Ensure brand is selected
+        features: true;
       };
     };
     company: {
       select: {
         id: true;
-        name: true; // Ensure company name is selected
+        name: true;
         logo: true;
         rating: true;
       };
@@ -869,3 +872,11 @@ export type CompanyWithDetails = Prisma.CompanyGetPayload<{
     refunds: true;
   };
 }>;
+
+export interface WeatherData {
+  temperature: number;
+  description: string;
+  icon: string; // OpenWeatherMap icon code
+  city: string;
+  country: string;
+}
