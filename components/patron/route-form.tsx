@@ -33,8 +33,8 @@ const routeFormSchema = z.object({
   description: z.string().optional(),
   departureCountry: z.string().min(1, "Pays de départ requis"),
   arrivalCountry: z.string().min(1, "Pays d'arrivée requis"),
-  origin: z.string().min(1, "Ville de départ requise"),
-  destination: z.string().min(1, "Ville d'arrivée requise"),
+  departureLocation: z.string().min(1, "Ville de départ requise"),
+  arrivalLocation: z.string().min(1, "Ville d'arrivée requise"),
   distance: z.coerce.number().positive("La distance doit être positive"),
   estimatedDuration: z.coerce.number().positive("La durée doit être positive"),
   basePrice: z.coerce.number().positive("Le prix doit être positif"),
@@ -65,8 +65,8 @@ export default function RouteForm({
       description: initialData?.description || "",
       departureCountry: initialData?.departureCountry || "CI",
       arrivalCountry: initialData?.arrivalCountry || "CI",
-      origin: initialData?.departureLocation || "",
-      destination: initialData?.arrivalLocation || "",
+      departureLocation: initialData?.departureLocation || "",
+      arrivalLocation: initialData?.arrivalLocation || "",
       distance: initialData?.distance || 0,
       estimatedDuration: initialData?.estimatedDuration || 0,
       basePrice: initialData?.basePrice || 0,
@@ -81,9 +81,10 @@ export default function RouteForm({
     defaultValues: defaultValues(),
   });
 
-  // Memoize the watch function to prevent re-renders
+  // Watch values for real-time calculation
   const watchDistance = form.watch("distance");
   const watchDuration = form.watch("estimatedDuration");
+  const watchBasePrice = form.watch("basePrice");
 
   // Calculate speed only when distance or duration changes
   const averageSpeed = useCallback(() => {
@@ -100,13 +101,13 @@ export default function RouteForm({
   // Calculate price per km only when distance or price changes
   const pricePerKm = useCallback(() => {
     const distance = Number.parseFloat(watchDistance.toString());
-    const price = Number.parseFloat(form.watch("basePrice").toString());
+    const price = Number.parseFloat(watchBasePrice.toString()); // Use watchBasePrice
 
     if (distance > 0 && price > 0) {
       return Math.round((price / distance) * 10) / 10;
     }
     return 0;
-  }, [watchDistance, form]);
+  }, [watchDistance, watchBasePrice]); // Add watchBasePrice to dependencies
 
   const onSubmit = async (data: RouteFormValues) => {
     setIsSubmitting(true);
@@ -288,7 +289,7 @@ export default function RouteForm({
 
             <FormField
               control={form.control}
-              name="origin"
+              name="departureLocation"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Ville de départ *</FormLabel>
@@ -302,7 +303,7 @@ export default function RouteForm({
 
             <FormField
               control={form.control}
-              name="destination"
+              name="arrivalLocation"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Ville d'arrivée *</FormLabel>
@@ -354,11 +355,7 @@ export default function RouteForm({
                       min="0"
                       step="0.1"
                       {...field}
-                      onChange={(e) => {
-                        field.onChange(e);
-                        // Force re-render for calculated fields
-                        form.trigger("distance");
-                      }}
+                      onChange={(e) => field.onChange(Number(e.target.value))} // Ensure numeric value
                     />
                   </FormControl>
                   <FormMessage />
@@ -377,11 +374,7 @@ export default function RouteForm({
                       type="number"
                       min="0"
                       {...field}
-                      onChange={(e) => {
-                        field.onChange(e);
-                        // Force re-render for calculated fields
-                        form.trigger("estimatedDuration");
-                      }}
+                      onChange={(e) => field.onChange(Number(e.target.value))} // Ensure numeric value
                     />
                   </FormControl>
                   <FormMessage />
@@ -400,11 +393,7 @@ export default function RouteForm({
                       type="number"
                       min="0"
                       {...field}
-                      onChange={(e) => {
-                        field.onChange(e);
-                        // Force re-render for calculated fields
-                        form.trigger("basePrice");
-                      }}
+                      onChange={(e) => field.onChange(Number(e.target.value))} // Ensure numeric value
                     />
                   </FormControl>
                   <FormMessage />

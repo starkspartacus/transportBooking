@@ -1,47 +1,53 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useSocket } from "@/components/ui/socket-provider"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { MapPin, Clock, Users, CreditCard } from "lucide-react"
-import { useSession } from "next-auth/react"
+import { useState } from "react";
+import { useSocket } from "@/components/ui/socket-provider";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { MapPin, Clock, Users, CreditCard } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 interface Trip {
-  id: string
-  departureTime: string
-  arrivalTime: string
-  availableSeats: number
+  id: string;
+  departureTime: Date;
+  arrivalTime: Date;
+  availableSeats: number;
   route: {
-    name: string
-    price: number
-    departure: { name: string }
-    arrival: { name: string }
-  }
+    id: string; // Ajouté pour correspondre à TripWithDetails
+    name: string;
+    basePrice: number; // Changé de 'price' à 'basePrice'
+    departureLocation: string; // Changé de 'departure: { name: string }' à 'departureLocation: string'
+    arrivalLocation: string; // Changé de 'arrival: { name: string }' à 'arrivalLocation: string'
+  };
   bus: {
-    plateNumber: string
-    capacity: number
-  }
+    plateNumber: string;
+    capacity: number;
+  };
 }
 
 interface BookingFormProps {
-  trip: Trip
-  onBookingComplete: (booking: any) => void
+  trip: Trip;
+  onBookingComplete: (booking: any) => void;
 }
 
-export default function BookingForm({ trip, onBookingComplete }: BookingFormProps) {
-  const { data: session } = useSession()
-  const { socket } = useSocket()
-  const [selectedSeat, setSelectedSeat] = useState<string>("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "MOBILE_MONEY">("CASH")
+export default function BookingForm({
+  trip,
+  onBookingComplete,
+}: BookingFormProps) {
+  const { data: session } = useSession();
+  const { socket } = useSocket();
+  const [selectedSeat, setSelectedSeat] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<
+    "CASH" | "CARD" | "MOBILE_MONEY"
+  >("CASH");
 
   const handleBooking = async () => {
-    if (!session?.user || !selectedSeat) return
+    if (!session?.user || !selectedSeat) return;
 
-    setIsLoading(true)
+    setIsLoading(true);
     try {
       const response = await fetch("/api/bookings", {
         method: "POST",
@@ -51,9 +57,9 @@ export default function BookingForm({ trip, onBookingComplete }: BookingFormProp
           seatNumber: selectedSeat,
           paymentMethod,
         }),
-      })
+      });
 
-      const booking = await response.json()
+      const booking = await response.json();
 
       if (response.ok) {
         // Emit socket event
@@ -62,21 +68,24 @@ export default function BookingForm({ trip, onBookingComplete }: BookingFormProp
             ...booking,
             userName: session.user.name,
             companyId: booking.companyId,
-          })
+          });
         }
 
-        onBookingComplete(booking)
+        onBookingComplete(booking);
       }
     } catch (error) {
-      console.error("Booking error:", error)
+      console.error("Booking error:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const generateSeatNumbers = (capacity: number) => {
-    return Array.from({ length: capacity }, (_, i) => `${Math.floor(i / 4) + 1}${String.fromCharCode(65 + (i % 4))}`)
-  }
+    return Array.from(
+      { length: capacity },
+      (_, i) => `${Math.floor(i / 4) + 1}${String.fromCharCode(65 + (i % 4))}`
+    );
+  };
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -92,13 +101,19 @@ export default function BookingForm({ trip, onBookingComplete }: BookingFormProp
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-600">Départ</p>
-              <p className="font-medium">{trip.route.departure.name}</p>
-              <p className="text-sm text-gray-600">{new Date(trip.departureTime).toLocaleString()}</p>
+              <p className="font-medium">{trip.route.departureLocation}</p>{" "}
+              {/* Mis à jour */}
+              <p className="text-sm text-gray-600">
+                {new Date(trip.departureTime).toLocaleString()}
+              </p>
             </div>
             <div>
               <p className="text-sm text-gray-600">Arrivée</p>
-              <p className="font-medium">{trip.route.arrival.name}</p>
-              <p className="text-sm text-gray-600">{new Date(trip.arrivalTime).toLocaleString()}</p>
+              <p className="font-medium">{trip.route.arrivalLocation}</p>{" "}
+              {/* Mis à jour */}
+              <p className="text-sm text-gray-600">
+                {new Date(trip.arrivalTime).toLocaleString()}
+              </p>
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
@@ -112,7 +127,9 @@ export default function BookingForm({ trip, onBookingComplete }: BookingFormProp
                 {trip.bus.plateNumber}
               </Badge>
             </div>
-            <div className="text-2xl font-bold text-green-600">{trip.route.price.toLocaleString()} FCFA</div>
+            <div className="text-2xl font-bold text-green-600">
+              {trip.route.basePrice.toLocaleString()} FCFA {/* Mis à jour */}
+            </div>
           </div>
         </div>
 
@@ -177,12 +194,19 @@ export default function BookingForm({ trip, onBookingComplete }: BookingFormProp
               </div>
               <div className="flex justify-between">
                 <span>Prix:</span>
-                <span className="font-medium">{trip.route.price.toLocaleString()} FCFA</span>
+                <span className="font-medium">
+                  {trip.route.basePrice.toLocaleString()} FCFA{" "}
+                  {/* Mis à jour */}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>Mode de paiement:</span>
                 <span className="font-medium">
-                  {paymentMethod === "CASH" ? "Espèces" : paymentMethod === "CARD" ? "Carte" : "Mobile Money"}
+                  {paymentMethod === "CASH"
+                    ? "Espèces"
+                    : paymentMethod === "CARD"
+                    ? "Carte"
+                    : "Mobile Money"}
                 </span>
               </div>
             </div>
@@ -190,10 +214,14 @@ export default function BookingForm({ trip, onBookingComplete }: BookingFormProp
         )}
 
         {/* Book Button */}
-        <Button className="w-full h-12 text-lg" onClick={handleBooking} disabled={!selectedSeat || isLoading}>
+        <Button
+          className="w-full h-12 text-lg"
+          onClick={handleBooking}
+          disabled={!selectedSeat || isLoading}
+        >
           {isLoading ? "Réservation en cours..." : "Confirmer la réservation"}
         </Button>
       </CardContent>
     </Card>
-  )
+  );
 }

@@ -402,7 +402,7 @@ export interface RouteForm {
   borderCrossings?: string[];
   departureCoordinates?: any; // Adjust as needed for specific JSON structure
   arrivalCoordinates?: any; // Adjust as needed for specific JSON structure
-  routePath?: any; // Adjust as needed for specific JSON structure
+  routePath?: any; // GeoJSON for route visualization
   stops?: Omit<
     PrismaRouteStop,
     "id" | "routeId" | "route" | "createdAt" | "updatedAt"
@@ -751,6 +751,8 @@ export type TripWithDetails = Prisma.TripGetPayload<{
         distance: true;
         estimatedDuration: true;
         basePrice: true;
+        departureCoordinates: true; // Changed from coordinates
+        arrivalCoordinates: true; // Added
       };
     };
     bus: {
@@ -761,6 +763,7 @@ export type TripWithDetails = Prisma.TripGetPayload<{
         brand: true;
         capacity: true;
         features: true;
+        // Removed 'type' as it's not in schema
       };
     };
     company: {
@@ -879,4 +882,9 @@ export interface WeatherData {
   icon: string; // OpenWeatherMap icon code
   city: string;
   country: string;
+}
+
+export interface Coordinates {
+  lat: number;
+  lng: number;
 }

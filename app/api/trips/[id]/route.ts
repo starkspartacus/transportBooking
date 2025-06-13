@@ -24,6 +24,8 @@ export async function GET(
             model: true,
             brand: true,
             features: true,
+            capacity: true, // Ensure capacity is selected for available seats calculation
+            plateNumber: true, // Ensure plateNumber is selected
           },
         },
         route: {
@@ -36,6 +38,15 @@ export async function GET(
             arrivalLocation: true,
             departureCountry: true,
             arrivalCountry: true,
+            basePrice: true,
+            departureCoordinates: true, // Changed from coordinates
+            arrivalCoordinates: true, // Added
+          },
+        },
+        _count: {
+          select: {
+            reservations: true,
+            tickets: true,
           },
         },
       },

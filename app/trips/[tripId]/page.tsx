@@ -22,10 +22,15 @@ import {
   Car,
   Luggage,
   Coffee,
+  ArrowLeft,
 } from "lucide-react";
 import { WeatherDisplay } from "@/components/weather/weather-display";
-import type { TripWithDetails, WeatherData } from "@/lib/types";
+import type { TripWithDetails, WeatherData, Coordinates } from "@/lib/types"; // Import Coordinates
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { AnimatedRouteMap } from "@/components/trip/animated-route-map";
+import { TripBookingSection } from "@/components/trip/trip-booking-section"; // Import the new component
 
 interface TripDetailsPageProps {
   params: {
@@ -67,6 +72,8 @@ async function getTripDetails(tripId: string): Promise<TripWithDetails | null> {
             departureCountry: true,
             arrivalCountry: true,
             basePrice: true,
+            departureCoordinates: true, // Ensure departureCoordinates are fetched
+            arrivalCoordinates: true, // Ensure arrivalCoordinates are fetched
           },
         },
         _count: {
@@ -156,54 +163,95 @@ export default async function TripDetailsPage({
   const departureDateTime = new Date(trip.departureTime);
   const arrivalDateTime = new Date(trip.arrivalTime);
 
+  const routeCoordinates: Coordinates[] = [];
+  // Safely cast and add coordinates if they exist and are valid
+  if (
+    trip.route.departureCoordinates &&
+    typeof trip.route.departureCoordinates === "object" &&
+    "lat" in trip.route.departureCoordinates &&
+    "lng" in trip.route.departureCoordinates
+  ) {
+    routeCoordinates.push(
+      trip.route.departureCoordinates as unknown as Coordinates
+    );
+  }
+  if (
+    trip.route.arrivalCoordinates &&
+    typeof trip.route.arrivalCoordinates === "object" &&
+    "lat" in trip.route.arrivalCoordinates &&
+    "lng" in trip.route.arrivalCoordinates
+  ) {
+    routeCoordinates.push(
+      trip.route.arrivalCoordinates as unknown as Coordinates
+    );
+  }
+
   return (
     <main className="container mx-auto px-4 py-8">
+      <div className="mb-6">
+        <Link href="/search" passHref>
+          <Button variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Retour à la liste des voyages
+          </Button>
+        </Link>
+      </div>
+
       <Card className="mx-auto max-w-5xl shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-3xl font-bold text-gray-800">
-            Détails du Voyage
+        <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6 rounded-t-lg">
+          <CardTitle className="text-4xl font-extrabold">
+            Voyage de {trip.route.departureLocation} à{" "}
+            {trip.route.arrivalLocation}
           </CardTitle>
-          <CardDescription className="text-lg text-gray-600">
-            {trip.route.departureLocation} ({trip.route.departureCountry}){" "}
-            <span className="mx-2">→</span> {trip.route.arrivalLocation} (
-            {trip.route.arrivalCountry})
+          <CardDescription className="text-blue-100 text-lg mt-2">
+            Avec {trip.company.name}
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <CardContent className="grid grid-cols-1 gap-8 p-6 lg:grid-cols-3">
           {/* Trip Info */}
-          <div className="space-y-6 lg:col-span-2">
+          <div className="space-y-8 lg:col-span-2">
             <section>
-              <h2 className="mb-4 flex items-center text-xl font-semibold">
-                <Building2 className="mr-2 h-5 w-5" /> Informations sur la
-                Compagnie
+              <h2 className="mb-4 flex items-center text-2xl font-bold text-gray-800">
+                <Building2 className="mr-3 h-6 w-6 text-blue-600" />{" "}
+                Informations sur la Compagnie
               </h2>
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-4 bg-gray-50 p-4 rounded-lg shadow-sm">
                 {trip.company.logo && (
                   <img
                     src={trip.company.logo || "/placeholder.svg"}
                     alt={trip.company.name}
-                    className="h-16 w-16 rounded-full border p-1 object-contain"
+                    className="h-20 w-20 rounded-full border-2 border-blue-200 p-1 object-contain shadow-md"
                   />
                 )}
-                <p className="text-lg font-medium">{trip.company.name}</p>
+                <div>
+                  <p className="text-xl font-semibold text-gray-900">
+                    {trip.company.name}
+                  </p>
+                  {trip.company.rating && (
+                    <p className="text-sm text-gray-600">
+                      Note: {trip.company.rating.toFixed(1)} / 5
+                    </p>
+                  )}
+                </div>
               </div>
             </section>
 
             <Separator />
 
             <section>
-              <h2 className="mb-4 flex items-center text-xl font-semibold">
-                <MapPin className="mr-2 h-5 w-5" /> Itinéraire et Horaires
+              <h2 className="mb-4 flex items-center text-2xl font-bold text-gray-800">
+                <MapPin className="mr-3 h-6 w-6 text-blue-600" /> Itinéraire et
+                Horaires
               </h2>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <p className="text-sm text-gray-500">Départ</p>
-                  <p className="text-lg font-medium">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-100">
+                  <p className="text-sm text-blue-700 font-semibold">Départ</p>
+                  <p className="text-xl font-bold text-gray-900">
                     {trip.route.departureLocation} (
                     {trip.route.departureCountry})
                   </p>
-                  <p className="flex items-center text-sm text-gray-600">
-                    <CalendarDays className="mr-1 h-4 w-4" />
+                  <p className="flex items-center text-base text-gray-700 mt-2">
+                    <CalendarDays className="mr-2 h-5 w-5 text-blue-500" />
                     {departureDateTime.toLocaleDateString("fr-FR", {
                       weekday: "long",
                       day: "numeric",
@@ -211,21 +259,23 @@ export default async function TripDetailsPage({
                       year: "numeric",
                     })}
                   </p>
-                  <p className="flex items-center text-sm text-gray-600">
-                    <Clock className="mr-1 h-4 w-4" />
+                  <p className="flex items-center text-base text-gray-700">
+                    <Clock className="mr-2 h-5 w-5 text-blue-500" />
                     {departureDateTime.toLocaleTimeString("fr-FR", {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
                   </p>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500">Arrivée</p>
-                  <p className="text-lg font-medium">
+                <div className="bg-green-50 p-4 rounded-lg shadow-sm border border-green-100">
+                  <p className="text-sm text-green-700 font-semibold">
+                    Arrivée
+                  </p>
+                  <p className="text-xl font-bold text-gray-900">
                     {trip.route.arrivalLocation} ({trip.route.arrivalCountry})
                   </p>
-                  <p className="flex items-center text-sm text-gray-600">
-                    <CalendarDays className="mr-1 h-4 w-4" />
+                  <p className="flex items-center text-base text-gray-700 mt-2">
+                    <CalendarDays className="mr-2 h-5 w-5 text-green-500" />
                     {arrivalDateTime.toLocaleDateString("fr-FR", {
                       weekday: "long",
                       day: "numeric",
@@ -233,8 +283,8 @@ export default async function TripDetailsPage({
                       year: "numeric",
                     })}
                   </p>
-                  <p className="flex items-center text-sm text-gray-600">
-                    <Clock className="mr-1 h-4 w-4" />
+                  <p className="flex items-center text-base text-gray-700">
+                    <Clock className="mr-2 h-5 w-5 text-green-500" />
                     {arrivalDateTime.toLocaleTimeString("fr-FR", {
                       hour: "2-digit",
                       minute: "2-digit",
@@ -242,9 +292,9 @@ export default async function TripDetailsPage({
                   </p>
                 </div>
               </div>
-              <div className="mt-4">
-                <p className="text-sm text-gray-500">Durée Estimée</p>
-                <p className="text-lg font-medium">
+              <div className="mt-6 text-center">
+                <p className="text-lg text-gray-600">Durée Estimée du Voyage</p>
+                <p className="text-3xl font-extrabold text-blue-700">
                   {trip.route.estimatedDuration} minutes
                 </p>
               </div>
@@ -253,39 +303,43 @@ export default async function TripDetailsPage({
             <Separator />
 
             <section>
-              <h2 className="mb-4 flex items-center text-xl font-semibold">
-                <Bus className="mr-2 h-5 w-5" /> Détails du Bus
+              <h2 className="mb-4 flex items-center text-2xl font-bold text-gray-800">
+                <Bus className="mr-3 h-6 w-6 text-blue-600" /> Détails du Bus
               </h2>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 bg-gray-50 p-4 rounded-lg shadow-sm">
                 <div>
                   <p className="text-sm text-gray-500">Modèle</p>
-                  <p className="font-medium">
+                  <p className="font-medium text-gray-900">
                     {trip.bus.brand} {trip.bus.model}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Immatriculation</p>
-                  <p className="font-medium">{trip.bus.plateNumber}</p>
+                  <p className="font-medium text-gray-900">
+                    {trip.bus.plateNumber}
+                  </p>
                 </div>
+                {/* Removed bus.type as it's not in schema */}
                 <div>
                   <p className="text-sm text-gray-500">Sièges disponibles</p>
-                  <p className="flex items-center font-medium">
-                    <Users className="mr-1 h-4 w-4" /> {trip.availableSeats} /{" "}
+                  <p className="flex items-center font-medium text-gray-900">
+                    <Users className="mr-2 h-5 w-5 text-blue-500" />{" "}
+                    {trip.bus.capacity - trip._count.reservations} /{" "}
                     {trip.bus.capacity}
                   </p>
                 </div>
               </div>
               {trip.bus.features && trip.bus.features.length > 0 && (
-                <div className="mt-4">
-                  <p className="mb-2 text-sm text-gray-500">
-                    Fonctionnalités :
+                <div className="mt-6">
+                  <p className="mb-3 text-lg font-semibold text-gray-800">
+                    Fonctionnalités à bord :
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3">
                     {trip.bus.features.map((feature, index) => (
                       <Badge
                         key={index}
                         variant="secondary"
-                        className="flex items-center gap-1"
+                        className="flex items-center gap-2 px-4 py-2 text-base bg-blue-100 text-blue-800 rounded-full shadow-sm"
                       >
                         <FeatureIcon feature={feature} />
                         {feature}
@@ -299,47 +353,80 @@ export default async function TripDetailsPage({
             <Separator />
 
             <section>
-              <h2 className="mb-4 flex items-center text-xl font-semibold">
-                <DollarSign className="mr-2 h-5 w-5" /> Tarification
+              <h2 className="mb-4 flex items-center text-2xl font-bold text-gray-800">
+                <DollarSign className="mr-3 h-6 w-6 text-blue-600" />{" "}
+                Tarification
               </h2>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <p className="text-sm text-gray-500">Prix de base</p>
-                  <p className="text-lg font-medium">
-                    {trip.basePrice.toLocaleString()} FCFA
-                  </p>
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 bg-green-50 p-4 rounded-lg shadow-sm border border-green-100">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 flex-grow">
+                  <div>
+                    <p className="text-sm text-gray-500">Prix de base</p>
+                    <p className="text-xl font-medium text-gray-900">
+                      {trip.basePrice.toLocaleString()} FCFA
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Prix actuel</p>
+                    <p className="text-3xl font-extrabold text-green-700">
+                      {trip.currentPrice.toLocaleString()} FCFA
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500">Prix actuel</p>
-                  <p className="text-2xl font-bold text-primary">
-                    {trip.currentPrice.toLocaleString()} FCFA
-                  </p>
+                <div className="w-full md:w-auto">
+                  <TripBookingSection trip={trip} />
                 </div>
               </div>
             </section>
           </div>
 
-          {/* Weather Info */}
-          <div className="space-y-6 lg:col-span-1">
-            <h2 className="mb-4 text-xl font-semibold">Météo</h2>
-            {departureWeather ? (
-              <WeatherDisplay weather={departureWeather} />
-            ) : (
-              <Card className="w-full">
-                <CardContent className="p-6 text-center text-gray-500">
-                  Météo de départ non disponible.
-                </CardContent>
-              </Card>
-            )}
-            {arrivalWeather ? (
-              <WeatherDisplay weather={arrivalWeather} />
-            ) : (
-              <Card className="w-full">
-                <CardContent className="p-6 text-center text-gray-500">
-                  Météo d'arrivée non disponible.
-                </CardContent>
-              </Card>
-            )}
+          {/* Weather & Map Info */}
+          <div className="space-y-8 lg:col-span-1">
+            <section>
+              <h2 className="mb-4 text-2xl font-bold text-gray-800">Météo</h2>
+              <div className="space-y-4">
+                {departureWeather ? (
+                  <WeatherDisplay weather={departureWeather} />
+                ) : (
+                  <Card className="w-full">
+                    <CardContent className="p-6 text-center text-gray-500">
+                      Météo de départ non disponible.
+                    </CardContent>
+                  </Card>
+                )}
+                {arrivalWeather ? (
+                  <WeatherDisplay weather={arrivalWeather} />
+                ) : (
+                  <Card className="w-full">
+                    <CardContent className="p-6 text-center text-gray-500">
+                      Météo d'arrivée non disponible.
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </section>
+
+            <Separator />
+
+            <section>
+              <h2 className="mb-4 text-2xl font-bold text-gray-800">
+                Visualisation de l'itinéraire
+              </h2>
+              {routeCoordinates.length === 2 ? ( // Ensure both departure and arrival coordinates are present
+                <AnimatedRouteMap
+                  coordinates={routeCoordinates}
+                  distance={trip.route.distance}
+                  departureLocation={trip.route.departureLocation}
+                  arrivalLocation={trip.route.arrivalLocation}
+                />
+              ) : (
+                <Card className="w-full">
+                  <CardContent className="p-6 text-center text-gray-500">
+                    Coordonnées de l'itinéraire non disponibles pour la
+                    visualisation.
+                  </CardContent>
+                </Card>
+              )}
+            </section>
           </div>
         </CardContent>
       </Card>

@@ -1,7 +1,4 @@
-interface Coordinates {
-  lat: number;
-  lng: number;
-}
+import type { Coordinates } from "@/lib/types";
 
 interface RouteResponse {
   distance: number; // in meters
