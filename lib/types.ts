@@ -761,6 +761,7 @@ export type TripWithDetails = Prisma.TripGetPayload<{
         plateNumber: true;
         model: true;
         capacity: true;
+        features: true;
       };
     };
     _count: {

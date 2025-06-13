@@ -14,41 +14,15 @@ import {
   Zap,
   Coffee,
   Music,
+  Tv,
 } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
-
-interface Trip {
-  id: string;
-  departureCity: string;
-  arrivalCity: string;
-  departureTime: string;
-  arrivalTime: string;
-  price: number;
-  availableSeats: number;
-  totalSeats: number;
-  status: string;
-  company: {
-    id: string;
-    name: string;
-    logo?: string;
-  };
-  bus: {
-    id: string;
-    model: string;
-    brand?: string;
-    features: string[];
-  };
-  route: {
-    id: string;
-    name: string;
-    distance: number;
-    estimatedDuration: number;
-  };
-}
+import { type TripWithDetails } from "@/lib/types";
+import { TripStatus } from "@prisma/client";
 
 interface TripCardProps {
-  trip: Trip;
+  trip: TripWithDetails;
   showBookingButton?: boolean;
 }
 
@@ -60,6 +34,10 @@ export default function TripCard({
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours}h${mins > 0 ? mins.toString().padStart(2, "0") : ""}`;
+  };
+
+  const formatTime = (dateTime: Date) => {
+    return format(dateTime, "HH:mm");
   };
 
   const formatPrice = (price: number) => {
@@ -75,23 +53,31 @@ export default function TripCard({
       return <Coffee className="h-3 w-3" />;
     if (featureLower.includes("music") || featureLower.includes("audio"))
       return <Music className="h-3 w-3" />;
+    if (featureLower.includes("tv") || featureLower.includes("ecran"))
+      return <Tv className="h-3 w-3" />;
     return <Bus className="h-3 w-3" />;
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: TripStatus) => {
     switch (status) {
-      case "ACTIVE":
+      case TripStatus.SCHEDULED:
         return "bg-green-100 text-green-800";
-      case "CANCELLED":
+      case TripStatus.CANCELLED:
         return "bg-red-100 text-red-800";
-      case "COMPLETED":
-        return "bg-gray-100 text-gray-800";
+      case TripStatus.DELAYED:
+        return "bg-orange-100 text-orange-800";
+      case TripStatus.IN_TRANSIT:
+        return "bg-blue-100 text-blue-800";
       default:
         return "bg-blue-100 text-blue-800";
     }
   };
 
-  const isBookable = trip.status === "ACTIVE" && trip.availableSeats > 0;
+  // Ensure availableSeats is correctly calculated or provided by the API
+  const availableSeats =
+    trip.availableSeats !== undefined ? trip.availableSeats : trip.bus.capacity;
+
+  const isBookable = trip.status === TripStatus.SCHEDULED && availableSeats > 0;
 
   return (
     <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500">
@@ -105,24 +91,28 @@ export default function TripCard({
                 <div className="flex items-center gap-2">
                   <MapPin className="h-5 w-5 text-blue-600" />
                   <span className="font-bold text-lg">
-                    {trip.departureCity}
+                    {trip.route.departureLocation}
                   </span>
                   <span className="text-gray-400 text-xl">→</span>
-                  <span className="font-bold text-lg">{trip.arrivalCity}</span>
+                  <span className="font-bold text-lg">
+                    {trip.route.arrivalLocation}
+                  </span>
                 </div>
               </div>
               <Badge className={getStatusColor(trip.status)}>
-                {trip.status === "ACTIVE" ? "Disponible" : trip.status}
+                {trip.status === TripStatus.SCHEDULED
+                  ? "Disponible"
+                  : trip.status}
               </Badge>
             </div>
 
             {/* Company and Bus Info */}
             <div className="flex items-center gap-4">
               <Badge variant="secondary" className="font-medium">
-                {trip.company.name}
+                {trip.companyId}
               </Badge>
               <span className="text-sm text-gray-600">
-                {trip.bus.brand} {trip.bus.model}
+                {trip.bus.plateNumber} {trip.bus.model}
               </span>
             </div>
 
@@ -132,17 +122,11 @@ export default function TripCard({
                 <Clock className="h-4 w-4 text-gray-500" />
                 <div>
                   <span className="font-medium">
-                    {format(
-                      new Date(`2000-01-01T${trip.departureTime}`),
-                      "HH:mm"
-                    )}
+                    {formatTime(trip.departureTime)}
                   </span>
                   <span className="text-gray-400 mx-2">-</span>
                   <span className="font-medium">
-                    {format(
-                      new Date(`2000-01-01T${trip.arrivalTime}`),
-                      "HH:mm"
-                    )}
+                    {formatTime(trip.arrivalTime)}
                   </span>
                 </div>
               </div>
@@ -157,24 +141,26 @@ export default function TripCard({
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-gray-500" />
                 <span>
-                  {trip.availableSeats} / {trip.totalSeats} places
+                  {availableSeats} / {trip.bus.capacity} places
                 </span>
               </div>
             </div>
 
             {/* Features */}
-            {trip.bus.features.length > 0 && (
+            {trip.bus.features && trip.bus.features.length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {trip.bus.features.slice(0, 5).map((feature, index) => (
-                  <Badge
-                    key={index}
-                    variant="outline"
-                    className="text-xs flex items-center gap-1"
-                  >
-                    {getFeatureIcon(feature)}
-                    {feature}
-                  </Badge>
-                ))}
+                {trip.bus.features
+                  .slice(0, 5)
+                  .map((feature: string, index: number) => (
+                    <Badge
+                      key={index}
+                      variant="outline"
+                      className="text-xs flex items-center gap-1"
+                    >
+                      {getFeatureIcon(feature)}
+                      {feature}
+                    </Badge>
+                  ))}
                 {trip.bus.features.length > 5 && (
                   <Badge variant="outline" className="text-xs">
                     +{trip.bus.features.length - 5} autres
@@ -184,12 +170,12 @@ export default function TripCard({
             )}
 
             {/* Availability Warning */}
-            {trip.availableSeats <= 5 && trip.availableSeats > 0 && (
+            {availableSeats <= 5 && availableSeats > 0 && (
               <div className="flex items-center gap-2 text-orange-600 text-sm">
                 <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
-                Plus que {trip.availableSeats} place
-                {trip.availableSeats > 1 ? "s" : ""} disponible
-                {trip.availableSeats > 1 ? "s" : ""} !
+                Plus que {availableSeats} place{availableSeats > 1 ? "s" : ""}{" "}
+                disponible
+                {availableSeats > 1 ? "s" : ""} !
               </div>
             )}
           </div>
@@ -199,7 +185,7 @@ export default function TripCard({
             <div className="text-right">
               <div className="flex items-center gap-1 text-3xl font-bold text-green-600">
                 <DollarSign className="h-6 w-6" />
-                {formatPrice(trip.price)}
+                {formatPrice(trip.route.basePrice)}
               </div>
               <p className="text-sm text-gray-500">FCFA par personne</p>
               {trip.route.distance && (
@@ -222,7 +208,7 @@ export default function TripCard({
                   </Link>
                 ) : (
                   <Button disabled className="w-full" size="lg">
-                    {trip.availableSeats === 0 ? "Complet" : "Non disponible"}
+                    {availableSeats === 0 ? "Complet" : "Non disponible"}
                   </Button>
                 )}
               </div>

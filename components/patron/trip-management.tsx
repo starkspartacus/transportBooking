@@ -86,7 +86,11 @@ interface BusData {
   status: string;
 }
 
-export default function TripManagement() {
+interface TripManagementProps {
+  companyId: string;
+}
+
+export default function TripManagement({ companyId }: TripManagementProps) {
   const { data: session } = useSession();
   const { toast } = useToast();
   const [trips, setTrips] = useState<TripData[]>([]);
@@ -124,11 +128,10 @@ export default function TripManagement() {
   }, []);
 
   const fetchTrips = useCallback(async () => {
-    if (!session?.user?.companyId) return;
+    if (!companyId) return;
 
     setIsLoading(true);
     try {
-      const companyId = session.user.companyId;
       const response = await fetch(`/api/patron/trips?companyId=${companyId}`);
       if (response.ok) {
         const data = await response.json();
@@ -143,7 +146,7 @@ export default function TripManagement() {
     } finally {
       setIsLoading(false);
     }
-  }, [session]);
+  }, [companyId]);
 
   const fetchRoutes = useCallback(async () => {
     if (!session?.user?.companyId) return;
@@ -284,7 +287,7 @@ export default function TripManagement() {
         driverName: formData.driverName || null,
         driverPhone: formData.driverPhone || null,
         notes: formData.notes || null,
-        companyId: session?.user?.companyId,
+        companyId: companyId,
       };
 
       const response = await fetch("/api/patron/trips", {

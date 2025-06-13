@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,91 +12,83 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-  MapPin,
-  Clock,
-  Users,
-  Filter,
-  Search,
-  Calendar,
-  DollarSign,
-} from "lucide-react";
+import { Filter, Search } from "lucide-react";
 import Link from "next/link";
-import { format } from "date-fns";
+import TripCard from "@/components/search/trip-card";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
+import type { TripWithDetails, SearchFilters } from "@/lib/types"; // Import types from lib/types.ts
 
-interface Trip {
+interface Company {
   id: string;
-  departureCity: string;
-  arrivalCity: string;
-  departureTime: string;
-  arrivalTime: string;
-  price: number;
-  availableSeats: number;
-  totalSeats: number;
-  status: string;
-  company: {
-    id: string;
-    name: string;
-    logo?: string;
-  };
-  bus: {
-    id: string;
-    model: string;
-    brand?: string;
-    features: string[];
-  };
-  route: {
-    id: string;
-    name: string;
-    distance: number;
-    estimatedDuration: number;
-  };
+  name: string;
 }
 
 export default function SearchPage() {
-  const [trips, setTrips] = useState<Trip[]>([]);
+  const [trips, setTrips] = useState<TripWithDetails[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({
-    from: "",
-    to: "",
-    date: "",
-    minPrice: "",
-    maxPrice: "",
-    company: "all",
-    sortBy: "price",
+  const [totalTrips, setTotalTrips] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10; // Number of items per page
+
+  const [filters, setFilters] = useState<SearchFilters>({
+    query: "",
+    status: "",
+    type: "",
+    dateFrom: new Date(),
+    dateTo: new Date(),
+    companyId: "",
+    routeId: "",
+    busId: "",
+    driverId: "",
+    passengerName: "",
+    paymentStatus: undefined,
+    reservationStatus: undefined,
+    page: 1,
+    limit: 10,
+    sortBy: "departure",
+    sortOrder: "asc",
   });
 
-  const [companies, setCompanies] = useState<
-    Array<{ id: string; name: string }>
-  >([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
 
   useEffect(() => {
     fetchTrips();
     fetchCompanies();
-  }, []);
+  }, [filters, currentPage]); // Re-fetch when filters or page changes
 
   const fetchTrips = async () => {
     setLoading(true);
     try {
       const queryParams = new URLSearchParams();
-      const effectiveFilters = {
-        ...filters,
-        company: filters.company === "all" ? "" : filters.company,
-      };
-
-      Object.entries(effectiveFilters).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value);
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString());
       });
+      queryParams.append("page", currentPage.toString());
+      queryParams.append("limit", itemsPerPage.toString());
 
-      const response = await fetch(`/api/trips?${queryParams}`);
+      const response = await fetch(`/api/trips?${queryParams.toString()}`);
       if (response.ok) {
         const data = await response.json();
         setTrips(data.trips || []);
+        setTotalTrips(data.totalCount || 0);
+      } else {
+        console.error("Failed to fetch trips:", response.statusText);
+        setTrips([]);
+        setTotalTrips(0);
       }
     } catch (error) {
       console.error("Error fetching trips:", error);
+      setTrips([]);
+      setTotalTrips(0);
     } finally {
       setLoading(false);
     }
@@ -114,35 +106,104 @@ export default function SearchPage() {
     }
   };
 
-  const handleFilterChange = (key: string, value: string) => {
+  const handleFilterChange = (
+    key: keyof SearchFilters,
+    value: string | number | Date | undefined
+  ) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
+    setCurrentPage(1); // Reset to first page on filter change
   };
 
   const handleSearch = () => {
+    setCurrentPage(1); // Ensure search starts from page 1
     fetchTrips();
   };
 
-  const resetFilters = () => {
-    setFilters({
-      from: "",
-      to: "",
-      date: "",
-      minPrice: "",
-      maxPrice: "",
-      company: "all",
-      sortBy: "price",
-    });
-    fetchTrips();
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
-  const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h${mins > 0 ? mins.toString().padStart(2, "0") : ""}`;
-  };
+  const totalPages = useMemo(
+    () => Math.ceil(totalTrips / itemsPerPage),
+    [totalTrips, itemsPerPage]
+  );
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("fr-FR").format(price);
+  const renderPaginationItems = () => {
+    const items = [];
+    const maxPagesToShow = 5; // Number of page links to show directly
+
+    if (totalPages <= maxPagesToShow) {
+      for (let i = 1; i <= totalPages; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink
+              isActive={currentPage === i}
+              onClick={() => handlePageChange(i)}
+            >
+              {i}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
+    } else {
+      // Always show first page
+      items.push(
+        <PaginationItem key={1}>
+          <PaginationLink
+            isActive={currentPage === 1}
+            onClick={() => handlePageChange(1)}
+          >
+            1
+          </PaginationLink>
+        </PaginationItem>
+      );
+
+      // Show ellipsis if current page is far from start
+      if (currentPage > maxPagesToShow - 2) {
+        items.push(<PaginationEllipsis key="start-ellipsis" />);
+      }
+
+      // Show pages around current page
+      const startPage = Math.max(
+        2,
+        currentPage - Math.floor(maxPagesToShow / 2) + 1
+      );
+      const endPage = Math.min(
+        totalPages - 1,
+        currentPage + Math.floor(maxPagesToShow / 2) - 1
+      );
+
+      for (let i = startPage; i <= endPage; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink
+              isActive={currentPage === i}
+              onClick={() => handlePageChange(i)}
+            >
+              {i}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
+
+      // Show ellipsis if current page is far from end
+      if (currentPage < totalPages - Math.floor(maxPagesToShow / 2) + 1) {
+        items.push(<PaginationEllipsis key="end-ellipsis" />);
+      }
+
+      // Always show last page
+      items.push(
+        <PaginationItem key={totalPages}>
+          <PaginationLink
+            isActive={currentPage === totalPages}
+            onClick={() => handlePageChange(totalPages)}
+          >
+            {totalPages}
+          </PaginationLink>
+        </PaginationItem>
+      );
+    }
+    return items;
   };
 
   return (
@@ -192,9 +253,9 @@ export default function SearchPage() {
                     <Input
                       id="from"
                       placeholder="Ex: Dakar"
-                      value={filters.from}
+                      value={filters.query}
                       onChange={(e) =>
-                        handleFilterChange("from", e.target.value)
+                        handleFilterChange("query", e.target.value)
                       }
                     />
                   </div>
@@ -203,8 +264,10 @@ export default function SearchPage() {
                     <Input
                       id="to"
                       placeholder="Ex: Thiès"
-                      value={filters.to}
-                      onChange={(e) => handleFilterChange("to", e.target.value)}
+                      value={filters.query}
+                      onChange={(e) =>
+                        handleFilterChange("query", e.target.value)
+                      }
                     />
                   </div>
                 </div>
@@ -217,8 +280,10 @@ export default function SearchPage() {
                   <Input
                     id="date"
                     type="date"
-                    value={filters.date}
-                    onChange={(e) => handleFilterChange("date", e.target.value)}
+                    value={filters.dateFrom?.toISOString().split("T")[0]}
+                    onChange={(e) =>
+                      handleFilterChange("dateFrom", new Date(e.target.value))
+                    }
                   />
                 </div>
 
@@ -231,17 +296,17 @@ export default function SearchPage() {
                     <Input
                       placeholder="Min"
                       type="number"
-                      value={filters.minPrice}
+                      value={filters.query}
                       onChange={(e) =>
-                        handleFilterChange("minPrice", e.target.value)
+                        handleFilterChange("query", e.target.value)
                       }
                     />
                     <Input
                       placeholder="Max"
                       type="number"
-                      value={filters.maxPrice}
+                      value={filters.query}
                       onChange={(e) =>
-                        handleFilterChange("maxPrice", e.target.value)
+                        handleFilterChange("query", e.target.value)
                       }
                     />
                   </div>
@@ -253,9 +318,9 @@ export default function SearchPage() {
                 <div>
                   <Label>Compagnie</Label>
                   <Select
-                    value={filters.company}
+                    value={filters.companyId}
                     onValueChange={(value) =>
-                      handleFilterChange("company", value)
+                      handleFilterChange("companyId", value)
                     }
                   >
                     <SelectTrigger>
@@ -284,40 +349,27 @@ export default function SearchPage() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Trier par prix croissant" />
+                      <SelectValue placeholder="Trier par" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="price">Prix croissant</SelectItem>
                       <SelectItem value="price_desc">
                         Prix décroissant
                       </SelectItem>
-                      <SelectItem value="departure">
-                        Heure de départ (tôt → tard)
-                      </SelectItem>
-                      <SelectItem value="duration">
-                        Durée (court → long)
-                      </SelectItem>
+                      <SelectItem value="departure">Heure de départ</SelectItem>
+                      <SelectItem value="duration">Durée du voyage</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleSearch}
-                    className="flex-1"
-                    disabled={loading}
-                  >
-                    <Search className="h-4 w-4 mr-2" />
-                    {loading ? "Recherche..." : "Rechercher"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={resetFilters}
-                    disabled={loading}
-                  >
-                    Réinitialiser
-                  </Button>
-                </div>
+                <Button
+                  onClick={handleSearch}
+                  className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700"
+                  disabled={loading}
+                >
+                  <Search className="h-4 w-4 mr-2" />
+                  {loading ? "Recherche..." : "Rechercher"}
+                </Button>
               </CardContent>
             </Card>
           </div>
@@ -329,19 +381,27 @@ export default function SearchPage() {
                 Recherche de voyages
               </h1>
               <p className="text-gray-600">
-                {trips.length} voyage{trips.length !== 1 ? "s" : ""} trouvé
-                {trips.length !== 1 ? "s" : ""}
+                {totalTrips} voyage{totalTrips !== 1 ? "s" : ""} trouvé
+                {totalTrips !== 1 ? "s" : ""}
               </p>
             </div>
 
             {loading ? (
               <div className="space-y-4">
-                {[...Array(5)].map((_, i) => (
-                  <Card key={i} className="animate-pulse">
+                {[...Array(itemsPerPage)].map((_, i) => (
+                  <Card
+                    key={i}
+                    className="animate-pulse border-l-4 border-l-gray-300"
+                  >
                     <CardContent className="p-6">
-                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
-                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-                      <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                      <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="h-4 bg-gray-200 rounded w-full"></div>
+                        <div className="h-4 bg-gray-200 rounded w-full"></div>
+                        <div className="h-4 bg-gray-200 rounded w-full"></div>
+                      </div>
+                      <div className="h-4 bg-gray-200 rounded w-1/2 mt-4"></div>
+                      <div className="h-10 bg-gray-200 rounded w-32 ml-auto mt-6"></div>
                     </CardContent>
                   </Card>
                 ))}
@@ -358,7 +418,29 @@ export default function SearchPage() {
                   <p className="text-gray-600 mb-4">
                     Essayez de modifier vos critères de recherche
                   </p>
-                  <Button onClick={resetFilters}>
+                  <Button
+                    onClick={() =>
+                      setFilters({
+                        query: "",
+                        status: "",
+                        type: "",
+                        dateFrom: new Date(),
+                        dateTo: new Date(),
+                        companyId: "",
+                        routeId: "",
+                        busId: "",
+                        driverId: "",
+                        passengerName: "",
+                        paymentStatus: undefined,
+                        reservationStatus: undefined,
+                        page: 1,
+                        limit: 10,
+                        sortBy: "departure",
+                        sortOrder: "asc",
+                      })
+                    }
+                    className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700"
+                  >
                     Réinitialiser les filtres
                   </Button>
                 </CardContent>
@@ -366,109 +448,31 @@ export default function SearchPage() {
             ) : (
               <div className="space-y-4">
                 {trips.map((trip) => (
-                  <Card
-                    key={trip.id}
-                    className="hover:shadow-lg transition-shadow"
-                  >
-                    <CardContent className="p-6">
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        {/* Trip Info */}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-4 mb-4">
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4 text-blue-600" />
-                              <span className="font-semibold">
-                                {trip.departureCity}
-                              </span>
-                              <span className="text-gray-400">→</span>
-                              <span className="font-semibold">
-                                {trip.arrivalCity}
-                              </span>
-                            </div>
-                            <Badge variant="secondary">
-                              {trip.company.name}
-                            </Badge>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4" />
-                              <span>
-                                {format(
-                                  new Date(`2000-01-01T${trip.departureTime}`),
-                                  "HH:mm"
-                                )}{" "}
-                                -{" "}
-                                {format(
-                                  new Date(`2000-01-01T${trip.arrivalTime}`),
-                                  "HH:mm"
-                                )}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4" />
-                              <span>
-                                {trip.availableSeats} places disponibles
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4" />
-                              <span>
-                                {formatDuration(trip.route.estimatedDuration)}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Bus Features */}
-                          {trip.bus.features.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-3">
-                              {trip.bus.features
-                                .slice(0, 4)
-                                .map((feature, index) => (
-                                  <Badge
-                                    key={index}
-                                    variant="outline"
-                                    className="text-xs"
-                                  >
-                                    {feature}
-                                  </Badge>
-                                ))}
-                              {trip.bus.features.length > 4 && (
-                                <Badge variant="outline" className="text-xs">
-                                  +{trip.bus.features.length - 4} autres
-                                </Badge>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Price and Action */}
-                        <div className="flex flex-col items-end gap-4">
-                          <div className="text-right">
-                            <div className="flex items-center gap-1 text-2xl font-bold text-green-600">
-                              <DollarSign className="h-5 w-5" />
-                              {formatPrice(trip.price)} FCFA
-                            </div>
-                            <p className="text-sm text-gray-500">
-                              par personne
-                            </p>
-                          </div>
-
-                          <Link href={`/booking/${trip.id}`}>
-                            <Button
-                              className="bg-gradient-to-r from-blue-600 to-green-600"
-                              disabled={trip.availableSeats === 0}
-                            >
-                              {trip.availableSeats === 0
-                                ? "Complet"
-                                : "Réserver"}
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <TripCard key={trip.id} trip={trip} />
                 ))}
+                {totalPages > 1 && (
+                  <Pagination className="mt-8">
+                    <PaginationContent>
+                      <PaginationPrevious
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        className={
+                          currentPage === 1
+                            ? "pointer-events-none opacity-50"
+                            : ""
+                        }
+                      />
+                      {renderPaginationItems()}
+                      <PaginationNext
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        className={
+                          currentPage === totalPages
+                            ? "pointer-events-none opacity-50"
+                            : ""
+                        }
+                      />
+                    </PaginationContent>
+                  </Pagination>
+                )}
               </div>
             )}
           </div>
