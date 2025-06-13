@@ -296,6 +296,12 @@ enum EmployeeDepartment {
  SERVICE_CLIENT
 }
 
+enum LoyaltyProgram {
+ POINTS
+ CASHBACK
+ DISCOUNT
+}
+
 enum EmployeePosition {
  CHAUFFEUR
  CHAUFFEUR_SENIOR
@@ -634,6 +640,7 @@ enum ActivityType {
  BUS_MAINTENANCE
  ROUTE_UPDATED
  TRIP_CANCELLED
+ TRIP_ARCHIVED
  TICKET_ISSUED
  PAYMENT_FAILED
  REFUND_PROCESSED
@@ -907,76 +914,41 @@ enum StationType {
 }
 
 model Trip {
- id            String      @id @default(cuid())
- departureTime DateTime
- arrivalTime   DateTime
- basePrice     Float
- currentPrice  Float
- availableSeats Int
- status        TripStatus  @default(SCHEDULED)
- 
- // Enhanced trip information
- tripType      TripType    @default(STANDARD)
- boardingTime  DateTime?
- actualDepartureTime DateTime?
- actualArrivalTime   DateTime?
- delayMinutes  Int?        @default(0)
- 
- // Trip details
- driverName    String?
- driverPhone   String?
- driverLicense String?
- vehicleNumber String?
- 
- // Operational info
- weatherConditions String?
- roadConditions    String?
- notes            String?
- cancellationReason CancellationReason?
- services         String[] @default([])
- 
- // Pricing and promotions
- discountPercentage Float? @default(0)
- promotionCode     String?
- 
- // Recurring trip settings
- isRecurring       Boolean @default(false)
- recurringPattern  Json?
- parentTripId      String?
- 
- // Seat availability tracking
- seatMap           Json?
- bookedSeats       Int[]    @default([])
- 
- // Performance metrics
- occupancyRate     Float?   @default(0)
- revenue           Float?   @default(0)
- costEstimate      Float?   @default(0)
- profitMargin      Float?   @default(0)
- 
- // Customer experience
- onTimePerformance Float?   @default(0)
- customerRating    Float?   @default(0)
+  id             String        @id @default(cuid())
+  departureTime  DateTime
+  arrivalTime    DateTime
+  basePrice      Float
+  currentPrice   Float
+  availableSeats Int
+  status         TripStatus    @default(SCHEDULED)
+  tripType       TripType      @default(STANDARD)
+  services       String[]      @default([])
+  driverName     String?
+  driverPhone    String?
+  notes          String?
+  isArchived     Boolean       @default(false) // New field for archiving
+  boardingStartTime DateTime? // New field for boarding start time
+  boardingEndTime   DateTime? // New field for boarding end time
 
- route         Route       @relation(fields: [routeId], references: [id])
- routeId       String
- bus           Bus         @relation(fields: [busId], references: [id])
- busId         String
- company       Company     @relation(fields: [companyId], references: [id])
- companyId     String
+  routeId   String
+  route     Route         @relation(fields: [routeId], references: [id])
+  busId     String
+  bus       Bus           @relation(fields: [busId], references: [id])
+  companyId String
+  company   Company       @relation(fields: [companyId], references: [id])
 
- reservations  Reservation[]
- tickets       Ticket[]
- promotions    PromotionTrip[]
+  reservations Reservation[]
+  tickets      Ticket[]
+  promotions   PromotionTrip[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
- createdAt     DateTime    @default(now())
- updatedAt     DateTime    @updatedAt
-
- @@index([companyId])
- @@index([routeId])
- @@index([busId])
- @@index([status])
- @@index([departureTime])
+  @@index([companyId])
+  @@index([routeId])
+  @@index([busId])
+  @@index([departureTime])
+  @@index([arrivalTime])
+  @@index([status])
 }
 
 enum TripStatus {
@@ -1393,6 +1365,7 @@ enum NotificationType {
  BOOKING_CONFIRMATION
  TRIP_CANCELLED
  TRIP_DELAYED
+ TRIP_STATUS
  MAINTENANCE_ALERT
  SYSTEM_UPDATE
  PROMOTION

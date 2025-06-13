@@ -1,13 +1,24 @@
 "use client";
 
-import type React from "react";
-
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+
 import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -15,168 +26,223 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Calendar } from "@/components/ui/calendar";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { CalendarIcon } from "lucide-react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
-import { format, addDays, isBefore, isAfter } from "date-fns";
-import { fr } from "date-fns/locale";
-import {
-  CalendarIcon,
-  Plus,
-  Clock,
-  MapPin,
-  Bus,
-  Users,
-  DollarSign,
-  Trash2,
-  Copy,
-  Play,
-  CheckCircle,
-} from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { Calendar } from "@/components/ui/calendar";
+import { TimePicker } from "@/components/ui/time-picker";
+import { cn } from "@/lib/utils";
+import { TripType, TripStatus } from "@prisma/client"; // Ensure enums are imported
+import type { Bus, Route as RouteType } from "@/lib/types";
 
-interface Trip {
-  id: string;
-  departureTime: string;
-  arrivalTime: string;
-  status: string;
-  availableSeats: number;
-  route: {
-    id: string;
-    name: string;
-    departureLocation: string;
-    arrivalLocation: string;
-    price: number;
-    estimatedDuration: number;
-  };
-  bus: BusType;
-  _count: {
-    reservations: number;
-    tickets: number;
-  };
+const formSchema = z.object({
+  routeId: z.string().min(1, "Veuillez sélectionner une route."),
+  busId: z.string().min(1, "Veuillez sélectionner un bus."),
+  departureDate: z.date({
+    required_error: "Une date de départ est requise.",
+  }),
+  departureTime: z.string().min(1, "Une heure de départ est requise."),
+  arrivalDate: z.date({
+    required_error: "Une date d'arrivée est requise.",
+  }),
+  arrivalTime: z.string().min(1, "Une heure d'arrivée est requise."),
+  basePrice: z
+    .string()
+    .transform((val) => Number.parseFloat(val))
+    .refine((val) => val > 0, {
+      message: "Le prix de base doit être un nombre positif.",
+    }),
+  availableSeats: z.preprocess(
+    (val) => Number.parseInt(val as string, 10),
+    z.number().int().positive().optional()
+  ),
+  status: z.nativeEnum(TripStatus).default(TripStatus.SCHEDULED),
+  tripType: z.nativeEnum(TripType).default(TripType.STANDARD),
+  services: z.string().optional(),
+  driverName: z.string().optional().nullable(),
+  driverPhone: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  boardingStartTime: z.string().optional().nullable(), // New field
+  boardingEndTime: z.string().optional().nullable(), // New field
+});
+
+interface TripSchedulingProps {
+  companyId: string;
+  onTripCreated?: () => void;
 }
 
-interface Route {
-  id: string;
-  name: string;
-  departureLocation: string;
-  arrivalLocation: string;
-  price: number;
-  estimatedDuration: number;
-  status: string;
-}
-
-interface BusType {
-  id: string;
-  plateNumber: string;
-  model: string;
-  brand: string;
-  capacity: number;
-  status: string;
-}
-
-const TRIP_STATUSES = [
-  {
-    value: "SCHEDULED",
-    label: "Programmé",
-    color: "bg-blue-100 text-blue-800",
-  },
-  {
-    value: "BOARDING",
-    label: "Embarquement",
-    color: "bg-yellow-100 text-yellow-800",
-  },
-  { value: "DEPARTED", label: "Parti", color: "bg-green-100 text-green-800" },
-  { value: "ARRIVED", label: "Arrivé", color: "bg-gray-100 text-gray-800" },
-  { value: "CANCELLED", label: "Annulé", color: "bg-red-100 text-red-800" },
-  {
-    value: "DELAYED",
-    label: "Retardé",
-    color: "bg-orange-100 text-orange-800",
-  },
-];
-
-export default function TripScheduling() {
+export function TripScheduling({
+  companyId,
+  onTripCreated,
+}: TripSchedulingProps) {
   const { data: session } = useSession();
   const { toast } = useToast();
+  const [buses, setBuses] = useState<Bus[]>([]);
+  const [routes, setRoutes] = useState<RouteType[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [routes, setRoutes] = useState<Route[]>([]);
-  const [buses, setBuses] = useState<BusType[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Form state
-  const [tripForm, setTripForm] = useState({
-    routeId: "",
-    busId: "",
-    departureDate: new Date(),
-    departureTime: "",
-    customPrice: "",
-    useCustomPrice: false,
-    repeatType: "none", // none, daily, weekly, monthly
-    repeatEndDate: new Date(),
-    repeatCount: 1,
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      routeId: "",
+      busId: "",
+      departureTime: "",
+      arrivalTime: "",
+      basePrice: 0,
+      availableSeats: undefined,
+      status: TripStatus.SCHEDULED,
+      tripType: TripType.STANDARD,
+      services: "",
+      driverName: "",
+      driverPhone: "",
+      notes: "",
+      boardingStartTime: "", // Initialize new fields
+      boardingEndTime: "", // Initialize new fields
+    },
   });
 
-  // Filter state
-  const [filters, setFilters] = useState({
-    status: "",
-    routeId: "",
-    dateRange: "all", // today, week, month, all
-    searchQuery: "",
-  });
-
+  // Fetch buses and routes for the selected company
   useEffect(() => {
-    if (session?.user?.companyId) {
-      fetchData();
-    }
-  }, [session]);
+    if (companyId) {
+      const fetchResources = async () => {
+        setIsLoading(true);
+        try {
+          const [busesRes, routesRes] = await Promise.all([
+            fetch(`/api/patron/buses?companyId=${companyId}`),
+            fetch(`/api/patron/routes?companyId=${companyId}`),
+          ]);
 
-  const fetchData = async () => {
+          if (busesRes.ok) {
+            const busesData = await busesRes.json();
+            setBuses(busesData);
+          } else {
+            console.error("Failed to fetch buses");
+            toast({
+              title: "Erreur",
+              description: "Impossible de charger les bus.",
+              variant: "destructive",
+            });
+          }
+
+          if (routesRes.ok) {
+            const routesData = await routesRes.json();
+            setRoutes(routesData);
+          } else {
+            console.error("Failed to fetch routes");
+            toast({
+              title: "Erreur",
+              description: "Impossible de charger les routes.",
+              variant: "destructive",
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching resources:", error);
+          toast({
+            title: "Erreur",
+            description:
+              "Une erreur inattendue est survenue lors du chargement des ressources.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchResources();
+    }
+  }, [companyId, toast]);
+
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (!session || session.user.role !== "PATRON") {
+      toast({
+        title: "Non autorisé",
+        description: "Vous n'avez pas la permission de créer un voyage.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const [tripsRes, routesRes, busesRes] = await Promise.all([
-        fetch(`/api/patron/trips?companyId=${session?.user?.companyId}`),
-        fetch(`/api/patron/routes?companyId=${session?.user?.companyId}`),
-        fetch(`/api/patron/buses?companyId=${session?.user?.companyId}`),
-      ]);
+      const departureDateTime = new Date(
+        values.departureDate as unknown as string
+      );
+      const [depHour, depMinute] = (values.departureTime as string)
+        .split(":")
+        .map(Number);
+      departureDateTime.setHours(depHour, depMinute, 0, 0);
 
-      if (tripsRes.ok) {
-        const tripsData = await tripsRes.json();
-        setTrips(tripsData);
+      const arrivalDateTime = new Date(values.arrivalDate as unknown as string);
+      const [arrHour, arrMinute] = (values.arrivalTime as string)
+        .split(":")
+        .map(Number);
+      arrivalDateTime.setHours(arrHour, arrMinute, 0, 0);
+
+      let boardingStartDateTime: Date | null = null;
+      if (values.boardingStartTime) {
+        boardingStartDateTime = new Date(
+          values.departureDate as unknown as string
+        ); // Base on departure date for boarding
+        const [bsHour, bsMinute] = (values.boardingStartTime as string)
+          .split(":")
+          .map(Number);
+        boardingStartDateTime.setHours(bsHour, bsMinute, 0, 0);
       }
 
-      if (routesRes.ok) {
-        const routesData = await routesRes.json();
-        setRoutes(
-          routesData.filter((route: Route) => route.status === "ACTIVE")
-        );
+      let boardingEndDateTime: Date | null = null;
+      if (values.boardingEndTime) {
+        boardingEndDateTime = new Date(
+          values.departureDate as unknown as string
+        ); // Base on departure date for boarding
+        const [beHour, beMinute] = (values.boardingEndTime as string)
+          .split(":")
+          .map(Number);
+        boardingEndDateTime.setHours(beHour, beMinute, 0, 0);
       }
 
-      if (busesRes.ok) {
-        const busesData = await busesRes.json();
-        setBuses(busesData.filter((bus: BusType) => bus.status === "ACTIVE"));
+      const response = await fetch("/api/patron/trips", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...values,
+          departureTime: departureDateTime.toISOString(),
+          arrivalTime: arrivalDateTime.toISOString(),
+          basePrice: values.basePrice,
+          companyId: companyId,
+          boardingStartTime: boardingStartDateTime?.toISOString() || null, // Send as ISO string or null
+          boardingEndTime: boardingEndDateTime?.toISOString() || null, // Send as ISO string or null
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Voyage créé",
+          description: "Le nouveau voyage a été programmé avec succès.",
+        });
+        form.reset(); // Reset form fields
+        onTripCreated?.(); // Callback to refresh parent component if needed
+      } else {
+        toast({
+          title: "Erreur",
+          description:
+            data.error ||
+            "Une erreur est survenue lors de la création du voyage.",
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error creating trip:", error);
       toast({
-        title: "Erreur",
-        description: "Impossible de charger les données",
+        title: "Erreur inattendue",
+        description: "Impossible de créer le voyage.",
         variant: "destructive",
       });
     } finally {
@@ -184,811 +250,400 @@ export default function TripScheduling() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      const selectedRoute = routes.find((r) => r.id === tripForm.routeId);
-      const selectedBus = buses.find((b) => b.id === tripForm.busId);
-
-      if (!selectedRoute || !selectedBus) {
-        throw new Error("Route ou bus non sélectionné");
-      }
-
-      // Calculer l'heure d'arrivée
-      const departureDateTime = new Date(tripForm.departureDate);
-      const [hours, minutes] = tripForm.departureTime.split(":");
-      departureDateTime.setHours(
-        Number.parseInt(hours),
-        Number.parseInt(minutes)
-      );
-
-      const arrivalDateTime = new Date(
-        departureDateTime.getTime() + selectedRoute.estimatedDuration * 60000
-      );
-
-      const tripData = {
-        routeId: tripForm.routeId,
-        busId: tripForm.busId,
-        departureTime: departureDateTime.toISOString(),
-        arrivalTime: arrivalDateTime.toISOString(),
-        availableSeats: selectedBus.capacity,
-        customPrice: tripForm.useCustomPrice
-          ? Number.parseFloat(tripForm.customPrice)
-          : null,
-        companyId: session?.user?.companyId,
-      };
-
-      // Gérer la répétition
-      const tripsToCreate = [];
-      if (tripForm.repeatType === "none") {
-        tripsToCreate.push(tripData);
-      } else {
-        for (let i = 0; i < tripForm.repeatCount; i++) {
-          const tripDate = new Date(tripForm.departureDate);
-
-          if (tripForm.repeatType === "daily") {
-            tripDate.setDate(tripDate.getDate() + i);
-          } else if (tripForm.repeatType === "weekly") {
-            tripDate.setDate(tripDate.getDate() + i * 7);
-          } else if (tripForm.repeatType === "monthly") {
-            tripDate.setMonth(tripDate.getMonth() + i);
-          }
-
-          if (isAfter(tripDate, tripForm.repeatEndDate)) break;
-
-          const tripDateTime = new Date(tripDate);
-          tripDateTime.setHours(
-            Number.parseInt(hours),
-            Number.parseInt(minutes)
-          );
-          const tripArrival = new Date(
-            tripDateTime.getTime() + selectedRoute.estimatedDuration * 60000
-          );
-
-          tripsToCreate.push({
-            ...tripData,
-            departureTime: tripDateTime.toISOString(),
-            arrivalTime: tripArrival.toISOString(),
-          });
-        }
-      }
-
-      // Créer les voyages
-      for (const trip of tripsToCreate) {
-        const response = await fetch("/api/patron/trips", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(trip),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || "Erreur lors de la création");
-        }
-      }
-
-      toast({
-        title: "Succès",
-        description: `${tripsToCreate.length} voyage(s) créé(s) avec succès`,
-      });
-
-      fetchData();
-      resetForm();
-      setIsDialogOpen(false);
-    } catch (error: any) {
-      toast({
-        title: "Erreur",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const duplicateTrip = async (trip: Trip) => {
-    try {
-      const newDepartureTime = new Date(trip.departureTime);
-      newDepartureTime.setDate(newDepartureTime.getDate() + 1);
-
-      const newArrivalTime = new Date(trip.arrivalTime);
-      newArrivalTime.setDate(newArrivalTime.getDate() + 1);
-
-      const response = await fetch("/api/patron/trips", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          routeId: trip.route.id,
-          busId: trip.bus.id,
-          departureTime: newDepartureTime.toISOString(),
-          arrivalTime: newArrivalTime.toISOString(),
-          availableSeats: trip.bus.capacity,
-          companyId: session?.user?.companyId,
-        }),
-      });
-
-      if (response.ok) {
-        toast({
-          title: "Succès",
-          description: "Voyage dupliqué avec succès",
-        });
-        fetchData();
-      } else {
-        throw new Error("Erreur lors de la duplication");
-      }
-    } catch (error: any) {
-      toast({
-        title: "Erreur",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const updateTripStatus = async (tripId: string, newStatus: string) => {
-    try {
-      const response = await fetch(`/api/patron/trips/${tripId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (response.ok) {
-        toast({
-          title: "Succès",
-          description: "Statut mis à jour",
-        });
-        fetchData();
-      } else {
-        throw new Error("Erreur lors de la mise à jour");
-      }
-    } catch (error: any) {
-      toast({
-        title: "Erreur",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const deleteTrip = async (tripId: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce voyage ?")) return;
-
-    try {
-      const response = await fetch(`/api/patron/trips/${tripId}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        toast({
-          title: "Succès",
-          description: "Voyage supprimé",
-        });
-        fetchData();
-      } else {
-        throw new Error("Erreur lors de la suppression");
-      }
-    } catch (error: any) {
-      toast({
-        title: "Erreur",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const resetForm = () => {
-    setTripForm({
-      routeId: "",
-      busId: "",
-      departureDate: new Date(),
-      departureTime: "",
-      customPrice: "",
-      useCustomPrice: false,
-      repeatType: "none",
-      repeatEndDate: addDays(new Date(), 30),
-      repeatCount: 1,
-    });
-    setSelectedTrip(null);
-    setIsEditMode(false);
-  };
-
-  const getStatusBadge = (status: string) => {
-    const statusConfig = TRIP_STATUSES.find((s) => s.value === status);
-    return (
-      <Badge className={statusConfig?.color || "bg-gray-100 text-gray-800"}>
-        {statusConfig?.label || status}
-      </Badge>
-    );
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("fr-FR").format(amount) + " FCFA";
-  };
-
-  const formatDateTime = (dateString: string) => {
-    return format(new Date(dateString), "dd/MM/yyyy à HH:mm", { locale: fr });
-  };
-
-  const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return hours > 0
-      ? `${hours}h${mins > 0 ? ` ${mins}min` : ""}`
-      : `${mins}min`;
-  };
-
-  const filteredTrips = trips.filter((trip) => {
-    if (filters.status && trip.status !== filters.status) return false;
-    if (filters.routeId && trip.route.id !== filters.routeId) return false;
-
-    if (filters.dateRange !== "all") {
-      const tripDate = new Date(trip.departureTime);
-      const today = new Date();
-
-      if (filters.dateRange === "today" && !isSameDay(tripDate, today))
-        return false;
-      if (filters.dateRange === "week" && isAfter(tripDate, addDays(today, 7)))
-        return false;
-      if (
-        filters.dateRange === "month" &&
-        isAfter(tripDate, addDays(today, 30))
-      )
-        return false;
-    }
-
-    if (filters.searchQuery) {
-      const query = filters.searchQuery.toLowerCase();
-      return (
-        trip.route.name.toLowerCase().includes(query) ||
-        trip.bus.plateNumber.toLowerCase().includes(query) ||
-        trip.route.departureLocation.toLowerCase().includes(query) ||
-        trip.route.arrivalLocation.toLowerCase().includes(query)
-      );
-    }
-
-    return true;
-  });
-
-  const isSameDay = (date1: Date, date2: Date) => {
-    return date1.toDateString() === date2.toDateString();
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Programmation des voyages
-          </h1>
-          <p className="text-gray-600">Planifiez et gérez vos voyages</p>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <h2 className="text-2xl font-bold">Programmer un nouveau voyage</h2>
+
+        <FormField
+          control={form.control}
+          name="routeId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Route</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner une route" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {routes.map((route) => (
+                    <SelectItem key={route.id} value={route.id}>
+                      {route.departureLocation} - {route.arrivalLocation} (
+                      {route.name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>La route que ce voyage suivra.</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="busId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Bus</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un bus" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {buses.map((bus) => (
+                    <SelectItem key={bus.id} value={bus.id}>
+                      {bus.plateNumber} ({bus.model} - {bus.capacity} places)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>Le bus attribué à ce voyage.</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="departureDate"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel>Date de départ</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full pl-3 text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        {field.value ? (
+                          format(field.value, "PPP", { locale: fr })
+                        ) : (
+                          <span>Choisir une date</span>
+                        )}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={field.value}
+                      onSelect={field.onChange}
+                      disabled={(date) => date < new Date()}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                <FormDescription>
+                  La date à laquelle le voyage débutera.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="departureTime"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Heure de départ</FormLabel>
+                <FormControl>
+                  <TimePicker
+                    time={field.value}
+                    setTime={field.onChange}
+                    className="w-full"
+                  />
+                </FormControl>
+                <FormDescription>
+                  L&apos;heure exacte de départ du voyage.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
-        <Dialog
-          open={isDialogOpen}
-          onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) resetForm();
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Programmer un voyage
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Programmer un nouveau voyage</DialogTitle>
-            </DialogHeader>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Sélection route et bus */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="routeId">Route *</Label>
-                  <Select
-                    value={tripForm.routeId}
-                    onValueChange={(value) =>
-                      setTripForm((prev) => ({ ...prev, routeId: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner une route" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {routes.map((route) => (
-                        <SelectItem key={route.id} value={route.id}>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{route.name}</span>
-                            <span className="text-xs text-gray-500">
-                              {route.departureLocation} →{" "}
-                              {route.arrivalLocation}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="busId">Bus *</Label>
-                  <Select
-                    value={tripForm.busId}
-                    onValueChange={(value) =>
-                      setTripForm((prev) => ({ ...prev, busId: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un bus" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {buses.map((bus) => (
-                        <SelectItem key={bus.id} value={bus.id}>
-                          <div className="flex flex-col">
-                            <span className="font-medium">
-                              {bus.plateNumber}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {bus.brand} {bus.model} - {bus.capacity} places
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Date et heure */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Date de départ *</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="arrivalDate"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel>Date d&apos;arrivée</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
                       <Button
-                        variant="outline"
-                        className="w-full justify-start text-left font-normal"
+                        variant={"outline"}
+                        className={cn(
+                          "w-full pl-3 text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
                       >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(tripForm.departureDate, "dd MMMM yyyy", {
-                          locale: fr,
-                        })}
+                        {field.value ? (
+                          format(field.value, "PPP", { locale: fr })
+                        ) : (
+                          <span>Choisir une date</span>
+                        )}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                       </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={tripForm.departureDate}
-                        onSelect={(date) =>
-                          date &&
-                          setTripForm((prev) => ({
-                            ...prev,
-                            departureDate: date,
-                          }))
-                        }
-                        disabled={(date) => isBefore(date, new Date())}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div>
-                  <Label htmlFor="departureTime">Heure de départ *</Label>
-                  <Input
-                    id="departureTime"
-                    type="time"
-                    value={tripForm.departureTime}
-                    onChange={(e) =>
-                      setTripForm((prev) => ({
-                        ...prev,
-                        departureTime: e.target.value,
-                      }))
-                    }
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Prix personnalisé */}
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="useCustomPrice"
-                    checked={tripForm.useCustomPrice}
-                    onChange={(e) =>
-                      setTripForm((prev) => ({
-                        ...prev,
-                        useCustomPrice: e.target.checked,
-                      }))
-                    }
-                  />
-                  <Label htmlFor="useCustomPrice">
-                    Utiliser un prix personnalisé
-                  </Label>
-                </div>
-
-                {tripForm.useCustomPrice && (
-                  <div>
-                    <Label htmlFor="customPrice">
-                      Prix personnalisé (FCFA)
-                    </Label>
-                    <Input
-                      id="customPrice"
-                      type="number"
-                      min="0"
-                      value={tripForm.customPrice}
-                      onChange={(e) =>
-                        setTripForm((prev) => ({
-                          ...prev,
-                          customPrice: e.target.value,
-                        }))
-                      }
-                      placeholder="Prix en FCFA"
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={field.value}
+                      onSelect={field.onChange}
+                      disabled={(date) => date < new Date()}
+                      initialFocus
                     />
-                  </div>
-                )}
-              </div>
-
-              {/* Répétition */}
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="repeatType">Type de répétition</Label>
-                  <Select
-                    value={tripForm.repeatType}
-                    onValueChange={(value) =>
-                      setTripForm((prev) => ({ ...prev, repeatType: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Aucune répétition</SelectItem>
-                      <SelectItem value="daily">Quotidienne</SelectItem>
-                      <SelectItem value="weekly">Hebdomadaire</SelectItem>
-                      <SelectItem value="monthly">Mensuelle</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {tripForm.repeatType !== "none" && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="repeatCount">Nombre de répétitions</Label>
-                      <Input
-                        id="repeatCount"
-                        type="number"
-                        min="1"
-                        max="365"
-                        value={tripForm.repeatCount}
-                        onChange={(e) =>
-                          setTripForm((prev) => ({
-                            ...prev,
-                            repeatCount: Number.parseInt(e.target.value),
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Date de fin</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-full justify-start text-left font-normal"
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {format(tripForm.repeatEndDate, "dd MMMM yyyy", {
-                              locale: fr,
-                            })}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={tripForm.repeatEndDate}
-                            onSelect={(date) =>
-                              date &&
-                              setTripForm((prev) => ({
-                                ...prev,
-                                repeatEndDate: date,
-                              }))
-                            }
-                            disabled={(date) =>
-                              isBefore(date, tripForm.departureDate)
-                            }
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Aperçu */}
-              {tripForm.routeId && tripForm.busId && (
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-900 mb-2">
-                    Aperçu du voyage
-                  </h4>
-                  {(() => {
-                    const selectedRoute = routes.find(
-                      (r) => r.id === tripForm.routeId
-                    );
-                    const selectedBus = buses.find(
-                      (b) => b.id === tripForm.busId
-                    );
-
-                    if (!selectedRoute || !selectedBus) return null;
-
-                    return (
-                      <div className="space-y-2 text-sm text-blue-800">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
-                          <span>
-                            {selectedRoute.departureLocation} →{" "}
-                            {selectedRoute.arrivalLocation}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Bus className="h-4 w-4" />
-                          <span>
-                            {selectedBus.plateNumber} ({selectedBus.capacity}{" "}
-                            places)
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          <span>
-                            Durée:{" "}
-                            {formatDuration(selectedRoute.estimatedDuration)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4" />
-                          <span>
-                            Prix:{" "}
-                            {formatCurrency(
-                              tripForm.useCustomPrice && tripForm.customPrice
-                                ? Number.parseFloat(tripForm.customPrice)
-                                : selectedRoute.price
-                            )}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              <div className="flex gap-4 pt-4">
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1"
-                >
-                  {isSubmitting ? "Programmation..." : "Programmer le voyage"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                >
-                  Annuler
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <Input
-                placeholder="Rechercher par route, bus, destination..."
-                value={filters.searchQuery}
-                onChange={(e) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    searchQuery: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <Select
-              value={filters.status}
-              onValueChange={(value) =>
-                setFilters((prev) => ({ ...prev, status: value }))
-              }
-            >
-              <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Tous les statuts" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all_statuses">Tous les statuts</SelectItem>
-                {TRIP_STATUSES.map((status) => (
-                  <SelectItem key={status.value} value={status.value}>
-                    {status.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filters.routeId}
-              onValueChange={(value) =>
-                setFilters((prev) => ({ ...prev, routeId: value }))
-              }
-            >
-              <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Toutes les routes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all_routes">Toutes les routes</SelectItem>
-                {routes.map((route) => (
-                  <SelectItem key={route.id} value={route.id}>
-                    {route.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filters.dateRange}
-              onValueChange={(value) =>
-                setFilters((prev) => ({ ...prev, dateRange: value }))
-              }
-            >
-              <SelectTrigger className="w-full md:w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes les dates</SelectItem>
-                <SelectItem value="today">Aujourd'hui</SelectItem>
-                <SelectItem value="week">Cette semaine</SelectItem>
-                <SelectItem value="month">Ce mois</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Trips List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {filteredTrips.map((trip) => (
-          <Card key={trip.id} className="overflow-hidden">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">{trip.route.name}</CardTitle>
-                {getStatusBadge(trip.status)}
-              </div>
-              <div className="flex items-center gap-4 text-sm text-gray-600">
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />
-                  {trip.route.departureLocation} → {trip.route.arrivalLocation}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Bus className="h-3 w-3" />
-                  {trip.bus.plateNumber}
-                </span>
-              </div>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              {/* Horaires */}
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-gray-600">Départ</p>
-                  <p className="font-medium">
-                    {formatDateTime(trip.departureTime)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Arrivée</p>
-                  <p className="font-medium">
-                    {formatDateTime(trip.arrivalTime)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-gray-400" />
-                  <span>{trip.availableSeats} places</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-gray-400" />
-                  <span>{trip._count.reservations} réservations</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-gray-400" />
-                  <span>{formatCurrency(trip.route.price)}</span>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-2 pt-2">
-                {trip.status === "SCHEDULED" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => updateTripStatus(trip.id, "BOARDING")}
-                  >
-                    <Play className="h-3 w-3 mr-1" />
-                    Démarrer
-                  </Button>
-                )}
-
-                {trip.status === "BOARDING" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => updateTripStatus(trip.id, "DEPARTED")}
-                  >
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    Parti
-                  </Button>
-                )}
-
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => duplicateTrip(trip)}
-                >
-                  <Copy className="h-3 w-3 mr-1" />
-                  Dupliquer
-                </Button>
-
-                {trip.status === "SCHEDULED" && (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => deleteTrip(trip.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredTrips.length === 0 && (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <CalendarIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {trips.length === 0 ? "Aucun voyage programmé" : "Aucun résultat"}
-            </h3>
-            <p className="text-gray-600 mb-4">
-              {trips.length === 0
-                ? "Commencez par programmer votre premier voyage"
-                : "Aucun voyage ne correspond à vos critères de recherche"}
-            </p>
-            {trips.length === 0 && (
-              <Button onClick={() => setIsDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Programmer un voyage
-              </Button>
+                  </PopoverContent>
+                </Popover>
+                <FormDescription>
+                  La date estimée d&apos;arrivée du voyage.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
             )}
-          </CardContent>
-        </Card>
-      )}
-    </div>
+          />
+          <FormField
+            control={form.control}
+            name="arrivalTime"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Heure d&apos;arrivée</FormLabel>
+                <FormControl>
+                  <TimePicker
+                    time={field.value}
+                    setTime={field.onChange}
+                    className="w-full"
+                  />
+                </FormControl>
+                <FormDescription>
+                  L&apos;heure exacte d&apos;arrivée du voyage.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="boardingStartTime"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Heure de début d&apos;embarquement</FormLabel>
+                <FormControl>
+                  <TimePicker
+                    time={field.value || ""}
+                    setTime={field.onChange}
+                    className="w-full"
+                  />
+                </FormControl>
+                <FormDescription>
+                  Heure à laquelle l&apos;embarquement commencera.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="boardingEndTime"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Heure de fin d&apos;embarquement</FormLabel>
+                <FormControl>
+                  <TimePicker
+                    time={field.value || ""}
+                    setTime={field.onChange}
+                    className="w-full"
+                  />
+                </FormControl>
+                <FormDescription>
+                  Heure à laquelle l&apos;embarquement se terminera.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <FormField
+          control={form.control}
+          name="basePrice"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Prix de base du billet</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.01"
+                  {...field}
+                  value={field.value || ""}
+                />
+              </FormControl>
+              <FormDescription>
+                Le prix unitaire de base pour un billet.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="availableSeats"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Places disponibles</FormLabel>
+              <FormControl>
+                <Input type="number" {...field} value={field.value || ""} />
+              </FormControl>
+              <FormDescription>
+                Nombre de places disponibles pour ce voyage.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="status"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Statut du voyage</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner le statut" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {Object.values(TripStatus).map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status.replace(/_/g, " ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>Le statut actuel du voyage.</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="tripType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Type de voyage</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner le type de voyage" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {Object.values(TripType).map((type) => (
+                    <SelectItem key={type as string} value={type as string}>
+                      {type.replace(/_/g, " ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Le type de ce voyage (standard, spécial, etc.).
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="services"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Services (séparés par des virgules)</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormDescription>Ex: AC, WIFI, TV</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="driverName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Nom du chauffeur</FormLabel>
+              <FormControl>
+                <Input {...field} value={field.value || ""} />
+              </FormControl>
+              <FormDescription>
+                Nom du chauffeur affecté au voyage.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="driverPhone"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Téléphone du chauffeur</FormLabel>
+              <FormControl>
+                <Input type="tel" {...field} value={field.value || ""} />
+              </FormControl>
+              <FormDescription>
+                Numéro de téléphone du chauffeur.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="notes"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Notes additionnelles</FormLabel>
+              <FormControl>
+                <Textarea {...field} value={field.value || ""} />
+              </FormControl>
+              <FormDescription>
+                Toute information supplémentaire pertinente pour ce voyage.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? "Programmation..." : "Programmer le voyage"}
+        </Button>
+      </form>
+    </Form>
   );
 }

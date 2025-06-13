@@ -1,344 +1,691 @@
-// User and Authentication Types
-export interface User {
-  id: string;
+import type {
+  User as PrismaUser,
+  Account as PrismaAccount,
+  Session as PrismaSession,
+  EmployeeAuthCode as PrismaEmployeeAuthCode,
+  SubscriptionTransaction as PrismaSubscriptionTransaction,
+  PasswordHistory as PrismaPasswordHistory,
+  SecurityQuestion as PrismaSecurityQuestion,
+  LoginHistory as PrismaLoginHistory,
+  Company as PrismaCompany,
+  Subscription as PrismaSubscription,
+  CompanyDocument as PrismaCompanyDocument,
+  SubscriptionHistory as PrismaSubscriptionHistory,
+  Activity as PrismaActivity,
+  Bus as PrismaBus,
+  Route as PrismaRoute,
+  RouteStop as PrismaRouteStop,
+  FavoriteRoute as PrismaFavoriteRoute,
+  Station as PrismaStation,
+  Trip as PrismaTrip,
+  Promotion as PrismaPromotion,
+  PromotionTrip as PrismaPromotionTrip,
+  Reservation as PrismaReservation,
+  Payment as PrismaPayment,
+  Refund as PrismaRefund,
+  Ticket as PrismaTicket,
+  Review as PrismaReview,
+  Notification as PrismaNotification,
+  NotificationPreference as PrismaNotificationPreference,
+  DeviceToken as PrismaDeviceToken,
+  ActivityLog as PrismaActivityLog,
+  // Enums from Prisma client
+  UserRole as PrismaUserRole,
+  UserStatus as PrismaUserStatus,
+  Gender as PrismaGender,
+  IdentificationType as PrismaIdentificationType,
+  EmployeeRole as PrismaEmployeeRole,
+  EmployeeDepartment as PrismaEmployeeDepartment,
+  EmployeePosition as PrismaEmployeePosition,
+  DocumentType as PrismaDocumentType,
+  SubscriptionStatus as PrismaSubscriptionStatus,
+  CompanySize as PrismaCompanySize,
+  CompanyStatus as PrismaCompanyStatus,
+  SubscriptionTier as PrismaSubscriptionTier,
+  ActivityType as PrismaActivityType,
+  ActivityStatus as PrismaActivityStatus,
+  BusStatus as PrismaBusStatus,
+  FuelType as PrismaFuelType,
+  RouteStatus as PrismaRouteStatus,
+  RouteType as PrismaRouteType,
+  StationType as PrismaStationType,
+  TripStatus as PrismaTripStatus,
+  TripType as PrismaTripType,
+  CancellationReason as PrismaCancellationReason,
+  DiscountType as PrismaDiscountType,
+  ReservationStatus as PrismaReservationStatus,
+  PaymentStatus as PrismaPaymentStatus,
+  PaymentMethod as PrismaPaymentMethod,
+  RefundStatus as PrismaRefundStatus,
+  PassengerType as PrismaPassengerType,
+  TicketStatus as PrismaTicketStatus,
+  NotificationType as PrismaNotificationType,
+  NotificationPriority as PrismaNotificationPriority,
+  LoyaltyProgram as PrismaLoyaltyProgram,
+  Prisma, // Import Prisma namespace for type utilities
+} from "@prisma/client";
+
+// Re-export Prisma enums for direct use in components
+export type {
+  PrismaUserRole as UserRole,
+  PrismaUserStatus as UserStatus,
+  PrismaGender as Gender,
+  PrismaIdentificationType as IdentificationType,
+  PrismaEmployeeRole as EmployeeRole,
+  PrismaEmployeeDepartment as EmployeeDepartment,
+  PrismaEmployeePosition as EmployeePosition,
+  PrismaDocumentType as DocumentType,
+  PrismaSubscriptionStatus as SubscriptionStatus,
+  PrismaCompanySize as CompanySize,
+  PrismaCompanyStatus as CompanyStatus,
+  PrismaSubscriptionTier as SubscriptionTier,
+  PrismaActivityType as ActivityType,
+  PrismaActivityStatus as ActivityStatus,
+  PrismaBusStatus as BusStatus,
+  PrismaFuelType as FuelType,
+  PrismaRouteStatus as RouteStatus,
+  PrismaRouteType as RouteType,
+  PrismaStationType as StationType,
+  PrismaTripStatus as TripStatus,
+  PrismaTripType as TripType,
+  PrismaCancellationReason as CancellationReason,
+  PrismaDiscountType as DiscountType,
+  PrismaReservationStatus as ReservationStatus,
+  PrismaPaymentStatus as PaymentStatus,
+  PrismaPaymentMethod as PaymentMethod,
+  PrismaRefundStatus as RefundStatus,
+  PrismaPassengerType as PassengerType,
+  PrismaTicketStatus as TicketStatus,
+  PrismaNotificationType as NotificationType,
+  PrismaNotificationPriority,
+  PrismaLoyaltyProgram as LoyaltyProgram,
+};
+
+// Define custom types extending Prisma's generated types with includes or computed properties
+export interface User extends PrismaUser {
+  accounts?: PrismaAccount[];
+  sessions?: PrismaSession[];
+  employeeAuthCodes?: PrismaEmployeeAuthCode[];
+  subscriptionTransactions?: PrismaSubscriptionTransaction[];
+  ownedCompanies?: PrismaCompany[];
+  employeeAt?: PrismaCompany | null;
+  activeCompany?: PrismaCompany | null;
+  reservations?: PrismaReservation[];
+  tickets?: PrismaTicket[];
+  notifications?: PrismaNotification[];
+  reviews?: PrismaReview[];
+  favorites?: PrismaFavoriteRoute[];
+  payments?: PrismaPayment[];
+  refunds?: PrismaRefund[];
+  deviceTokens?: PrismaDeviceToken[];
+  activityLogs?: PrismaActivityLog[];
+  loginHistory?: PrismaLoginHistory[];
+  securityQuestions?: PrismaSecurityQuestion[];
+  passwordHistory?: PrismaPasswordHistory[];
+  notificationPreferences?: PrismaNotificationPreference[];
+  subscriptions?: PrismaSubscription[];
+  company?: PrismaCompany | null;
+  employee?: PrismaUser | null;
+}
+
+export interface EmployeeAuthCode extends PrismaEmployeeAuthCode {
+  employee?: PrismaUser;
+}
+
+export interface SubscriptionTransaction extends PrismaSubscriptionTransaction {
+  user?: PrismaUser;
+  company?: PrismaCompany;
+}
+
+export interface PasswordHistory extends PrismaPasswordHistory {
+  user?: PrismaUser;
+}
+
+export interface SecurityQuestion extends PrismaSecurityQuestion {
+  user?: PrismaUser;
+}
+
+export interface LoginHistory extends PrismaLoginHistory {
+  user?: PrismaUser;
+}
+
+export interface Company extends PrismaCompany {
+  owner?: PrismaUser;
+  employees?: PrismaUser[];
+  activeForUsers?: PrismaUser[];
+  buses?: PrismaBus[];
+  routes?: PrismaRoute[];
+  stations?: PrismaStation[];
+  trips?: PrismaTrip[];
+  reservations?: PrismaReservation[];
+  tickets?: PrismaTicket[];
+  reviews?: PrismaReview[];
+  activities?: PrismaActivity[];
+  promotions?: PrismaPromotion[];
+  payments?: PrismaPayment[];
+  refunds?: PrismaRefund[];
+  documents?: PrismaCompanyDocument[];
+  subscriptionTransactions?: PrismaSubscriptionTransaction[];
+  subscriptionHistory?: PrismaSubscriptionHistory[];
+  subscriptions?: PrismaSubscription[];
+  totalEmployees?: number; // Example of computed field
+  totalBuses?: number; // Example of computed field
+  totalRevenue: number; // Changed to non-optional to match error message's implied base type
+  loyaltyProgram?: PrismaLoyaltyProgram | null; // Added
+}
+
+export interface Subscription extends PrismaSubscription {
+  company?: PrismaCompany;
+  user?: PrismaUser;
+}
+
+export interface CompanyDocument extends PrismaCompanyDocument {
+  company?: PrismaCompany;
+}
+
+export interface SubscriptionHistory extends PrismaSubscriptionHistory {
+  company?: PrismaCompany;
+}
+
+export interface Activity extends PrismaActivity {
+  user?: PrismaUser | null;
+  company?: PrismaCompany | null;
+}
+
+export interface Bus extends PrismaBus {
+  company?: PrismaCompany;
+  trips?: PrismaTrip[];
+}
+
+export interface Route extends PrismaRoute {
+  company?: PrismaCompany | null;
+  stops?: PrismaRouteStop[];
+  trips?: PrismaTrip[];
+  favorites?: PrismaFavoriteRoute[];
+  promotions?: PrismaPromotionTrip[];
+}
+
+export interface RouteStop extends PrismaRouteStop {
+  route?: PrismaRoute;
+}
+
+export interface FavoriteRoute extends PrismaFavoriteRoute {
+  user?: PrismaUser;
+  route?: PrismaRoute;
+}
+
+export interface Station extends PrismaStation {
+  company?: PrismaCompany;
+}
+
+export interface Trip extends PrismaTrip {
+  route?: PrismaRoute;
+  bus?: PrismaBus;
+  company?: PrismaCompany;
+  reservations?: PrismaReservation[];
+  tickets?: PrismaTicket[];
+  promotions?: PrismaPromotionTrip[];
+  // Assuming driver and conductor are Users with EmployeeRole
+  driver?: PrismaUser | null;
+  conductor?: PrismaUser | null;
+  driverId?: string; // Added
+  conductorId?: string; // Added
+  availableSeats: number; // Computed property for frontend
+}
+
+export interface Promotion extends PrismaPromotion {
+  company?: PrismaCompany;
+  targetRoutes?: PrismaRoute[];
+  targetTrips?: PrismaPromotionTrip[];
+}
+
+export interface PromotionTrip extends PrismaPromotionTrip {
+  promotion?: PrismaPromotion;
+  trip?: PrismaTrip;
+}
+
+export interface Reservation extends PrismaReservation {
+  trip?: PrismaTrip;
+  user?: PrismaUser | null;
+  company?: PrismaCompany;
+  tickets?: PrismaTicket[];
+  payments?: PrismaPayment[];
+  refunds?: PrismaRefund[];
+}
+
+export interface Payment extends PrismaPayment {
+  user?: PrismaUser | null;
+  company?: PrismaCompany;
+  reservation?: PrismaReservation | null;
+  refunds?: PrismaRefund[];
+}
+
+export interface Refund extends PrismaRefund {
+  user?: PrismaUser;
+  company?: PrismaCompany;
+  reservation?: PrismaReservation;
+  payment?: PrismaPayment;
+}
+
+export interface Ticket extends PrismaTicket {
+  trip?: PrismaTrip;
+  user?: PrismaUser | null;
+  company?: PrismaCompany;
+  reservation?: PrismaReservation | null;
+}
+
+export interface Review extends PrismaReview {
+  user?: PrismaUser;
+  company?: PrismaCompany;
+}
+
+export interface Notification extends PrismaNotification {
+  user?: PrismaUser;
+}
+
+export interface NotificationPreference extends PrismaNotificationPreference {
+  user?: PrismaUser;
+}
+
+export interface DeviceToken extends PrismaDeviceToken {
+  user?: PrismaUser;
+}
+
+export interface ActivityLog extends PrismaActivityLog {
+  user?: PrismaUser;
+}
+
+// --- Form Types (Updated to reflect new schema fields) ---
+
+export interface LoginForm {
   email: string;
-  name?: string;
-  role: UserRole;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  password: string;
 }
 
-export enum UserRole {
-  ADMIN = "ADMIN",
-  PATRON = "PATRON",
-  GESTIONNAIRE = "GESTIONNAIRE",
-  CAISSIER = "CAISSIER",
-  CLIENT = "CLIENT",
+export interface RegisterForm {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  phone: string;
+  countryCode: string;
+  role: PrismaUserRole; // For client registration
 }
 
-// Company Types
-export interface Company {
-  id: string;
+export interface CompanyForm {
   name: string;
   description?: string;
+  logo?: string;
+  coverImage?: string;
   email: string;
   phone: string;
+  countryCode: string;
   address: string;
-  city: string;
   country: string;
-  logo?: string;
-  status: CompanyStatus;
-  isActive: boolean;
-  patronId: string;
-  createdAt: Date;
-  updatedAt: Date;
-  buses?: Bus[];
-  routes?: Route[];
-  employees?: Employee[];
-  trips?: Trip[];
+  city: string;
+  commune?: string;
+  website?: string;
+  postalCode?: string;
+  licenseNumber: string;
+  taxId?: string;
+  foundedYear?: number;
+  size?: PrismaCompanySize;
+  operatingCountries?: string[];
+  primaryRoutes?: any; // Adjust as needed for specific JSON structure
+  services?: string[];
+  vehicleTypes?: string[];
+  businessHours?: any; // Adjust as needed for specific JSON structure
+  socialMedia?: any; // Adjust as needed for specific JSON structure
+  certifications?: string[];
+  bookingSettings?: any; // Adjust as needed for specific JSON structure
+  paymentMethods?: PrismaPaymentMethod[];
+  cancellationPolicy?: string;
+  refundPolicy?: string;
+  termsAndConditions?: string;
+  legalStatus?: string;
+  insuranceProvider?: string;
+  insurancePolicy?: string;
+  insuranceExpiry?: Date;
+  safetyRating?: number;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+  bankCode?: string;
+  swiftCode?: string;
 }
 
-export enum CompanyStatus {
-  PENDING = "PENDING",
-  APPROVED = "APPROVED",
-  REJECTED = "REJECTED",
-  SUSPENDED = "SUSPENDED",
-}
-
-// Bus Types
-export interface Bus {
-  id: string;
+export interface BusForm {
   plateNumber: string;
   model: string;
-  brand: string;
+  brand?: string;
   capacity: number;
-  type: BusType;
-  status: BusStatus;
-  isActive: boolean;
-  companyId: string;
-  company?: Company;
+  year?: number;
+  status?: PrismaBusStatus;
+  mileage?: number;
+  color?: string;
+  fuelType?: PrismaFuelType;
   features?: string[];
-  images?: string[];
-  createdAt: Date;
-  updatedAt: Date;
-  trips?: Trip[];
+  lastMaintenance?: Date;
+  nextMaintenance?: Date;
+  insuranceExpiry?: Date;
+  technicalControlExpiry?: Date;
+  registrationExpiry?: Date;
+  purchaseDate?: Date;
+  purchasePrice?: number;
 }
 
-export enum BusType {
-  STANDARD = "STANDARD",
-  VIP = "VIP",
-  LUXURY = "LUXURY",
-  SLEEPER = "SLEEPER",
-}
-
-export enum BusStatus {
-  AVAILABLE = "AVAILABLE",
-  IN_TRANSIT = "IN_TRANSIT",
-  MAINTENANCE = "MAINTENANCE",
-  OUT_OF_SERVICE = "OUT_OF_SERVICE",
-}
-
-// Route Types
-export interface Route {
-  id: string;
+export interface RouteForm {
   name: string;
-  description?: string;
   departureLocation: string;
   arrivalLocation: string;
-  departureCountry?: string;
-  arrivalCountry?: string;
+  departureCountry: string;
+  arrivalCountry: string;
   distance: number;
   estimatedDuration: number;
   basePrice: number;
-  isInternational: boolean;
-  status: RouteStatus;
-  isActive: boolean;
-  companyId: string;
-  company?: Company;
-  stops?: RouteStop[];
-  trips?: Trip[];
-  totalTrips?: number;
-  createdAt: Date;
-  updatedAt: Date;
+  description?: string;
+  isInternational?: boolean;
+  status?: PrismaRouteStatus;
+  routeType?: PrismaRouteType;
+  difficulty?: string;
+  scenicRating?: number;
+  roadCondition?: string;
+  dynamicPricing?: boolean;
+  peakSeasonMultiplier?: number;
+  weekendMultiplier?: number;
+  holidayMultiplier?: number;
+  minimumBookingTime?: number;
+  maximumBookingDays?: number;
+  waypoints?: any[]; // Adjust as needed for specific JSON structure
+  tollFees?: number;
+  borderCrossings?: string[];
+  departureCoordinates?: any; // Adjust as needed for specific JSON structure
+  arrivalCoordinates?: any; // Adjust as needed for specific JSON structure
+  routePath?: any; // Adjust as needed for specific JSON structure
+  stops?: Omit<
+    PrismaRouteStop,
+    "id" | "routeId" | "route" | "createdAt" | "updatedAt"
+  >[];
 }
 
-export enum RouteStatus {
-  ACTIVE = "ACTIVE",
-  INACTIVE = "INACTIVE",
-  MAINTENANCE = "MAINTENANCE",
-}
-
-export interface RouteStop {
-  id: string;
+export interface RouteStopForm {
   name: string;
-  location: string;
+  country: string;
+  city: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
   order: number;
   estimatedArrival: number;
-  price: number;
-  routeId: string;
-  route?: Route;
+  stopDuration?: number;
+  isOptional?: boolean;
+  facilities?: string[];
+  description?: string;
+  contactPhone?: string;
+  isActive?: boolean;
+  priceAdjustment?: number;
 }
 
-// Employee Types
-export interface Employee {
-  id: string;
+export interface TripForm {
+  routeId: string;
+  busId: string;
+  departureTime: Date;
+  arrivalTime: Date;
+  basePrice: number;
+  currentPrice: number;
+  availableSeats: number;
+  status?: PrismaTripStatus;
+  tripType?: PrismaTripType;
+  services?: string[];
+  driverName?: string;
+  driverPhone?: string;
+  notes?: string;
+  isArchived?: boolean;
+  boardingStartTime?: Date;
+  boardingEndTime?: Date;
+  driverId?: string;
+  conductorId?: string;
+}
+
+export interface EmployeeForm {
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
-  role: EmployeeRole;
-  status: EmployeeStatus;
-  isActive: boolean;
-  companyId: string;
-  company?: Company;
-  hireDate: Date;
+  countryCode: string;
+  role: PrismaEmployeeRole;
+  department?: PrismaEmployeeDepartment;
+  position?: PrismaEmployeePosition;
+  hireDate?: Date;
   salary?: number;
   address?: string;
+  city?: string;
+  country?: string;
+  postalCode?: string;
   emergencyContact?: string;
-  licenseNumber?: string;
+  emergencyPhone?: string;
+  emergencyRelation?: string;
+  employeeNotes?: string;
+  education?: string;
+  skills?: string[];
+  languages?: string[];
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+  driverLicenseNumber?: string;
+  passportNumber?: string;
+  socialSecurityNumber?: string;
   licenseExpiry?: Date;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
-export enum EmployeeRole {
-  DRIVER = "DRIVER",
-  CONDUCTOR = "CONDUCTOR",
-  MECHANIC = "MECHANIC",
-  MANAGER = "MANAGER",
-  CASHIER = "CASHIER",
-}
-
-export enum EmployeeStatus {
-  ACTIVE = "ACTIVE",
-  INACTIVE = "INACTIVE",
-  ON_LEAVE = "ON_LEAVE",
-  SUSPENDED = "SUSPENDED",
-}
-
-// Trip Types
-export interface Trip {
-  id: string;
-  departureDate: Date;
-  departureTime: string;
-  arrivalDate: Date;
-  arrivalTime: string;
-  availableSeats: number;
-  price: number;
-  status: TripStatus;
-  isActive: boolean;
-  routeId: string;
-  route?: Route;
-  busId: string;
-  bus?: Bus;
-  companyId: string;
-  company?: Company;
-  driverId?: string;
-  driver?: Employee;
-  conductorId?: string;
-  conductor?: Employee;
-  reservations?: Reservation[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export enum TripStatus {
-  SCHEDULED = "SCHEDULED",
-  IN_PROGRESS = "IN_PROGRESS",
-  COMPLETED = "COMPLETED",
-  CANCELLED = "CANCELLED",
-  DELAYED = "DELAYED",
-}
-
-// Reservation Types
-export interface Reservation {
-  id: string;
+export interface ReservationForm {
   passengerName: string;
   passengerPhone: string;
   passengerEmail?: string;
-  seatNumbers: string[];
+  seatNumbers: number[];
   totalAmount: number;
-  status: ReservationStatus;
-  paymentStatus: PaymentStatus;
-  paymentMethod?: string;
-  paymentReference?: string;
   tripId: string;
-  trip?: Trip;
   userId?: string;
-  user?: User;
-  createdAt: Date;
-  updatedAt: Date;
+  companyId: string;
+  paymentMethod?: PrismaPaymentMethod;
+  bookingSource?: string;
+  specialRequests?: string;
+  emergencyContact?: string;
+  passengerCount?: number;
+  passengerDetails?: any; // Adjust as needed for specific JSON structure
+  promotionCode?: string;
 }
 
-export enum ReservationStatus {
-  PENDING = "PENDING",
-  CONFIRMED = "CONFIRMED",
-  CANCELLED = "CANCELLED",
-  COMPLETED = "COMPLETED",
-}
-
-export enum PaymentStatus {
-  PENDING = "PENDING",
-  PAID = "PAID",
-  FAILED = "FAILED",
-  REFUNDED = "REFUNDED",
-}
-
-// Activity Types
-export interface Activity {
-  id: string;
-  type: ActivityType;
-  description: string;
-  userId?: string;
-  user?: User;
-  companyId?: string;
-  company?: Company;
-  metadata?: Record<string, any>;
-  createdAt: Date;
-}
-
-export enum ActivityType {
-  USER_CREATED = "USER_CREATED",
-  USER_UPDATED = "USER_UPDATED",
-  USER_DELETED = "USER_DELETED",
-  COMPANY_CREATED = "COMPANY_CREATED",
-  COMPANY_UPDATED = "COMPANY_UPDATED",
-  COMPANY_APPROVED = "COMPANY_APPROVED",
-  COMPANY_REJECTED = "COMPANY_REJECTED",
-  BUS_CREATED = "BUS_CREATED",
-  BUS_UPDATED = "BUS_UPDATED",
-  BUS_DELETED = "BUS_DELETED",
-  ROUTE_CREATED = "ROUTE_CREATED",
-  ROUTE_UPDATED = "ROUTE_UPDATED",
-  ROUTE_DELETED = "ROUTE_DELETED",
-  TRIP_CREATED = "TRIP_CREATED",
-  TRIP_UPDATED = "TRIP_UPDATED",
-  TRIP_CANCELLED = "TRIP_CANCELLED",
-  RESERVATION_CREATED = "RESERVATION_CREATED",
-  RESERVATION_CANCELLED = "RESERVATION_CANCELLED",
-  PAYMENT_PROCESSED = "PAYMENT_PROCESSED",
-  EMPLOYEE_CREATED = "EMPLOYEE_CREATED",
-  EMPLOYEE_UPDATED = "EMPLOYEE_UPDATED",
-  EMPLOYEE_DELETED = "EMPLOYEE_DELETED",
-}
-
-// Notification Types
-export interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: NotificationType;
-  isRead: boolean;
-  userId?: string;
-  user?: User;
-  companyId?: string;
-  company?: Company;
-  metadata?: Record<string, any>;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export enum NotificationType {
-  INFO = "INFO",
-  SUCCESS = "SUCCESS",
-  WARNING = "WARNING",
-  ERROR = "ERROR",
-  RESERVATION = "RESERVATION",
-  PAYMENT = "PAYMENT",
-  TRIP = "TRIP",
-  SYSTEM = "SYSTEM",
-}
-
-// Subscription Types
-export interface Subscription {
-  id: string;
-  planName: string;
-  planType: SubscriptionPlan;
-  status: SubscriptionStatus;
-  startDate: Date;
-  endDate: Date;
+export interface PaymentForm {
   amount: number;
   currency: string;
-  paymentReference?: string;
-  isActive: boolean;
+  method: PrismaPaymentMethod;
+  reference?: string;
+  processorId?: string;
+  processorFee?: number;
+  metadata?: any; // Adjust as needed for specific JSON structure
+  receiptUrl?: string;
+  userId?: string;
   companyId: string;
-  company?: Company;
-  features: string[];
-  createdAt: Date;
-  updatedAt: Date;
+  reservationId?: string;
 }
 
-export enum SubscriptionPlan {
-  BASIC = "BASIC",
-  PREMIUM = "PREMIUM",
-  ENTERPRISE = "ENTERPRISE",
+export interface RefundForm {
+  amount: number;
+  reason: string;
+  status?: PrismaRefundStatus;
+  processorId?: string;
+  processorFee?: number;
+  metadata?: any; // Adjust as needed for specific JSON structure
+  notes?: string;
+  userId: string;
+  companyId: string;
+  reservationId: string;
+  paymentId: string;
 }
 
-export enum SubscriptionStatus {
-  ACTIVE = "ACTIVE",
-  EXPIRED = "EXPIRED",
-  CANCELLED = "CANCELLED",
-  PENDING = "PENDING",
+export interface TicketForm {
+  ticketNumber: string;
+  passengerName: string;
+  passengerPhone: string;
+  passengerEmail?: string;
+  seatNumber: number;
+  price: number;
+  status?: PrismaTicketStatus;
+  qrCode?: string;
+  qrHash?: string;
+  barcode?: string;
+  issueDate?: Date;
+  validUntil?: Date;
+  usedAt?: Date;
+  verificationCode?: string;
+  isVerified?: boolean;
+  verifiedBy?: string;
+  verifiedAt?: Date;
+  passengerType?: PrismaPassengerType;
+  passengerDetails?: any; // Adjust as needed for specific JSON structure
+  boardingPoint?: string;
+  alightingPoint?: string;
+  hasLuggage?: boolean;
+  luggageDetails?: any; // Adjust as needed for specific JSON structure
+  specialServices?: string[];
+  tripId: string;
+  userId?: string;
+  companyId: string;
+  reservationId?: string;
 }
 
-// API Response Types
-export interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
+export interface ReviewForm {
+  rating: number;
+  comment?: string;
+  serviceRating?: number;
+  comfortRating?: number;
+  punctualityRating?: number;
+  driverRating?: number;
+  isPublic?: boolean;
+  tripDate?: Date;
+  routeName?: string;
+  tripId?: string;
+  userId: string;
+  companyId: string;
 }
 
-export interface PaginatedResponse<T = any> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
+export interface NotificationPreferenceForm {
+  type: PrismaNotificationType;
+  email?: boolean;
+  push?: boolean;
+  sms?: boolean;
+  inApp?: boolean;
+  userId: string;
 }
 
-// Dashboard Stats Types
+export interface DeviceTokenForm {
+  token: string;
+  device?: string;
+  platform?: string;
+  appVersion?: string;
+  lastUsed?: Date;
+  userId: string;
+}
+
+export interface ActivityLogForm {
+  action: string;
+  description?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  method?: string;
+  endpoint?: string;
+  statusCode?: number;
+  duration?: number;
+  sessionId?: string;
+  deviceInfo?: any; // Adjust as needed for specific JSON structure
+  location?: any; // Adjust as needed for specific JSON structure
+  entityType?: string;
+  entityId?: string;
+  userId: string;
+}
+
+export interface CompanyDocumentForm {
+  name: string;
+  type: DocumentType;
+  fileUrl: string;
+  fileSize?: number;
+  mimeType?: string;
+  isVerified?: boolean;
+  verifiedAt?: Date;
+  verifiedBy?: string;
+  expiryDate?: Date;
+  companyId: string;
+}
+
+export interface SubscriptionForm {
+  tier: PrismaSubscriptionTier;
+  status?: PrismaSubscriptionStatus;
+  startDate?: Date;
+  endDate?: Date;
+  amount?: number;
+  currency?: string;
+  period?: string;
+  paymentMethod?: string;
+  paymentDate?: Date;
+  paymentReference?: string;
+  transactionId?: string;
+  companyId: string;
+  userId: string;
+}
+
+export interface PromotionForm {
+  name: string;
+  description?: string;
+  code: string;
+  discountType?: PrismaDiscountType;
+  discountValue: number;
+  minPurchase?: number;
+  maxDiscount?: number;
+  startDate: Date;
+  endDate: Date;
+  isActive?: boolean;
+  usageLimit?: number;
+  perUserLimit?: number;
+  targetUserType?: PrismaUserRole;
+  image?: string;
+  termsAndConditions?: string;
+  companyId: string;
+  targetRouteIds?: string[]; // For linking to routes
+  targetTripIds?: string[]; // For linking to trips
+}
+
+export interface StationForm {
+  name: string;
+  address: string;
+  city: string;
+  country: string;
+  latitude?: number;
+  longitude?: number;
+  stationType?: PrismaStationType;
+  facilities?: string[];
+  isActive?: boolean;
+  phone?: string;
+  email?: string;
+  manager?: string;
+  openingHours?: any; // Adjust as needed for specific JSON structure
+  capacity?: number;
+  hasWifi?: boolean;
+  hasRestrooms?: boolean;
+  hasWaitingRoom?: boolean;
+  hasTicketCounter?: boolean;
+  hasCafeteria?: boolean;
+  images?: string[];
+  virtualTour?: string;
+  companyId: string;
+}
+
+// --- Utility Types ---
+export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
+export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
+
+// --- Dashboard Stats Types (Updated to reflect new schema fields) ---
 export interface DashboardStats {
   totalUsers: number;
   totalCompanies: number;
@@ -349,10 +696,32 @@ export interface DashboardStats {
   totalRevenue: number;
   activeTrips: number;
   pendingReservations: number;
-  recentActivities: Activity[];
+  recentActivities: Activity[]; // Using the extended Activity type
+  // Add more specific stats as needed based on your dashboard requirements
+  companyStats?: {
+    active: number;
+    pending: number;
+    suspended: number;
+  };
+  tripStats?: {
+    scheduled: number;
+    inProgress: number;
+    completed: number;
+    cancelled: number;
+  };
+  paymentStats?: {
+    completed: number;
+    pending: number;
+    failed: number;
+  };
+  userStats?: {
+    clients: number;
+    employees: number;
+    patrons: number;
+  };
 }
 
-// Search and Filter Types
+// --- Search and Filter Types (Updated to reflect new schema fields) ---
 export interface SearchFilters {
   query?: string;
   status?: string;
@@ -361,91 +730,137 @@ export interface SearchFilters {
   dateTo?: Date;
   companyId?: string;
   routeId?: string;
+  busId?: string;
+  driverId?: string;
+  passengerName?: string;
+  paymentStatus?: PrismaPaymentStatus;
+  reservationStatus?: PrismaReservationStatus;
   page?: number;
   limit?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
 }
 
-// Form Types
-export interface LoginForm {
-  email: string;
-  password: string;
-}
+// --- Specific Payload Types for Prisma Includes ---
+export type TripWithDetails = Prisma.TripGetPayload<{
+  include: {
+    route: {
+      select: {
+        id: true;
+        name: true;
+        departureLocation: true;
+        arrivalLocation: true;
+        distance: true;
+        estimatedDuration: true;
+        basePrice: true;
+      };
+    };
+    bus: {
+      select: {
+        id: true;
+        plateNumber: true;
+        model: true;
+        capacity: true;
+      };
+    };
+    _count: {
+      select: {
+        reservations: true;
+        tickets: true;
+      };
+    };
+  };
+}>;
 
-export interface RegisterForm {
-  name: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-  phone?: string;
-}
+export type TripWithReservationsAndUsers = Prisma.TripGetPayload<{
+  include: {
+    route: true;
+    reservations: {
+      include: { user: true };
+    };
+  };
+}>;
 
-export interface CompanyForm {
-  name: string;
-  description?: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  country: string;
-  logo?: string;
-}
+export type UserProfile = Prisma.UserGetPayload<{
+  select: {
+    id: true;
+    name: true;
+    email: true;
+    phone: true;
+    countryCode: true;
+    role: true;
+    status: true;
+    firstName: true;
+    lastName: true;
+    country: true;
+    city: true;
+    commune: true;
+    address: true;
+    dateOfBirth: true;
+    gender: true;
+    nationality: true;
+    idNumber: true;
+    idType: true;
+    idExpiryDate: true;
+    department: true;
+    position: true;
+    hireDate: true;
+    salary: true;
+    emergencyContact: true;
+    emergencyPhone: true;
+    emergencyRelation: true;
+    employeeNotes: true;
+    education: true;
+    skills: true;
+    languages: true;
+    bankName: true;
+    bankAccountNumber: true;
+    bankAccountName: true;
+    lastLogin: true;
+    loginCount: true;
+    marketingConsent: true;
+    referralCode: true;
+    referredBy: true;
+    referralCount: true;
+    twoFactorEnabled: true;
+    twoFactorSecret: true;
+    employeeRole: true;
+    company: {
+      select: {
+        id: true;
+        name: true;
+      };
+    };
+    activeCompany: {
+      select: {
+        id: true;
+        name: true;
+      };
+    };
+    notificationPreferences: true;
+    securityQuestions: true;
+    passwordHistory: true;
+    loginHistory: true;
+    deviceTokens: true;
+  };
+}>;
 
-export interface BusForm {
-  plateNumber: string;
-  model: string;
-  brand: string;
-  capacity: number;
-  type: BusType;
-  features?: string[];
-  images?: string[];
-}
-
-export interface RouteForm {
-  name: string;
-  description?: string;
-  departureLocation: string;
-  arrivalLocation: string;
-  departureCountry?: string;
-  arrivalCountry?: string;
-  distance: number;
-  estimatedDuration: number;
-  basePrice: number;
-  isInternational: boolean;
-  stops?: Omit<RouteStop, "id" | "routeId" | "route">[];
-}
-
-export interface TripForm {
-  routeId: string;
-  busId: string;
-  departureDate: Date;
-  departureTime: string;
-  price: number;
-  driverId?: string;
-  conductorId?: string;
-}
-
-export interface EmployeeForm {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  role: EmployeeRole;
-  hireDate: Date;
-  salary?: number;
-  address?: string;
-  emergencyContact?: string;
-  licenseNumber?: string;
-  licenseExpiry?: Date;
-}
-
-export interface ReservationForm {
-  passengerName: string;
-  passengerPhone: string;
-  passengerEmail?: string;
-  seatNumbers: string[];
-  tripId: string;
-}
-
-// Utility Types
-export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
-export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
+export type CompanyWithDetails = Prisma.CompanyGetPayload<{
+  include: {
+    buses: true;
+    routes: true;
+    trips: true;
+    employees: true; // These are Users with employee roles
+    owner: true;
+    stations: true;
+    documents: true;
+    subscriptions: true;
+    subscriptionHistory: true;
+    subscriptionTransactions: true;
+    promotions: true;
+    reviews: true;
+    activities: true;
+    payments: true;
+    refunds: true;
+  };
+}>;

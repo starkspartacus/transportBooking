@@ -3,96 +3,86 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// GET - Récupérer les voyages disponibles pour un caissier
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (
-      !session?.user ||
-      !["ADMIN", "PATRON", "GESTIONNAIRE", "CAISSIER"].includes(
-        session.user.role
-      )
-    ) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    if (!session || session.user.role !== "CAISSIER") {
+      return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
-    const companyId = searchParams.get("companyId") || session.user.companyId;
+    const companyId = searchParams.get("companyId");
 
     if (!companyId) {
       return NextResponse.json(
-        { error: "Company ID required" },
+        { error: "ID de l'entreprise requis" },
         { status: 400 }
       );
     }
 
-    // Get today's and upcoming trips
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // A cashier can only see trips for their assigned company
+    if (session.user.companyId !== companyId) {
+      return NextResponse.json(
+        { error: "Accès refusé à cette entreprise" },
+        { status: 403 }
+      );
+    }
 
+    // Fetch trips that are currently scheduled or boarding, and not archived
     const trips = await prisma.trip.findMany({
       where: {
-        companyId,
-        departureTime: {
-          gte: today,
-        },
+        companyId: companyId,
         status: {
-          in: ["SCHEDULED", "BOARDING", "IN_TRANSIT"],
+          in: [
+            "SCHEDULED",
+            "BOARDING",
+            "DELAYED",
+            "ARRIVED",
+            "CANCELLED",
+            "COMPLETED",
+            "DEPARTED",
+            "IN_TRANSIT",
+            "MAINTENANCE",
+          ], // Include trips that are active
         },
+        isArchived: false, // Do not show archived trips
       },
       include: {
-        route: true,
-        bus: true,
-        reservations: {
-          include: {
-            user: true,
-            payments: true,
+        route: {
+          select: {
+            id: true,
+            name: true,
+            departureLocation: true,
+            arrivalLocation: true,
+            basePrice: true, // Crucially include basePrice from route
+            estimatedDuration: true,
           },
         },
-        tickets: true,
+        bus: {
+          select: {
+            id: true,
+            plateNumber: true,
+            model: true,
+            capacity: true,
+          },
+        },
+        _count: {
+          select: {
+            reservations: true,
+            tickets: true,
+          },
+        },
       },
       orderBy: {
         departureTime: "asc",
       },
     });
 
-    // Calculate trip statistics
-    const tripsWithStats = trips.map((trip) => {
-      const totalSeats = trip.bus.capacity;
-      const reservedSeats = trip.reservations.reduce(
-        (sum: number, r) => sum + r.seatNumbers.length,
-        0
-      );
-      const paidReservations = trip.reservations.filter((r) =>
-        r.payments.some((p) => p.status === "COMPLETED")
-      ).length;
-      const pendingReservations = trip.reservations.filter(
-        (r) => !r.payments.some((p) => p.status === "COMPLETED")
-      ).length;
-      const availableSeats = totalSeats - reservedSeats;
-      const revenue = trip.reservations
-        .filter((r) => r.payments.some((p) => p.status === "COMPLETED"))
-        .reduce((sum: number, r) => sum + r.totalAmount, 0);
-
-      return {
-        ...trip,
-        stats: {
-          totalSeats,
-          reservedSeats,
-          availableSeats,
-          paidReservations,
-          pendingReservations,
-          revenue,
-          occupancyRate: Math.round((reservedSeats / totalSeats) * 100),
-        },
-      };
-    });
-
-    return NextResponse.json(tripsWithStats);
+    return NextResponse.json(trips);
   } catch (error) {
-    console.error("Get trips error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    console.error("Error fetching cashier trips:", error);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }

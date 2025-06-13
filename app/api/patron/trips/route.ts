@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSocketIO } from "@/lib/socket"; // Updated import
 
 // GET - Récupérer tous les voyages d'une entreprise
 export async function GET(request: NextRequest) {
@@ -14,6 +15,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const companyId = searchParams.get("companyId");
+    const includeArchived = searchParams.get("includeArchived") === "true";
 
     if (!companyId) {
       return NextResponse.json(
@@ -37,22 +39,40 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const whereClause: any = {
+      companyId: companyId,
+    };
+
+    if (!includeArchived) {
+      whereClause.isArchived = false;
+    }
+
     const trips = await prisma.trip.findMany({
-      where: {
-        companyId: companyId,
-      },
+      where: whereClause,
       include: {
         route: {
           select: {
+            id: true,
             name: true,
-            departureCountry: true,
-            arrivalCountry: true,
+            departureLocation: true,
+            arrivalLocation: true,
+            distance: true,
+            estimatedDuration: true,
+            basePrice: true, // Ensure price is included
           },
         },
         bus: {
           select: {
+            id: true,
             plateNumber: true,
             model: true,
+            capacity: true,
+          },
+        },
+        _count: {
+          select: {
+            reservations: true,
+            tickets: true,
           },
         },
       },
@@ -85,7 +105,6 @@ export async function POST(request: NextRequest) {
       "busId",
       "departureTime",
       "arrivalTime",
-      "basePrice",
       "companyId",
     ];
 
@@ -153,7 +172,15 @@ export async function POST(request: NextRequest) {
         busId: data.busId,
         companyId: data.companyId,
         status: {
-          in: ["SCHEDULED", "BOARDING", "DEPARTED"],
+          in: [
+            "SCHEDULED",
+            "BOARDING",
+            "DELAYED",
+            "IN_TRANSIT",
+            "ARRIVED",
+            "COMPLETED",
+            "MAINTENANCE",
+          ], // Only consider active trips that might conflict
         },
         OR: [
           {
@@ -168,6 +195,20 @@ export async function POST(request: NextRequest) {
               { arrivalTime: { gte: new Date(data.arrivalTime) } },
             ],
           },
+          {
+            // Check if a trip starts during the new trip
+            AND: [
+              { departureTime: { gte: new Date(data.departureTime) } },
+              { departureTime: { lte: new Date(data.arrivalTime) } },
+            ],
+          },
+          {
+            // Check if a trip ends during the new trip
+            AND: [
+              { arrivalTime: { gte: new Date(data.departureTime) } },
+              { arrivalTime: { lte: new Date(data.arrivalTime) } },
+            ],
+          },
         ],
       },
     });
@@ -179,13 +220,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Créer le voyage
+    // Determine basePrice and currentPrice. Use route's basePrice if no customPrice is provided.
+    const basePrice =
+      data.customPrice !== null && data.customPrice !== undefined
+        ? Number.parseFloat(data.customPrice)
+        : route.basePrice;
+    const currentPrice = basePrice; // For now, currentPrice is same as basePrice or customPrice
+
+    // Create the trip
     const trip = await prisma.trip.create({
       data: {
         departureTime: new Date(data.departureTime),
         arrivalTime: new Date(data.arrivalTime),
-        basePrice: Number.parseFloat(data.basePrice),
-        currentPrice: Number.parseFloat(data.currentPrice || data.basePrice),
+        basePrice: basePrice,
+        currentPrice: currentPrice,
         availableSeats: data.availableSeats || bus.capacity,
         status: data.status || "SCHEDULED",
         tripType: data.tripType || "STANDARD",
@@ -193,6 +241,12 @@ export async function POST(request: NextRequest) {
         driverName: data.driverName || null,
         driverPhone: data.driverPhone || null,
         notes: data.notes || null,
+        boardingStartTime: data.boardingStartTime
+          ? new Date(data.boardingStartTime)
+          : null,
+        boardingEndTime: data.boardingEndTime
+          ? new Date(data.boardingEndTime)
+          : null,
         route: {
           connect: { id: data.routeId },
         },
@@ -204,7 +258,16 @@ export async function POST(request: NextRequest) {
         },
       },
       include: {
-        route: true,
+        route: {
+          select: {
+            id: true,
+            name: true,
+            departureLocation: true,
+            arrivalLocation: true,
+            basePrice: true, // Include basePrice here for socket emit
+            estimatedDuration: true,
+          },
+        },
         bus: true,
       },
     });
@@ -225,6 +288,39 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Emit socket event for new trip
+    const io = getSocketIO();
+    if (io) {
+      io.to(`company-${data.companyId}`).emit("new-trip-scheduled", {
+        id: trip.id,
+        departureTime: trip.departureTime,
+        arrivalTime: trip.arrivalTime,
+        status: trip.status,
+        availableSeats: trip.availableSeats,
+        route: {
+          id: trip.route.id,
+          name: trip.route.name,
+          departureLocation: trip.route.departureLocation,
+          arrivalLocation: trip.route.arrivalLocation,
+          price: trip.route.basePrice, // Use basePrice for display
+          estimatedDuration: trip.route.estimatedDuration,
+        },
+        bus: {
+          id: trip.bus.id,
+          plateNumber: trip.bus.plateNumber,
+          model: trip.bus.model,
+          capacity: trip.bus.capacity,
+        },
+        _count: {
+          reservations: 0, // New trips have 0 reservations initially
+          tickets: 0,
+        },
+        company: {
+          name: company.name,
+        },
+      });
+    }
 
     return NextResponse.json(trip);
   } catch (error) {

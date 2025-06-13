@@ -1,256 +1,142 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Check, ChevronsUpDown, Plus, Building } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from "@/components/ui/command";
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardDescription,
+} from "@/components/ui/card";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useToast } from "@/components/ui/use-toast";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Building } from "lucide-react";
 
 interface Company {
   id: string;
   name: string;
-  logo?: string | null;
-  isActive: boolean;
-  isVerified: boolean;
 }
 
-export function CompanySelector() {
-  const router = useRouter();
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [showNewDialog, setShowNewDialog] = useState(false);
+interface CompanySelectorProps {
+  selectedCompanyId: string | null;
+  onSelectCompany: Dispatch<SetStateAction<string | null>>;
+  ownerId: string; // The ID of the patron
+}
+
+export function CompanySelector({
+  selectedCompanyId,
+  onSelectCompany,
+  ownerId,
+}: CompanySelectorProps) {
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [activeCompany, setActiveCompany] = useState<Company | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    fetchCompanies();
-  }, []);
+    const fetchCompanies = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(
+          `/api/patron/companies/active?ownerId=${ownerId}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setCompanies(data);
+          // If no company is selected and there are companies, select the first one
+          if (!selectedCompanyId && data.length > 0) {
+            onSelectCompany(data[0].id);
+          }
+        } else {
+          toast({
+            title: "Erreur",
+            description: "Impossible de charger les entreprises actives.",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching active companies:", error);
+        toast({
+          title: "Erreur",
+          description:
+            "Une erreur inattendue est survenue lors du chargement des entreprises actives.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const fetchCompanies = async () => {
-    setIsLoading(true);
-    try {
-      // Récupérer toutes les entreprises
-      const companiesRes = await fetch("/api/patron/companies");
-      const companiesData = await companiesRes.json();
-
-      // Récupérer l'entreprise active
-      const activeCompanyRes = await fetch("/api/patron/companies/active");
-      const activeCompanyData = await activeCompanyRes.json();
-
-      setCompanies(companiesData);
-      setActiveCompany(activeCompanyData);
-    } catch (error) {
-      console.error("Error fetching companies:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger vos entreprises",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+    if (ownerId) {
+      fetchCompanies();
     }
-  };
+  }, [ownerId, selectedCompanyId, onSelectCompany, toast]);
 
   const handleCompanyChange = async (companyId: string) => {
+    onSelectCompany(companyId);
     try {
-      const response = await fetch("/api/patron/companies/active", {
+      // Optionally, send a request to update the active company in the session/backend
+      await fetch("/api/patron/set-active-company", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyId }),
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setActiveCompany(data.company);
-        toast({
-          title: "Entreprise changée",
-          description: `Vous travaillez maintenant avec ${data.company.name}`,
-        });
-
-        // Rafraîchir la page pour mettre à jour les données
-        router.refresh();
-      }
+      toast({
+        title: "Entreprise sélectionnée",
+        description: "L'entreprise active a été mise à jour.",
+      });
     } catch (error) {
-      console.error("Error changing company:", error);
+      console.error("Error setting active company:", error);
       toast({
         title: "Erreur",
-        description: "Impossible de changer d'entreprise",
+        description: "Impossible de définir l'entreprise active.",
         variant: "destructive",
       });
-    } finally {
-      setOpen(false);
     }
   };
 
-  const createNewCompany = () => {
-    setOpen(false);
-    setShowNewDialog(true);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-8 w-8 rounded-full" />
-        <Skeleton className="h-4 w-40" />
-      </div>
-    );
-  }
-
   return (
-    <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            aria-label="Sélectionner une entreprise"
-            className="flex items-center justify-between w-64"
-          >
-            <div className="flex items-center gap-2 truncate">
-              {activeCompany ? (
-                <>
-                  <Avatar className="h-6 w-6">
-                    {activeCompany.logo ? (
-                      <AvatarImage
-                        src={activeCompany.logo || "/placeholder.svg"}
-                        alt={activeCompany.name}
-                      />
-                    ) : (
-                      <AvatarFallback>
-                        {activeCompany?.name
-                          ? activeCompany.name.substring(0, 2).toUpperCase()
-                          : "??"}
-                      </AvatarFallback>
-                    )}
-                  </Avatar>
-                  <span className="truncate">
-                    {activeCompany?.name || "Entreprise"}
-                  </span>
-                  {!activeCompany.isVerified && (
-                    <Badge variant="outline" className="ml-1 text-xs">
-                      En attente
-                    </Badge>
-                  )}
-                </>
-              ) : (
-                <span>Sélectionner une entreprise</span>
-              )}
-            </div>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-64 p-0">
-          <Command>
-            <CommandInput placeholder="Rechercher une entreprise..." />
-            <CommandList>
-              <CommandEmpty>Aucune entreprise trouvée</CommandEmpty>
-              <CommandGroup heading="Vos entreprises">
-                {companies.map((company) => (
-                  <CommandItem
-                    key={company.id}
-                    value={company.id}
-                    onSelect={() => handleCompanyChange(company.id)}
-                    className="flex items-center gap-2"
-                  >
-                    <Avatar className="h-6 w-6">
-                      {company.logo ? (
-                        <AvatarImage
-                          src={company.logo || "/placeholder.svg"}
-                          alt={company.name}
-                        />
-                      ) : (
-                        <AvatarFallback>
-                          {company?.name
-                            ? company.name.substring(0, 2).toUpperCase()
-                            : "??"}
-                        </AvatarFallback>
-                      )}
-                    </Avatar>
-                    <span className="truncate">{company.name}</span>
-                    {!company.isVerified && (
-                      <Badge variant="outline" className="ml-auto text-xs">
-                        En attente
-                      </Badge>
-                    )}
-                    <Check
-                      className={cn(
-                        "ml-auto h-4 w-4",
-                        activeCompany?.id === company.id
-                          ? "opacity-100"
-                          : "opacity-0"
-                      )}
-                    />
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-              <CommandSeparator />
-              <CommandGroup>
-                <CommandItem onSelect={createNewCompany}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Créer une nouvelle entreprise
-                </CommandItem>
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-
-      <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Building className="h-5 w-5" />
-              Créer une nouvelle entreprise
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="py-4">
-            <p className="text-sm text-gray-500 mb-4">
-              Vous allez être redirigé vers le formulaire de création
-              d'entreprise complet.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowNewDialog(false)}>
-                Annuler
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowNewDialog(false);
-                  router.push("/patron/companies/new");
-                }}
-              >
-                Continuer
-              </Button>
-            </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Sélectionner une Entreprise</CardTitle>
+        <CardDescription>
+          Gérez les données spécifiques à une entreprise.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="text-center py-4 text-gray-500">
+            <Building className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p>Chargement des entreprises...</p>
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+        ) : companies.length > 0 ? (
+          <Select
+            value={selectedCompanyId || ""}
+            onValueChange={handleCompanyChange}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Sélectionner une entreprise" />
+            </SelectTrigger>
+            <SelectContent>
+              {companies.map((company) => (
+                <SelectItem key={company.id} value={company.id}>
+                  {company.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="text-center py-4 text-gray-500">
+            <p>Aucune entreprise active trouvée.</p>
+            <p className="text-sm">Veuillez créer une entreprise d'abord.</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
