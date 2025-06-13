@@ -3,12 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSocketIO } from "@/lib/socket";
-import {
-  TripStatus,
-  NotificationType,
-  ActivityType,
-  ActivityStatus,
-} from "@prisma/client";
+import { TripStatus, NotificationType, ActivityStatus } from "@prisma/client";
 
 export async function POST(request: NextRequest) {
   try {
@@ -237,5 +232,57 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error checking and updating trip statuses:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+  }
+}
+
+export async function PATCH() {
+  try {
+    const now = new Date();
+    const fortyMinutesFromNow = new Date(now.getTime() + 40 * 60 * 1000);
+
+    // 1. Update SCHEDULED trips to DEPARTING_SOON
+    const departingSoonTrips = await prisma.trip.updateMany({
+      where: {
+        status: TripStatus.SCHEDULED,
+        departureTime: {
+          lte: fortyMinutesFromNow, // Within 40 minutes from now
+          gte: now, // Not yet departed
+        },
+      },
+      data: {
+        status: TripStatus.DEPARTING_SOON,
+      },
+    });
+
+    // 2. Update DEPARTING_SOON or SCHEDULED trips to DEPARTED if departure time has passed
+    const departedTrips = await prisma.trip.updateMany({
+      where: {
+        status: {
+          in: [TripStatus.SCHEDULED, TripStatus.DEPARTING_SOON],
+        },
+        departureTime: {
+          lte: now, // Departure time has passed
+        },
+      },
+      data: {
+        status: TripStatus.DEPARTED,
+      },
+    });
+
+    console.log(
+      `Trip status update: ${departingSoonTrips.count} trips set to DEPARTING_SOON, ${departedTrips.count} trips set to DEPARTED.`
+    );
+
+    return NextResponse.json({
+      message: "Trip statuses updated successfully",
+      departingSoonCount: departingSoonTrips.count,
+      departedCount: departedTrips.count,
+    });
+  } catch (error) {
+    console.error("Error updating trip statuses:", error);
+    return NextResponse.json(
+      { error: "Failed to update trip statuses" },
+      { status: 500 }
+    );
   }
 }

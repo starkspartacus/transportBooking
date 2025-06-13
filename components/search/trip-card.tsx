@@ -17,9 +17,12 @@ import {
   Tv,
 } from "lucide-react";
 import Link from "next/link";
-import { format } from "date-fns";
-import { type TripWithDetails } from "@/lib/types";
+import { format, intervalToDuration } from "date-fns";
+import { fr } from "date-fns/locale"; // Import French locale
+import type { TripWithDetails } from "@/lib/types";
 import { TripStatus } from "@prisma/client";
+import { useState, useEffect } from "react";
+import { Duration } from "date-fns";
 
 interface TripCardProps {
   trip: TripWithDetails;
@@ -30,14 +33,42 @@ export default function TripCard({
   trip,
   showBookingButton = true,
 }: TripCardProps) {
+  const [timeRemaining, setTimeRemaining] = useState<Duration | null>(null);
+
+  useEffect(() => {
+    const calculateTimeRemaining = () => {
+      const now = new Date();
+      const departure = new Date(trip.departureTime);
+
+      if (trip.status === TripStatus.DEPARTING_SOON && departure > now) {
+        setTimeRemaining(intervalToDuration({ start: now, end: departure }));
+      } else {
+        setTimeRemaining(null);
+      }
+    };
+
+    calculateTimeRemaining(); // Initial calculation
+    const timer = setInterval(calculateTimeRemaining, 1000); // Update every second
+
+    return () => clearInterval(timer); // Cleanup on unmount
+  }, [trip.departureTime, trip.status]);
+
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours}h${mins > 0 ? mins.toString().padStart(2, "0") : ""}`;
   };
 
-  const formatTime = (dateTime: Date) => {
-    return format(dateTime, "HH:mm");
+  const formatDateTime = (dateTime: Date | string) => {
+    const dateObj =
+      typeof dateTime === "string" ? new Date(dateTime) : dateTime;
+    return format(dateObj, "dd MMM yyyy HH:mm", { locale: fr });
+  };
+
+  const formatTime = (dateTime: Date | string) => {
+    const dateObj =
+      typeof dateTime === "string" ? new Date(dateTime) : dateTime;
+    return format(dateObj, "HH:mm");
   };
 
   const formatPrice = (price: number) => {
@@ -62,18 +93,44 @@ export default function TripCard({
     switch (status) {
       case TripStatus.SCHEDULED:
         return "bg-green-100 text-green-800";
+      case TripStatus.DEPARTING_SOON:
+        return "bg-yellow-100 text-yellow-800"; // New color for departing soon
       case TripStatus.CANCELLED:
         return "bg-red-100 text-red-800";
       case TripStatus.DELAYED:
         return "bg-orange-100 text-orange-800";
       case TripStatus.IN_TRANSIT:
         return "bg-blue-100 text-blue-800";
+      case TripStatus.DEPARTED:
+        return "bg-gray-100 text-gray-800"; // Color for departed trips
       default:
         return "bg-blue-100 text-blue-800";
     }
   };
 
-  // Ensure availableSeats is correctly calculated or provided by the API
+  const getStatusText = (status: TripStatus) => {
+    switch (status) {
+      case TripStatus.SCHEDULED:
+        return "Disponible";
+      case TripStatus.DEPARTING_SOON:
+        return "Départ Bientôt";
+      case TripStatus.CANCELLED:
+        return "Annulé";
+      case TripStatus.DELAYED:
+        return "Retardé";
+      case TripStatus.IN_TRANSIT:
+        return "En Transit";
+      case TripStatus.DEPARTED:
+        return "Parti";
+      case TripStatus.ARRIVED:
+        return "Arrivé";
+      case TripStatus.COMPLETED:
+        return "Terminé";
+      default:
+        return status;
+    }
+  };
+
   const availableSeats =
     trip.availableSeats !== undefined ? trip.availableSeats : trip.bus.capacity;
 
@@ -100,19 +157,17 @@ export default function TripCard({
                 </div>
               </div>
               <Badge className={getStatusColor(trip.status)}>
-                {trip.status === TripStatus.SCHEDULED
-                  ? "Disponible"
-                  : trip.status}
+                {getStatusText(trip.status)}
               </Badge>
             </div>
 
             {/* Company and Bus Info */}
             <div className="flex items-center gap-4">
               <Badge variant="secondary" className="font-medium">
-                {trip.companyId}
+                {trip.company.name} {/* Display company name */}
               </Badge>
               <span className="text-sm text-gray-600">
-                {trip.bus.plateNumber} {trip.bus.model}
+                {trip.bus.brand} {trip.bus.model}
               </span>
             </div>
 
@@ -122,10 +177,7 @@ export default function TripCard({
                 <Clock className="h-4 w-4 text-gray-500" />
                 <div>
                   <span className="font-medium">
-                    {formatTime(trip.departureTime)}
-                  </span>
-                  <span className="text-gray-400 mx-2">-</span>
-                  <span className="font-medium">
+                    {formatTime(trip.departureTime)} -{" "}
                     {formatTime(trip.arrivalTime)}
                   </span>
                 </div>
@@ -133,16 +185,11 @@ export default function TripCard({
 
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-gray-500" />
-                <span>
-                  Durée: {formatDuration(trip.route.estimatedDuration)}
-                </span>
+                <span>Départ: {formatDateTime(trip.departureTime)}</span>
               </div>
-
               <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-gray-500" />
-                <span>
-                  {availableSeats} / {trip.bus.capacity} places
-                </span>
+                <Calendar className="h-4 w-4 text-gray-500" />
+                <span>Arrivée: {formatDateTime(trip.arrivalTime)}</span>
               </div>
             </div>
 
@@ -169,15 +216,32 @@ export default function TripCard({
               </div>
             )}
 
-            {/* Availability Warning */}
-            {availableSeats <= 5 && availableSeats > 0 && (
-              <div className="flex items-center gap-2 text-orange-600 text-sm">
-                <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
-                Plus que {availableSeats} place{availableSeats > 1 ? "s" : ""}{" "}
-                disponible
-                {availableSeats > 1 ? "s" : ""} !
+            {/* Availability Warning / Departing Soon Countdown */}
+            {trip.status === TripStatus.DEPARTING_SOON && timeRemaining && (
+              <div className="flex items-center gap-2 text-yellow-700 text-sm font-semibold">
+                <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                Départ dans:{" "}
+                {timeRemaining.hours ? `${timeRemaining.hours}h ` : ""}
+                {timeRemaining.minutes ? `${timeRemaining.minutes}m ` : ""}
+                {timeRemaining.seconds ? `${timeRemaining.seconds}s` : ""}
               </div>
             )}
+            {availableSeats <= 5 &&
+              availableSeats > 0 &&
+              trip.status === TripStatus.SCHEDULED && (
+                <div className="flex items-center gap-2 text-orange-600 text-sm">
+                  <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
+                  Plus que {availableSeats} place{availableSeats > 1 ? "s" : ""}{" "}
+                  disponible
+                  {availableSeats > 1 ? "s" : ""} !
+                </div>
+              )}
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-gray-500" />
+              <span>
+                {availableSeats} / {trip.bus.capacity} places
+              </span>
+            </div>
           </div>
 
           {/* Price and Action */}
@@ -208,7 +272,9 @@ export default function TripCard({
                   </Link>
                 ) : (
                   <Button disabled className="w-full" size="lg">
-                    {availableSeats === 0 ? "Complet" : "Non disponible"}
+                    {availableSeats === 0
+                      ? "Complet"
+                      : getStatusText(trip.status)}
                   </Button>
                 )}
               </div>

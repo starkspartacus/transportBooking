@@ -1,254 +1,225 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  ActivityType,
+  type PaymentMethod,
+  ReservationStatus,
+} from "@prisma/client";
+import QRCode from "qrcode";
+import { generateTicketHash } from "@/app/api/tickets/generate-qr/route"; // Import the helper
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (
-      !session?.user ||
-      !["ADMIN", "PATRON", "GESTIONNAIRE", "CAISSIER"].includes(
-        session.user.role
-      )
-    ) {
+    if (!session?.user || !session.user.companyId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const body = await request.json();
-    console.log("Received request body:", body);
 
     const {
       tripId,
       customerName,
       customerPhone,
       customerEmail,
-      numberOfTickets, // Now expecting numberOfTickets
+      numberOfTickets,
       amountPaid,
-      paymentMethod = "CASH",
-    } = body;
+      paymentMethod,
+    } = await request.json();
 
-    // Validate required fields (seatNumber is no longer required from client)
     if (
       !tripId ||
-      !customerName ||
-      !customerPhone ||
       !numberOfTickets ||
-      !amountPaid
+      numberOfTickets <= 0 ||
+      !amountPaid ||
+      amountPaid <= 0 ||
+      !customerPhone || // Phone is now required for ticket generation
+      !customerName
     ) {
-      console.log("Missing required fields:", {
-        tripId: !tripId,
-        customerName: !customerName,
-        customerPhone: !customerPhone,
-        numberOfTickets: !numberOfTickets,
-        amountPaid: !amountPaid,
-      });
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing required fields or invalid values" },
         { status: 400 }
       );
     }
 
-    // Get trip details including bus capacity and existing reservations
+    const companyId = session.user.companyId;
+
+    // Find the trip and check available seats
     const trip = await prisma.trip.findUnique({
       where: { id: tripId },
       include: {
-        route: true,
         bus: true,
-        reservations: {
-          select: {
-            seatNumbers: true, // Only need seat numbers from existing reservations
-          },
+        route: true,
+        tickets: {
+          select: { seatNumber: true },
         },
       },
     });
 
     if (!trip) {
-      console.log("Trip not found:", tripId);
       return NextResponse.json({ error: "Trip not found" }, { status: 404 });
     }
 
     if (!trip.bus) {
-      console.log("Bus not found for trip:", tripId);
       return NextResponse.json(
-        { error: "Bus details missing for trip" },
+        { error: "Bus information missing for trip" },
         { status: 500 }
       );
     }
 
-    // Determine available seats
-    const allSeats = Array.from({ length: trip.bus.capacity }, (_, i) => i + 1);
-    const bookedSeats = trip.reservations.flatMap((r) => r.seatNumbers);
-    const availableSeats = allSeats.filter(
-      (seat) => !bookedSeats.includes(seat)
-    );
+    const bookedSeats = trip.tickets.map((ticket) => ticket.seatNumber);
+    const availableSeatsCount = trip.bus.capacity - bookedSeats.length;
 
-    if (numberOfTickets > availableSeats.length) {
-      console.log("Not enough seats available:", {
-        requested: numberOfTickets,
-        available: availableSeats.length,
-      });
+    if (numberOfTickets > availableSeatsCount) {
       return NextResponse.json(
         {
-          error: `Not enough seats available. Only ${availableSeats.length} seats left.`,
+          error: `Not enough seats available. Only ${availableSeatsCount} left.`,
         },
         { status: 400 }
       );
     }
 
-    // Assign the first 'numberOfTickets' available seats
-    const assignedSeatNumbers = availableSeats.slice(0, numberOfTickets);
-    const pricePerTicket = amountPaid / numberOfTickets;
+    // Find available seat numbers
+    const assignedSeatNumbers: number[] = [];
+    for (
+      let i = 1;
+      i <= trip.bus.capacity && assignedSeatNumbers.length < numberOfTickets;
+      i++
+    ) {
+      if (!bookedSeats.includes(i)) {
+        assignedSeatNumbers.push(i);
+      }
+    }
 
-    // Validate amount (total amount for all tickets)
-    if (amountPaid < trip.currentPrice * numberOfTickets) {
-      console.log("Insufficient payment amount:", {
-        amountPaid,
-        expected: trip.currentPrice * numberOfTickets,
-      });
+    if (assignedSeatNumbers.length !== numberOfTickets) {
       return NextResponse.json(
-        { error: "Insufficient payment amount for all tickets" },
-        { status: 400 }
+        { error: "Could not assign all requested seats. Please try again." },
+        { status: 500 }
       );
     }
 
-    // Create or find customer
-    let customer = await prisma.user.findFirst({
-      where: {
-        OR: [{ phone: customerPhone }, { email: customerEmail || undefined }],
+    const pricePerTicket = amountPaid / numberOfTickets;
+
+    // Create a single reservation for all tickets
+    const reservation = await prisma.reservation.create({
+      data: {
+        tripId: trip.id,
+        companyId: companyId,
+        passengerName: customerName,
+        passengerPhone: customerPhone,
+        passengerEmail: customerEmail,
+        seatNumbers: assignedSeatNumbers,
+        totalAmount: amountPaid,
+        paymentMethod: paymentMethod as PaymentMethod,
+        status: ReservationStatus.CONFIRMED, // Assuming direct sale is confirmed
+        bookingSource: "CASHIER_DESK",
+        // userId: session.user.id, // Link to cashier if needed, or leave null for anonymous client
       },
     });
 
-    if (!customer) {
-      customer = await prisma.user.create({
-        data: {
-          name: customerName,
-          phone: customerPhone,
-          email: customerEmail,
-          role: "CLIENT",
-          firstName: customerName.split(" ")[0],
-          lastName: customerName.split(" ").slice(1).join(" ") || "",
-        },
-      });
-    }
+    const generatedQrCodesData: {
+      ticketId: string;
+      qrCodeUrl: string;
+      qrData: any;
+    }[] = [];
 
-    // Create reservation, payment, and tickets in a transaction
-    const result = await prisma.$transaction(async (tx) => {
-      const reservation = await tx.reservation.create({
+    for (const seatNumber of assignedSeatNumbers) {
+      const ticketNumber = `TICKET-${Date.now()}-${Math.floor(
+        Math.random() * 1000
+      )}`;
+
+      const ticket = await prisma.ticket.create({
         data: {
+          tripId: trip.id,
+          companyId: companyId,
+          reservationId: reservation.id,
+          ticketNumber: ticketNumber,
           passengerName: customerName,
           passengerPhone: customerPhone,
           passengerEmail: customerEmail,
-          userId: customer.id,
-          tripId: trip.id,
-          seatNumbers: assignedSeatNumbers, // Array of assigned seats
-          totalAmount: amountPaid,
+          seatNumber: seatNumber,
+          price: pricePerTicket,
           status: "CONFIRMED",
-          paymentStatus: "COMPLETED",
-          companyId: trip.companyId,
-        },
-        include: {
-          user: true,
-          trip: {
-            include: {
-              route: true,
-            },
-          },
         },
       });
 
-      // Create payment record for the total amount
-      const payment = await tx.payment.create({
+      // Generate QR Code data
+      const qrData = {
+        ticketId: ticket.id,
+        ticketNumber: ticket.ticketNumber,
+        passengerName: ticket.passengerName,
+        passengerPhone: ticket.passengerPhone,
+        tripId: ticket.tripId,
+        seatNumber: ticket.seatNumber,
+        departureLocation: trip.route.departureLocation,
+        arrivalLocation: trip.route.arrivalLocation,
+        departureTime: trip.departureTime,
+        busPlateNumber: trip.bus.plateNumber,
+        companyId: ticket.companyId,
+        companyName: trip.companyId, // Assuming companyId is enough, or fetch company name
+        price: ticket.price,
+        status: ticket.status,
+        issueDate: ticket.createdAt,
+        hash: generateTicketHash(ticket), // Use the helper function
+      };
+
+      const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(qrData), {
+        errorCorrectionLevel: "M",
+        type: "image/png",
+        quality: 0.92,
+        margin: 1,
+        color: {
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
+        width: 256,
+      });
+
+      await prisma.ticket.update({
+        where: { id: ticket.id },
         data: {
-          reservationId: reservation.id,
-          amount: amountPaid,
-          method: paymentMethod,
-          status: "COMPLETED",
-          companyId: trip.companyId,
+          qrCode: qrCodeDataURL,
+          qrCodeData: JSON.stringify(qrData),
         },
       });
 
-      // Create individual tickets for each assigned seat
-      const tickets = [];
-      for (const seat of assignedSeatNumbers) {
-        const ticket = await tx.ticket.create({
-          data: {
-            ticketNumber: `TK-${Date.now()}-${seat}`, // Unique ticket number
-            passengerName: customerName,
-            passengerPhone: customerPhone,
-            passengerEmail: customerEmail,
-            seatNumber: seat,
-            price: pricePerTicket, // Price per individual ticket
-            status: "VALID",
-            userId: customer.id,
-            tripId: trip.id,
-            companyId: trip.companyId,
-            reservationId: reservation.id,
-          },
-        });
-        tickets.push(ticket);
-      }
-
-      // Update available seats on the trip
-      await tx.trip.update({
-        where: { id: trip.id },
-        data: {
-          availableSeats: {
-            decrement: numberOfTickets,
-          },
-        },
+      generatedQrCodesData.push({
+        ticketId: ticket.id,
+        qrCodeUrl: qrCodeDataURL,
+        qrData: qrData,
       });
+    }
 
-      // Create activity log with cashier information
-      await tx.activity.create({
-        data: {
-          type: "TICKET_SALE", // Changed to TICKET_SALE for clarity
-          description: `Vente directe de ${numberOfTickets} billet(s) pour ${customerName} - ${trip.route.departureLocation} → ${trip.route.arrivalLocation}`,
-          status: "SUCCESS",
-          userId: session.user.id,
-          companyId: trip.companyId,
-          metadata: {
-            action: "CASH_COLLECTION",
-            cashierId: session.user.id,
-            cashierName: session.user.name,
-            amount: amountPaid,
-            paymentMethod,
-            customerName,
-            seatNumbers: assignedSeatNumbers,
-            paymentId: payment.id,
-            ticketIds: tickets.map((t) => t.id),
-            timestamp: new Date().toISOString(),
-            ipAddress: request.headers.get("x-forwarded-for") || "unknown",
-          },
+    // Update trip available seats
+    await prisma.trip.update({
+      where: { id: trip.id },
+      data: {
+        availableSeats: {
+          decrement: numberOfTickets,
         },
-      });
-
-      return { reservation, payment, tickets };
+      },
     });
 
-    // Return QR code data for the first ticket (if multiple, client needs to handle displaying all)
-    const firstTicketQrData =
-      result.tickets.length > 0
-        ? JSON.stringify({
-            ticketId: result.tickets[0].id,
-            ticketNumber: result.tickets[0].ticketNumber,
-            tripId: result.tickets[0].tripId,
-            seatNumber: result.tickets[0].seatNumber,
-            passengerName: result.tickets[0].passengerName,
-            companyId: result.tickets[0].companyId,
-          })
-        : null;
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: session.user.id,
+        companyId: companyId,
+        action: ActivityType.TICKET_SALE,
+        description: `Sold ${numberOfTickets} ticket(s) for trip ${trip.route.departureLocation} to ${trip.route.arrivalLocation} to ${customerName}.`,
+        entityType: "Ticket",
+        entityId: reservation.id, // Link to reservation
+      },
+    });
 
     return NextResponse.json({
       success: true,
-      reservation: result.reservation,
-      payment: result.payment,
-      tickets: result.tickets,
-      qrCodeData: firstTicketQrData, // Return QR data for the first ticket
-      message: "Ticket(s) sold successfully",
+      message: "Tickets sold successfully",
+      qrCodesData: generatedQrCodesData, // Return array of QR codes
+      reservationId: reservation.id,
     });
   } catch (error) {
-    console.error("Sell ticket error:", error);
+    console.error("Error selling ticket:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

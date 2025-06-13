@@ -1,10 +1,19 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { CalendarIcon, Search } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 import {
   Select,
   SelectContent,
@@ -12,472 +21,406 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Filter, Search } from "lucide-react";
-import Link from "next/link";
 import TripCard from "@/components/search/trip-card";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-  PaginationEllipsis,
-} from "@/components/ui/pagination";
-import type { TripWithDetails, SearchFilters } from "@/lib/types"; // Import types from lib/types.ts
-
-interface Company {
-  id: string;
-  name: string;
-}
+import type { TripWithDetails, SearchFilters } from "@/lib/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { AFRICAN_COUNTRIES, type Country } from "@/constants/countries";
 
 export default function SearchPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [trips, setTrips] = useState<TripWithDetails[]>([]);
-  const [loading, setLoading] = useState(false);
   const [totalTrips, setTotalTrips] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10; // Number of items per page
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [availableCountries, setAvailableCountries] = useState<string[]>([]);
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
 
   const [filters, setFilters] = useState<SearchFilters>({
-    query: "",
-    status: "",
-    type: "",
-    dateFrom: new Date(),
-    dateTo: new Date(),
-    companyId: "",
-    routeId: "",
-    busId: "",
-    driverId: "",
-    passengerName: "",
-    paymentStatus: undefined,
-    reservationStatus: undefined,
-    page: 1,
-    limit: 10,
-    sortBy: "departure",
-    sortOrder: "asc",
+    from: searchParams?.get("from") || "",
+    to: searchParams?.get("to") || "",
+    date: searchParams?.get("date") || format(new Date(), "yyyy-MM-dd"),
+    minPrice: searchParams?.get("minPrice") || "",
+    maxPrice: searchParams?.get("maxPrice") || "",
+    company: searchParams?.get("company") || "all",
+    sortBy: searchParams?.get("sortBy") || "departure",
+    departureCountry: searchParams?.get("departureCountry") || "",
+    arrivalCountry: searchParams?.get("arrivalCountry") || "",
   });
 
-  const [companies, setCompanies] = useState<Company[]>([]);
-
-  useEffect(() => {
-    fetchTrips();
-    fetchCompanies();
-  }, [filters, currentPage]); // Re-fetch when filters or page changes
-
-  const fetchTrips = async () => {
+  const fetchTrips = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const queryParams = new URLSearchParams();
+      const params = new URLSearchParams();
       Object.entries(filters).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString());
+        if (value) {
+          params.append(key, String(value));
+        }
       });
-      queryParams.append("page", currentPage.toString());
-      queryParams.append("limit", itemsPerPage.toString());
 
-      const response = await fetch(`/api/trips?${queryParams.toString()}`);
-      if (response.ok) {
-        const data = await response.json();
-        setTrips(data.trips || []);
-        setTotalTrips(data.totalCount || 0);
-      } else {
-        console.error("Failed to fetch trips:", response.statusText);
-        setTrips([]);
-        setTotalTrips(0);
+      const response = await fetch(`/api/trips?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch trips");
       }
-    } catch (error) {
-      console.error("Error fetching trips:", error);
-      setTrips([]);
-      setTotalTrips(0);
+      const data = await response.json();
+      setTrips(data.trips);
+      setTotalTrips(data.totalCount);
+    } catch (err) {
+      console.error("Error fetching trips:", err);
+      setError("Impossible de charger les voyages. Veuillez réessayer.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
-  const fetchCompanies = async () => {
+  const fetchCountries = useCallback(async () => {
     try {
-      const response = await fetch("/api/companies");
-      if (response.ok) {
-        const data = await response.json();
-        setCompanies(data.companies || []);
-      }
-    } catch (error) {
-      console.error("Error fetching companies:", error);
+      setAvailableCountries(AFRICAN_COUNTRIES.map((country) => country.name));
+    } catch (err) {
+      console.error("Error setting countries:", err);
     }
-  };
+  }, []);
+
+  const fetchCities = useCallback(
+    async (country: string, type: "departure" | "arrival") => {
+      if (!country) {
+        setAvailableCities([]);
+        return;
+      }
+      try {
+        const response = await fetch(
+          `/api/locations/cities?country=${country}`
+        );
+        if (!response.ok) {
+          throw new Error(`Failed to fetch cities for ${country}`);
+        }
+        const data = await response.json();
+        setAvailableCities(data.cities);
+      } catch (err) {
+        console.error(`Error fetching cities for ${country}:`, err);
+        setAvailableCities([]);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    fetchTrips();
+    fetchCountries();
+  }, [fetchTrips, fetchCountries]);
+
+  useEffect(() => {
+    if (filters.departureCountry) {
+      fetchCities(filters.departureCountry, "departure");
+    } else {
+      setAvailableCities([]);
+    }
+  }, [filters.departureCountry, fetchCities]);
+
+  useEffect(() => {
+    if (filters.arrivalCountry) {
+      fetchCities(filters.arrivalCountry, "arrival");
+    } else {
+      setAvailableCities([]);
+    }
+  }, [filters.arrivalCountry, fetchCities]);
 
   const handleFilterChange = (
     key: keyof SearchFilters,
-    value: string | number | Date | undefined
+    value: string | Date | null
   ) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-    setCurrentPage(1); // Reset to first page on filter change
+    setFilters((prev) => ({
+      ...prev,
+      [key]: value instanceof Date ? format(value, "yyyy-MM-dd") : value,
+    }));
   };
 
   const handleSearch = () => {
-    setCurrentPage(1); // Ensure search starts from page 1
-    fetchTrips();
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) {
+        params.append(key, String(value));
+      }
+    });
+    router.push(`/search?${params.toString()}`);
+    fetchTrips(); // Re-fetch trips with new filters
   };
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  const totalPages = useMemo(
-    () => Math.ceil(totalTrips / itemsPerPage),
-    [totalTrips, itemsPerPage]
-  );
-
-  const renderPaginationItems = () => {
-    const items = [];
-    const maxPagesToShow = 5; // Number of page links to show directly
-
-    if (totalPages <= maxPagesToShow) {
-      for (let i = 1; i <= totalPages; i++) {
-        items.push(
-          <PaginationItem key={i}>
-            <PaginationLink
-              isActive={currentPage === i}
-              onClick={() => handlePageChange(i)}
-            >
-              {i}
-            </PaginationLink>
-          </PaginationItem>
-        );
-      }
-    } else {
-      // Always show first page
-      items.push(
-        <PaginationItem key={1}>
-          <PaginationLink
-            isActive={currentPage === 1}
-            onClick={() => handlePageChange(1)}
-          >
-            1
-          </PaginationLink>
-        </PaginationItem>
-      );
-
-      // Show ellipsis if current page is far from start
-      if (currentPage > maxPagesToShow - 2) {
-        items.push(<PaginationEllipsis key="start-ellipsis" />);
-      }
-
-      // Show pages around current page
-      const startPage = Math.max(
-        2,
-        currentPage - Math.floor(maxPagesToShow / 2) + 1
-      );
-      const endPage = Math.min(
-        totalPages - 1,
-        currentPage + Math.floor(maxPagesToShow / 2) - 1
-      );
-
-      for (let i = startPage; i <= endPage; i++) {
-        items.push(
-          <PaginationItem key={i}>
-            <PaginationLink
-              isActive={currentPage === i}
-              onClick={() => handlePageChange(i)}
-            >
-              {i}
-            </PaginationLink>
-          </PaginationItem>
-        );
-      }
-
-      // Show ellipsis if current page is far from end
-      if (currentPage < totalPages - Math.floor(maxPagesToShow / 2) + 1) {
-        items.push(<PaginationEllipsis key="end-ellipsis" />);
-      }
-
-      // Always show last page
-      items.push(
-        <PaginationItem key={totalPages}>
-          <PaginationLink
-            isActive={currentPage === totalPages}
-            onClick={() => handlePageChange(totalPages)}
-          >
-            {totalPages}
-          </PaginationLink>
-        </PaginationItem>
-      );
-    }
-    return items;
-  };
+  const sortOptions = [
+    { value: "departure", label: "Heure de départ" },
+    { value: "price", label: "Prix (croissant)" },
+    { value: "price_desc", label: "Prix (décroissant)" },
+    { value: "duration", label: "Durée du voyage" },
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-green-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">T</span>
-              </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                TransportApp
-              </span>
-            </Link>
-            <div className="flex items-center gap-4">
-              <Link href="/auth/signin">
-                <Button variant="outline">Se connecter</Button>
-              </Link>
-              <Link href="/auth/signup">
-                <Button className="bg-gradient-to-r from-blue-600 to-green-600">
-                  S'inscrire
-                </Button>
-              </Link>
+    <main className="container mx-auto px-4 py-8 md:py-12">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        {/* Filter Section */}
+        <Card className="lg:col-span-1 h-fit">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Search className="h-5 w-5" /> Filtres de recherche
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <label
+                htmlFor="departureCountry"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Pays de départ
+              </label>
+              <Select
+                value={filters.departureCountry || ""}
+                onValueChange={(value) =>
+                  handleFilterChange("departureCountry", value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un pays" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les pays</SelectItem>
+                  {availableCountries.map((country) => (
+                    <SelectItem key={country} value={country}>
+                      {country}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Filters Sidebar */}
-          <div className="lg:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Filter className="h-5 w-5" />
-                  Filtres de recherche
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Origin/Destination */}
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="from">Ville de départ</Label>
-                    <Input
-                      id="from"
-                      placeholder="Ex: Dakar"
-                      value={filters.query}
-                      onChange={(e) =>
-                        handleFilterChange("query", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="to">Ville d'arrivée</Label>
-                    <Input
-                      id="to"
-                      placeholder="Ex: Thiès"
-                      value={filters.query}
-                      onChange={(e) =>
-                        handleFilterChange("query", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Date */}
-                <div>
-                  <Label htmlFor="date">Date de voyage</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={filters.dateFrom?.toISOString().split("T")[0]}
-                    onChange={(e) =>
-                      handleFilterChange("dateFrom", new Date(e.target.value))
-                    }
-                  />
-                </div>
-
-                <Separator />
-
-                {/* Price Range */}
-                <div className="space-y-4">
-                  <Label>Fourchette de prix (FCFA)</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Min"
-                      type="number"
-                      value={filters.query}
-                      onChange={(e) =>
-                        handleFilterChange("query", e.target.value)
-                      }
-                    />
-                    <Input
-                      placeholder="Max"
-                      type="number"
-                      value={filters.query}
-                      onChange={(e) =>
-                        handleFilterChange("query", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Company */}
-                <div>
-                  <Label>Compagnie</Label>
-                  <Select
-                    value={filters.companyId}
-                    onValueChange={(value) =>
-                      handleFilterChange("companyId", value)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Toutes les compagnies" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Toutes les compagnies</SelectItem>
-                      {companies.map((company) => (
-                        <SelectItem key={company.id} value={company.id}>
-                          {company.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Separator />
-
-                {/* Sort */}
-                <div>
-                  <Label>Trier par</Label>
-                  <Select
-                    value={filters.sortBy}
-                    onValueChange={(value) =>
-                      handleFilterChange("sortBy", value)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Trier par" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="price">Prix croissant</SelectItem>
-                      <SelectItem value="price_desc">
-                        Prix décroissant
-                      </SelectItem>
-                      <SelectItem value="departure">Heure de départ</SelectItem>
-                      <SelectItem value="duration">Durée du voyage</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Button
-                  onClick={handleSearch}
-                  className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700"
-                  disabled={loading}
-                >
-                  <Search className="h-4 w-4 mr-2" />
-                  {loading ? "Recherche..." : "Rechercher"}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Results */}
-          <div className="lg:col-span-3">
-            <div className="mb-6">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Recherche de voyages
-              </h1>
-              <p className="text-gray-600">
-                {totalTrips} voyage{totalTrips !== 1 ? "s" : ""} trouvé
-                {totalTrips !== 1 ? "s" : ""}
-              </p>
+            <div>
+              <label
+                htmlFor="from"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Ville de départ
+              </label>
+              <Select
+                value={filters.from || ""}
+                onValueChange={(value) => handleFilterChange("from", value)}
+                disabled={
+                  !filters.departureCountry || availableCities.length === 0
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner une ville" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les villes</SelectItem>
+                  {availableCities.map((city) => (
+                    <SelectItem key={city} value={city}>
+                      {city}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {loading ? (
-              <div className="space-y-4">
-                {[...Array(itemsPerPage)].map((_, i) => (
-                  <Card
-                    key={i}
-                    className="animate-pulse border-l-4 border-l-gray-300"
-                  >
-                    <CardContent className="p-6">
-                      <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="h-4 bg-gray-200 rounded w-full"></div>
-                        <div className="h-4 bg-gray-200 rounded w-full"></div>
-                        <div className="h-4 bg-gray-200 rounded w-full"></div>
-                      </div>
-                      <div className="h-4 bg-gray-200 rounded w-1/2 mt-4"></div>
-                      <div className="h-10 bg-gray-200 rounded w-32 ml-auto mt-6"></div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : trips.length === 0 ? (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Search className="h-8 w-8 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Aucun voyage trouvé
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Essayez de modifier vos critères de recherche
-                  </p>
+            <div>
+              <label
+                htmlFor="arrivalCountry"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Pays d'arrivée
+              </label>
+              <Select
+                value={filters.arrivalCountry || ""}
+                onValueChange={(value) =>
+                  handleFilterChange("arrivalCountry", value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un pays" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les pays</SelectItem>
+                  {availableCountries.map((country) => (
+                    <SelectItem key={country} value={country}>
+                      {country}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label
+                htmlFor="to"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Ville d'arrivée
+              </label>
+              <Select
+                value={filters.to || ""}
+                onValueChange={(value) => handleFilterChange("to", value)}
+                disabled={
+                  !filters.arrivalCountry || availableCities.length === 0
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner une ville" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les villes</SelectItem>
+                  {availableCities.map((city) => (
+                    <SelectItem key={city} value={city}>
+                      {city}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="date"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Date de voyage
+              </label>
+              <Popover>
+                <PopoverTrigger asChild>
                   <Button
-                    onClick={() =>
-                      setFilters({
-                        query: "",
-                        status: "",
-                        type: "",
-                        dateFrom: new Date(),
-                        dateTo: new Date(),
-                        companyId: "",
-                        routeId: "",
-                        busId: "",
-                        driverId: "",
-                        passengerName: "",
-                        paymentStatus: undefined,
-                        reservationStatus: undefined,
-                        page: 1,
-                        limit: 10,
-                        sortBy: "departure",
-                        sortOrder: "asc",
-                      })
-                    }
-                    className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700"
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !filters.date && "text-muted-foreground"
+                    )}
                   >
-                    Réinitialiser les filtres
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {filters.date
+                      ? format(new Date(filters.date), "dd/MM/yyyy")
+                      : "Sélectionner une date"}
                   </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {trips.map((trip) => (
-                  <TripCard key={trip.id} trip={trip} />
-                ))}
-                {totalPages > 1 && (
-                  <Pagination className="mt-8">
-                    <PaginationContent>
-                      <PaginationPrevious
-                        onClick={() => handlePageChange(currentPage - 1)}
-                        className={
-                          currentPage === 1
-                            ? "pointer-events-none opacity-50"
-                            : ""
-                        }
-                      />
-                      {renderPaginationItems()}
-                      <PaginationNext
-                        onClick={() => handlePageChange(currentPage + 1)}
-                        className={
-                          currentPage === totalPages
-                            ? "pointer-events-none opacity-50"
-                            : ""
-                        }
-                      />
-                    </PaginationContent>
-                  </Pagination>
-                )}
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={filters.date ? new Date(filters.date) : undefined}
+                    onSelect={(date) =>
+                      handleFilterChange("date", date || null)
+                    }
+                    initialFocus
+                    locale={fr}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fourchette de prix (FCFA)
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="Min"
+                  value={filters.minPrice}
+                  onChange={(e) =>
+                    handleFilterChange("minPrice", e.target.value)
+                  }
+                />
+                <Input
+                  type="number"
+                  placeholder="Max"
+                  value={filters.maxPrice}
+                  onChange={(e) =>
+                    handleFilterChange("maxPrice", e.target.value)
+                  }
+                />
               </div>
-            )}
-          </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="company"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Pays
+              </label>
+              <Select
+                value={filters.company || "all"}
+                onValueChange={(value) => handleFilterChange("company", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Tous les pays" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les pays</SelectItem>
+                  {AFRICAN_COUNTRIES.map((country) => (
+                    <SelectItem key={country.id} value={country.id}>
+                      {country.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="sortBy"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Trier par
+              </label>
+              <Select
+                value={filters.sortBy || "departure"}
+                onValueChange={(value) => handleFilterChange("sortBy", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Heure de départ" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              onClick={handleSearch}
+              className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 transition-all duration-300"
+            >
+              <Search className="mr-2 h-4 w-4" /> Rechercher
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Trip Results Section */}
+        <div className="lg:col-span-3 space-y-6">
+          <h2 className="text-2xl font-bold text-gray-800">
+            Recherche de voyages
+          </h2>
+          <p className="text-gray-600">{totalTrips} voyages trouvés</p>
+
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-40 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="text-red-500 text-center py-8">{error}</div>
+          ) : trips.length === 0 ? (
+            <div className="text-gray-500 text-center py-8">
+              Aucun voyage trouvé pour vos critères de recherche.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {trips.map((trip) => (
+                <TripCard key={trip.id} trip={trip} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

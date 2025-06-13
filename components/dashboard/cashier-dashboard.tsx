@@ -66,7 +66,9 @@ export function CashierDashboard({ initialStats }: CashierDashboardProps) {
   const [clientPhone, setClientPhone] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [isSellingTicket, setIsSellingTicket] = useState(false);
-  const [qrCodeData, setQrCodeData] = useState<string | null>(null);
+  const [qrCodesData, setQrCodesData] = useState<
+    { ticketId: string; qrCodeUrl: string; qrData: any }[] | null
+  >(null); // Changed to array of QR codes
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [qrCodeValue, setQrCodeValue] = useState("");
   const [validationResult, setValidationResult] = useState<string | null>(null);
@@ -283,7 +285,7 @@ export function CashierDashboard({ initialStats }: CashierDashboardProps) {
         );
         fetchStats(); // Refresh stats
         setIsQrModalOpen(true);
-        setQrCodeData(data.qrCodeData || null); // qrCodeData will be for the first ticket
+        setQrCodesData(data.qrCodesData || null); // Set array of QR codes
         setNumberOfTickets(1);
         setClientName("");
         setClientPhone("");
@@ -698,23 +700,35 @@ export function CashierDashboard({ initialStats }: CashierDashboardProps) {
             </CardDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4 place-items-center">
-            {qrCodeData ? (
-              <QRCodeSVG value={qrCodeData} size={256} level="H" />
+            {qrCodesData && qrCodesData.length > 0 ? (
+              qrCodesData.map((qr, index) => (
+                <div
+                  key={qr.ticketId}
+                  className="flex flex-col items-center gap-2"
+                >
+                  <p className="text-sm font-semibold">
+                    Billet {index + 1} (Siège: {qr.qrData.seatNumber})
+                  </p>
+                  <QRCodeSVG
+                    value={JSON.stringify(qr.qrData)}
+                    size={200}
+                    level="H"
+                  />
+                  <a
+                    href={qr.qrCodeUrl}
+                    download={`ticket-${qr.qrData.ticketNumber}-qr-code.png`}
+                    className="text-blue-500 hover:underline text-sm"
+                  >
+                    Télécharger QR Code {index + 1}
+                  </a>
+                </div>
+              ))
             ) : (
-              <p>Impossible de générer le QR code.</p>
+              <p>Impossible de générer les QR codes.</p>
             )}
             <p className="text-sm text-center text-gray-500">
               Scannez ce code pour valider le billet.
             </p>
-            {qrCodeData && (
-              <a
-                href={`data:image/png;base64,${btoa(qrCodeData)}`} // This is a placeholder, a real QR code URL would be better
-                download="ticket-qr-code.png"
-                className="text-blue-500 hover:underline"
-              >
-                Télécharger le QR Code
-              </a>
-            )}
           </div>
           <DialogFooter>
             <Button onClick={() => setIsQrModalOpen(false)}>Fermer</Button>

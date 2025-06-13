@@ -723,22 +723,17 @@ export interface DashboardStats {
 
 // --- Search and Filter Types (Updated to reflect new schema fields) ---
 export interface SearchFilters {
-  query?: string;
-  status?: string;
-  type?: string;
-  dateFrom?: Date;
-  dateTo?: Date;
-  companyId?: string;
-  routeId?: string;
-  busId?: string;
-  driverId?: string;
-  passengerName?: string;
-  paymentStatus?: PrismaPaymentStatus;
-  reservationStatus?: PrismaReservationStatus;
+  from?: string; // Corresponds to departureLocation
+  to?: string; // Corresponds to arrivalLocation
+  date?: string; // For single date input (YYYY-MM-DD)
+  minPrice?: string;
+  maxPrice?: string;
+  company?: string; // Company ID
+  sortBy?: string;
+  departureCountry?: string; // New
+  arrivalCountry?: string; // New
   page?: number;
   limit?: number;
-  sortBy?: string;
-  sortOrder?: "asc" | "desc";
 }
 
 // --- Specific Payload Types for Prisma Includes ---
@@ -761,7 +756,16 @@ export type TripWithDetails = Prisma.TripGetPayload<{
         plateNumber: true;
         model: true;
         capacity: true;
-        features: true;
+        features: true; // Ensure features are selected
+        brand: true; // Ensure brand is selected
+      };
+    };
+    company: {
+      select: {
+        id: true;
+        name: true; // Ensure company name is selected
+        logo: true;
+        rating: true;
       };
     };
     _count: {

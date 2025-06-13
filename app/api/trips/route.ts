@@ -13,6 +13,9 @@ export async function GET(request: Request) {
     const maxPrice = searchParams.get("maxPrice");
     const companyId = searchParams.get("company");
     const sortBy = searchParams.get("sortBy") || "departure"; // Default sort by departure time
+    const departureCountry = searchParams.get("departureCountry");
+    const arrivalCountry = searchParams.get("arrivalCountry");
+
     const page = Number.parseInt(searchParams.get("page") || "1");
     const limit = Number.parseInt(searchParams.get("limit") || "10");
 
@@ -22,23 +25,29 @@ export async function GET(request: Request) {
       status: TripStatus.SCHEDULED, // Only show active trips by default
     };
 
+    // Build route filter conditions
+    const routeWhere: any = {};
     if (from) {
-      where.route = {
-        departureLocation: {
-          contains: from,
-          mode: "insensitive",
-        },
+      routeWhere.departureLocation = {
+        contains: from,
+        mode: "insensitive",
       };
     }
-
     if (to) {
-      where.route = {
-        ...where.route, // Keep existing route filters
-        arrivalLocation: {
-          contains: to,
-          mode: "insensitive",
-        },
+      routeWhere.arrivalLocation = {
+        contains: to,
+        mode: "insensitive",
       };
+    }
+    if (departureCountry) {
+      routeWhere.departureCountry = departureCountry;
+    }
+    if (arrivalCountry) {
+      routeWhere.arrivalCountry = arrivalCountry;
+    }
+
+    if (Object.keys(routeWhere).length > 0) {
+      where.route = routeWhere;
     }
 
     if (date) {
@@ -66,7 +75,7 @@ export async function GET(request: Request) {
       };
     }
 
-    if (companyId) {
+    if (companyId && companyId !== "all") {
       where.companyId = companyId;
     }
 
@@ -110,13 +119,14 @@ export async function GET(request: Request) {
               plateNumber: true,
               model: true,
               capacity: true,
-              brand: true, // Ensure brand is selected for trip-card
+              brand: true,
+              features: true, // Ensure features are selected
             },
           },
           company: {
             select: {
               id: true,
-              name: true,
+              name: true, // Ensure company name is selected
               logo: true,
               rating: true,
             },
