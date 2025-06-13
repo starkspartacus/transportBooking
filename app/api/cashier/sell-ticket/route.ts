@@ -6,6 +6,7 @@ import {
   ActivityType,
   type PaymentMethod,
   ReservationStatus,
+  TicketStatus,
 } from "@prisma/client";
 import QRCode from "qrcode";
 import { generateTicketHash } from "@/app/api/tickets/generate-qr/route"; // Import the helper
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
       include: {
         bus: true,
         route: true,
+        company: true,
         tickets: {
           select: { seatNumber: true },
         },
@@ -139,7 +141,7 @@ export async function POST(request: Request) {
           passengerEmail: customerEmail,
           seatNumber: seatNumber,
           price: pricePerTicket,
-          status: "CONFIRMED",
+          status: TicketStatus.VALID,
         },
       });
 
@@ -156,17 +158,15 @@ export async function POST(request: Request) {
         departureTime: trip.departureTime,
         busPlateNumber: trip.bus.plateNumber,
         companyId: ticket.companyId,
-        companyName: trip.companyId, // Assuming companyId is enough, or fetch company name
+        companyName: trip.company.name,
         price: ticket.price,
         status: ticket.status,
         issueDate: ticket.createdAt,
-        hash: generateTicketHash(ticket), // Use the helper function
+        hash: generateTicketHash(ticket),
       };
 
       const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(qrData), {
         errorCorrectionLevel: "M",
-        type: "image/png",
-        quality: 0.92,
         margin: 1,
         color: {
           dark: "#000000",
@@ -178,14 +178,13 @@ export async function POST(request: Request) {
       await prisma.ticket.update({
         where: { id: ticket.id },
         data: {
-          qrCode: qrCodeDataURL,
-          qrCodeData: JSON.stringify(qrData),
+          qrCode: qrCodeDataURL as string,
         },
       });
 
       generatedQrCodesData.push({
         ticketId: ticket.id,
-        qrCodeUrl: qrCodeDataURL,
+        qrCodeUrl: qrCodeDataURL as string,
         qrData: qrData,
       });
     }
@@ -204,11 +203,10 @@ export async function POST(request: Request) {
     await prisma.activityLog.create({
       data: {
         userId: session.user.id,
-        companyId: companyId,
-        action: ActivityType.TICKET_SALE,
-        description: `Sold ${numberOfTickets} ticket(s) for trip ${trip.route.departureLocation} to ${trip.route.arrivalLocation} to ${customerName}.`,
+        action: "TICKET_SALE",
+        description: `Vente directe de ${numberOfTickets} billet(s) pour ${customerName} - ${trip.route.departureLocation} → ${trip.route.arrivalLocation}`,
         entityType: "Ticket",
-        entityId: reservation.id, // Link to reservation
+        entityId: reservation.id,
       },
     });
 

@@ -62,24 +62,14 @@ export async function POST(request: NextRequest) {
     };
 
     // Generate QR Code
-    const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(qrData), {
-      errorCorrectionLevel: "M",
-      type: "image/png",
-      quality: 0.92,
-      margin: 1,
-      color: {
-        dark: "#000000",
-        light: "#FFFFFF",
-      },
-      width: 256,
-    });
+    const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(qrData));
 
     // Update ticket with QR code info
     await prisma.ticket.update({
       where: { id: ticketId },
       data: {
         qrCode: qrCodeDataURL,
-        qrCodeData: JSON.stringify(qrData),
+        qrHash: generateTicketHash(ticket),
       },
     });
 
@@ -98,7 +88,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Helper function to generate security hash
-function generateTicketHash(ticket: any): string {
+export function generateTicketHash(ticket: any): string {
   const crypto = require("crypto");
   const data = `${ticket.id}${ticket.ticketNumber}${ticket.passengerPhone}${ticket.seatNumber}${ticket.tripId}`;
   return crypto
