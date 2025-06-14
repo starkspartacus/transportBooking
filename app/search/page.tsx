@@ -25,7 +25,7 @@ import { TripCard } from "@/components/search/trip-card";
 import type { TripWithDetails, SearchFilters } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { AFRICAN_COUNTRIES, type Country } from "@/constants/countries";
+import { ALL_COUNTRIES, type Country } from "@/constants/countries";
 
 export default function SearchPage() {
   const searchParams = useSearchParams();
@@ -84,7 +84,7 @@ export default function SearchPage() {
 
   const fetchCountries = useCallback(async () => {
     try {
-      setAvailableCountries(AFRICAN_COUNTRIES.map((country) => country.name));
+      setAvailableCountries(ALL_COUNTRIES.map((country) => country.name));
     } catch (err) {
       console.error("Error setting countries:", err);
     }
@@ -357,7 +357,7 @@ export default function SearchPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les pays</SelectItem>
-                  {AFRICAN_COUNTRIES.map((country) => (
+                  {ALL_COUNTRIES.map((country) => (
                     <SelectItem key={country.id} value={country.id}>
                       {country.name}
                     </SelectItem>

@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CheckCircle, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { useSocket } from "@/components/ui/socket-provider"; // Import useSocket
 
 export default function BookingPage() {
   const params = useParams();
@@ -22,6 +23,7 @@ export default function BookingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<any | null>(null);
+  const { socket } = useSocket(); // Get socket instance
 
   useEffect(() => {
     const fetchTripDetails = async () => {
@@ -42,7 +44,54 @@ export default function BookingPage() {
     if (tripId) {
       fetchTripDetails();
     }
-  }, [tripId]);
+
+    // Listen for real-time updates for this specific trip
+    if (socket) {
+      const handleNewReservation = (data: any) => {
+        if (data.reservation && data.reservation.tripId === tripId) {
+          // Update the trip's available seats and reservations count
+          setTrip((prevTrip) => {
+            if (!prevTrip) return null;
+
+            const newOccupiedSeats = data.reservation.seatNumbers.map(
+              (s: number) => s.toString()
+            );
+            const updatedReservations = [
+              ...prevTrip.reservations,
+              data.reservation,
+            ];
+
+            // Recalculate available seats based on updated reservations
+            const currentOccupiedSeats = updatedReservations.flatMap((res) =>
+              res.status === "CONFIRMED" ||
+              res.status === "CHECKED_IN" ||
+              res.status === "PENDING"
+                ? res.seatNumbers.map((s: number) => s.toString())
+                : []
+            );
+            const newAvailableSeats =
+              prevTrip.bus.capacity - currentOccupiedSeats.length;
+
+            return {
+              ...prevTrip,
+              availableSeats: newAvailableSeats,
+              reservations: updatedReservations, // Update reservations array
+              _count: {
+                ...prevTrip._count,
+                reservations: updatedReservations.length,
+              },
+            };
+          });
+        }
+      };
+
+      socket.on("new-reservation", handleNewReservation);
+
+      return () => {
+        socket.off("new-reservation", handleNewReservation);
+      };
+    }
+  }, [tripId, socket]);
 
   const handleBookingComplete = (bookingData: any) => {
     setBookingSuccess(bookingData);
@@ -58,16 +107,41 @@ export default function BookingPage() {
 
   if (error) {
     return (
-      <div className="flex justify-center items-center min-h-[calc(100vh-64px)]">
-        <p className="text-destructive">Erreur: {error}</p>
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <h1 className="text-2xl font-bold text-red-700 mb-4">Erreur</h1>
+          <p className="text-red-600 mb-4">
+            Une erreur s'est produite lors du chargement des détails du voyage:{" "}
+            {error}
+          </p>
+          <a
+            href="/search"
+            className="inline-block bg-primary hover:bg-primary/90 text-white font-medium py-2 px-6 rounded-md transition-colors"
+          >
+            Retour à la recherche
+          </a>
+        </div>
       </div>
     );
   }
 
   if (!trip) {
     return (
-      <div className="flex justify-center items-center min-h-[calc(100vh-64px)]">
-        <p>Voyage non trouvé.</p>
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <h1 className="text-2xl font-bold text-red-700 mb-4">
+            Voyage non trouvé
+          </h1>
+          <p className="text-red-600 mb-4">
+            Les détails du voyage n'ont pas pu être chargés.
+          </p>
+          <a
+            href="/search"
+            className="inline-block bg-primary hover:bg-primary/90 text-white font-medium py-2 px-6 rounded-md transition-colors"
+          >
+            Rechercher d'autres voyages
+          </a>
+        </div>
       </div>
     );
   }
@@ -100,8 +174,19 @@ export default function BookingPage() {
                 <ul className="list-disc list-inside space-y-1">
                   {bookingSuccess.tickets.map((ticket: any) => (
                     <li key={ticket.id}>
-                      Siège {ticket.seatNumber}: {ticket.ticketNumber} (
-                      {ticket.passengerName})
+                      Siège {ticket.seatNumber}: {ticket.ticketNumber}
+                      {ticket.qrCode && (
+                        <div className="mt-2">
+                          <img
+                            src={ticket.qrCode || "/placeholder.svg"}
+                            alt={`QR Code for Ticket ${ticket.ticketNumber}`}
+                            className="w-24 h-24 mx-auto"
+                          />
+                          <p className="text-xs text-gray-500">
+                            Scannez ce QR code à la gare.
+                          </p>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -136,10 +221,88 @@ export default function BookingPage() {
     );
   }
 
+  // Determine the cities for display
+  const departureCity = trip.route?.departureLocation || "N/A";
+  const arrivalCity = trip.route?.arrivalLocation || "N/A";
+
+  // Check if the trip is available for booking
+  if (trip.status !== "SCHEDULED" && trip.status !== "BOARDING") {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <h1 className="text-2xl font-bold text-red-700 mb-4">
+            Voyage non disponible
+          </h1>
+          <p className="text-red-600 mb-4">
+            Ce voyage n'est plus disponible pour les réservations.
+          </p>
+          <a
+            href="/search"
+            className="inline-block bg-primary hover:bg-primary/90 text-white font-medium py-2 px-6 rounded-md transition-colors"
+          >
+            Rechercher d'autres voyages
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto py-8 px-4 md:px-6">
-      <h1 className="text-3xl font-bold mb-6">Réserver un voyage</h1>
-      <BookingForm trip={trip} onBookingComplete={handleBookingComplete} />
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">
+            Réserver votre voyage
+          </h1>
+
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <h2 className="font-semibold text-lg text-gray-700 mb-2">
+              Détails du voyage
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-500">Départ</p>
+                <p className="font-medium">{departureCity}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Arrivée</p>
+                <p className="font-medium">{arrivalCity}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Date et heure</p>
+                <p className="font-medium">
+                  {new Date(trip.departureTime).toLocaleDateString("fr-FR", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Compagnie</p>
+                <p className="font-medium">{trip.company.name}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Type de bus</p>
+                <p className="font-medium">
+                  {trip.bus.model} ({trip.bus.features.join(", ")})
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Prix</p>
+                <p className="font-medium text-primary">
+                  {trip.currentPrice.toLocaleString()} FCFA
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <BookingForm trip={trip} onBookingComplete={handleBookingComplete} />
+        </div>
+      </div>
     </div>
   );
 }

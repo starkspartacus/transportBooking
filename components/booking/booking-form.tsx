@@ -86,7 +86,9 @@ export default function BookingForm({
   useEffect(() => {
     if (trip.reservations) {
       const confirmedSeats = trip.reservations.flatMap((res) =>
-        res.status === "CONFIRMED" || res.status === "CHECKED_IN"
+        res.status === "CONFIRMED" ||
+        res.status === "CHECKED_IN" ||
+        res.status === "PENDING" // Include PENDING reservations as occupied
           ? res.seatNumbers.map((s) => s.toString())
           : []
       );
@@ -298,10 +300,11 @@ export default function BookingForm({
           values.passengers[0]?.countryCode || session?.user?.countryCode || "";
 
         // Construct the WhatsApp link (ensure phone number is in international format without leading +)
+        // Remove '+' from country code and any leading '0' from phone number
         const fullPhoneNumberForWhatsapp = `${countryCode.replace(
           /\+/g,
           ""
-        )}${passengerPhone.replace(/^0/, "")}`; // Remove '+' from country code and leading zero from phone
+        )}${passengerPhone.replace(/^0/, "")}`;
         const whatsappLink = `https://wa.me/${fullPhoneNumberForWhatsapp}?text=${whatsappMessage}`;
 
         onBookingComplete({
@@ -328,6 +331,8 @@ export default function BookingForm({
     }
   };
 
+  const availableSeatsCount = trip.bus.capacity - occupiedSeats.length;
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-4">
@@ -353,7 +358,7 @@ export default function BookingForm({
             <div className="flex items-center gap-4">
               <Badge variant="outline" className="flex items-center gap-1">
                 <Users className="h-3 w-3" />
-                {trip.availableSeats - occupiedSeats.length} places disponibles
+                {availableSeatsCount} places disponibles
               </Badge>
               <Badge variant="outline" className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />

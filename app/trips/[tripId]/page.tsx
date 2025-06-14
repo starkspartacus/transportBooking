@@ -97,7 +97,20 @@ async function getTripDetails(tripId: string): Promise<TripWithDetails | null> {
 
     if (!trip) return null;
 
-    return trip as TripWithDetails;
+    // Calculate available seats based on current reservations
+    const occupiedSeatsCount = trip.reservations.flatMap((res) =>
+      res.status === "CONFIRMED" ||
+      res.status === "CHECKED_IN" ||
+      res.status === "PENDING"
+        ? res.seatNumbers.map((s: number) => s.toString())
+        : []
+    ).length;
+    const availableSeats = trip.bus.capacity - occupiedSeatsCount;
+
+    return {
+      ...trip,
+      availableSeats: availableSeats, // Add calculated availableSeats
+    } as TripWithDetails;
   } catch (error) {
     console.error("Error fetching trip details:", error);
     return null;
@@ -334,8 +347,7 @@ export default async function TripDetailsPage({
                   <p className="text-sm text-gray-500">Sièges disponibles</p>
                   <p className="flex items-center font-medium text-gray-900">
                     <Users className="mr-2 h-5 w-5 text-blue-500" />{" "}
-                    {trip.bus.capacity - trip._count.reservations} /{" "}
-                    {trip.bus.capacity}
+                    {trip.availableSeats} / {trip.bus.capacity}
                   </p>
                 </div>
               </div>

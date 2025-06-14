@@ -1041,14 +1041,16 @@ FREE_UPGRADE
 }
 
 model Reservation {
-id            String            @id @default(cuid())
-reservationNumber String        @unique @default(cuid())
-passengerName String? // Changed to optional
-passengerPhone String? // Changed to optional
-seatNumbers   Int[]             @default([])
-totalAmount   Float
-status        ReservationStatus @default(PENDING)
-paymentStatus PaymentStatus     @default(PENDING)
+id                   String            @id @default(cuid())
+reservationNumber    String            @unique @default(cuid())
+passengerName        String? // Changed to optional
+passengerPhone       String? // Changed to optional
+passengerEmail       String? // New: Main passenger email
+passengerCountryCode String? // New: Direct field for main passenger's country code
+seatNumbers          Int[]             @default([])
+totalAmount          Float
+status               ReservationStatus @default(PENDING)
+paymentStatus        PaymentStatus     @default(PENDING)
 
 // Payment information
 paymentMethod String?
@@ -1206,53 +1208,54 @@ PARTIAL
 }
 
 model Ticket {
-id            String       @id @default(cuid())
-ticketNumber  String       @unique
-passengerName String
-passengerPhone String
-passengerEmail String?
-seatNumber    Int
-price         Float
-status        TicketStatus @default(VALID)
+id                   String       @id @default(cuid())
+ticketNumber         String       @unique
+passengerName        String
+passengerPhone       String
+passengerEmail       String?
+passengerCountryCode String? // New: Direct field for ticket passenger's country code
+seatNumber           Int
+price                Float
+status               TicketStatus @default(VALID)
 
 // Ticket details
-qrCode        String?
-qrHash        String?
-barcode       String?
-issueDate     DateTime     @default(now())
-validUntil    DateTime?
-usedAt        DateTime?
+qrCode               String? // Now stores the QR code data URL
+qrHash               String?
+barcode              String?
+issueDate            DateTime     @default(now())
+validUntil           DateTime?
+usedAt               DateTime?
 
 // Verification
-verificationCode String?
-isVerified    Boolean      @default(false)
-verifiedBy    String?
-verifiedAt    DateTime?
+verificationCode     String?
+isVerified           Boolean      @default(false)
+verifiedBy           String?
+verifiedAt           DateTime?
 
 // Passenger details
-passengerType PassengerType @default(ADULT)
-passengerDetails Json?
+passengerType        PassengerType @default(ADULT)
+passengerDetails     Json?
 
 // Boarding details
-boardingPoint String?
-alightingPoint String?
+boardingPoint        String?
+alightingPoint       String?
 
 // Additional services
-hasLuggage    Boolean      @default(false)
-luggageDetails Json?
-specialServices String[]   @default([])
+hasLuggage           Boolean      @default(false)
+luggageDetails       Json?
+specialServices      String[]     @default([])
 
-trip          Trip         @relation(fields: [tripId], references: [id])
-tripId        String
-user          User?        @relation(fields: [userId], references: [id])
-userId        String?
-company       Company      @relation(fields: [companyId], references: [id])
-companyId     String
-reservation   Reservation? @relation(fields: [reservationId], references: [id])
-reservationId String?
+trip                 Trip         @relation(fields: [tripId], references: [id])
+tripId               String
+user                 User?        @relation(fields: [userId], references: [id])
+userId               String?
+company              Company      @relation(fields: [companyId], references: [id])
+companyId            String
+reservation          Reservation? @relation(fields: [reservationId], references: [id])
+reservationId        String?
 
-createdAt     DateTime     @default(now())
-updatedAt     DateTime     @updatedAt
+createdAt            DateTime     @default(now())
+updatedAt            DateTime     @updatedAt
 
 @@index([userId])
 @@index([tripId])
@@ -1260,7 +1263,6 @@ updatedAt     DateTime     @updatedAt
 @@index([reservationId])
 @@index([status])
 @@index([ticketNumber])
-@@index([qrCode])
 @@index([qrHash])
 }
 
@@ -1274,13 +1276,14 @@ MILITARY
 }
 
 enum TicketStatus {
-VALID
-USED
-CANCELLED
-EXPIRED
-REFUNDED
-CHECKED_IN
-RESERVED
+PENDING // For tickets awaiting payment confirmation (e.g., mobile money)
+RESERVED // New status for tickets associated with PENDING reservations (cash/card)
+VALID // Confirmed and ready for use
+USED // Ticket has been scanned and used for boarding
+CANCELLED // Ticket has been cancelled
+EXPIRED // Ticket has expired
+REFUNDED // Ticket has been refunded
+CHECKED_IN // Passenger has checked in
 }
 
 model Review {

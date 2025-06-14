@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { nanoid } from "nanoid";
 import { getSocketIO } from "@/lib/socket"; // Import getSocketIO
+import QRCode from "qrcode"; // Import qrcode library
 
 export async function POST(request: NextRequest) {
   try {
@@ -104,6 +105,8 @@ export async function POST(request: NextRequest) {
         selectedSeats[0]?.phone || session?.user?.phone || "N/A";
       const mainPassengerEmail =
         selectedSeats[0]?.email || session?.user?.email || null;
+      const mainPassengerCountryCode =
+        selectedSeats[0]?.countryCode || session?.user?.countryCode || null;
 
       // Prepare passengerDetails JSON object
       const passengerDetails = {
@@ -111,7 +114,7 @@ export async function POST(request: NextRequest) {
           name: mainPassengerName,
           phone: mainPassengerPhone,
           email: mainPassengerEmail,
-          countryCode: selectedSeats[0]?.countryCode,
+          countryCode: mainPassengerCountryCode,
         },
         otherPassengers: selectedSeats.slice(1).map((p) => ({
           seatNumber: p.seatNumber,
@@ -139,6 +142,8 @@ export async function POST(request: NextRequest) {
           passengerCount: selectedSeats.length,
           passengerName: mainPassengerName, // Primary booker's name (direct field)
           passengerPhone: mainPassengerPhone, // Primary booker's phone (direct field)
+          passengerEmail: mainPassengerEmail, // Primary booker's email (direct field)
+          passengerCountryCode: mainPassengerCountryCode, // New: Direct field for main passenger's country code
           passengerDetails: passengerDetails, // Store all passenger details as JSON
         },
         include: {
@@ -157,12 +162,36 @@ export async function POST(request: NextRequest) {
       // Create individual tickets for each selected seat
       for (const seatInfo of selectedSeats) {
         const ticketCode = nanoid(10).toUpperCase();
-        const qrCode = nanoid(16); // Unique QR code hash
+        // Create QR Code data
+        const qrData = {
+          ticketId: ticketCode, // Using ticketCode as a unique ID for QR data
+          ticketNumber: ticketCode,
+          passengerName: seatInfo.name,
+          passengerPhone: seatInfo.phone,
+          tripId: trip.id,
+          seatNumber: seatInfo.seatNumber,
+          departureLocation: trip.route.departureLocation,
+          arrivalLocation: trip.route.arrivalLocation,
+          departureTime: trip.departureTime,
+          busPlateNumber: trip.bus.plateNumber,
+          companyId: trip.companyId,
+          companyName: trip.company.name,
+          price: trip.currentPrice,
+          status: paymentMethod === "CASH" ? "VALID" : "RESERVED",
+          issueDate: new Date(),
+          // Note: For a real security hash, you'd need a consistent secret and a more robust hashing mechanism.
+          // For now, we'll use a simple hash based on ticketCode.
+          hash: nanoid(16), // Simple hash for now
+        };
+
+        // Generate QR Code Data URL
+        const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(qrData));
 
         const ticket = await tx.ticket.create({
           data: {
             ticketNumber: ticketCode,
-            qrCode: qrCode,
+            qrCode: qrCodeDataURL, // Store the actual data URL
+            qrHash: qrData.hash, // Store the hash
             reservationId: reservation.id,
             userId: userId, // Use determined userId
             tripId: trip.id,
@@ -170,10 +199,10 @@ export async function POST(request: NextRequest) {
             seatNumber: Number.parseInt(seatInfo.seatNumber, 10),
             passengerName: seatInfo.name,
             passengerPhone: seatInfo.phone,
-            passengerEmail: seatInfo.email, // Store passenger email directly on ticket (assuming schema supports it)
+            passengerEmail: seatInfo.email, // Store passenger email directly on ticket
+            passengerCountryCode: seatInfo.countryCode, // New: Store country code directly on ticket
             price: trip.currentPrice, // Price per ticket
             status: paymentMethod === "CASH" ? "VALID" : "RESERVED", // Use RESERVED for pending payment tickets
-            // Assuming QR generation is handled later or client-side for display
           },
         });
         ticketsCreated.push(ticket);
@@ -235,7 +264,7 @@ export async function POST(request: NextRequest) {
             ticketNumber: t.ticketNumber,
             passengerName: t.passengerName,
             seatNumber: t.seatNumber,
-            qrCode: t.qrCode,
+            qrCode: t.qrCode, // Now contains the data URL
             status: t.status,
           })),
         });
