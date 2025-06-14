@@ -37,30 +37,44 @@ interface Company {
 
 interface Reservation {
   id: string;
-  reservationCode: string;
+  reservationNumber: string;
   status: string;
   expiresAt: string;
   totalAmount: number;
+  passengerName?: string;
+  passengerPhone?: string;
+  passengerEmail?: string;
   trip: {
     departureTime: string;
     arrivalTime: string;
     route: {
-      departure: {
-        name: string;
-      };
-      arrival: {
-        name: string;
-      };
+      departureLocation: string;
+      arrivalLocation: string;
+    };
+    bus: {
+      plateNumber: string;
+      model: string;
+      brand?: string;
+    };
+    company: {
+      id: string;
+      name: string;
+      logo?: string;
     };
   };
-  seat: {
-    number: string;
-  };
-  ticket?: {
-    ticketCode: string;
-    qrCode: string;
+  tickets: Array<{
+    id: string;
+    ticketNumber: string;
+    qrCode?: string;
     status: string;
-  };
+    seatNumber: number;
+  }>;
+  payments: Array<{
+    id: string;
+    status: string;
+    amount: number;
+    method: string;
+  }>;
 }
 
 export default function ClientDashboard() {
@@ -143,7 +157,11 @@ export default function ClientDashboard() {
       if (response.ok) {
         setReservations(data);
       } else {
-        console.error("Failed to fetch reservations:", data.error);
+        console.error(
+          "Failed to fetch reservations:",
+          data.error,
+          data.details
+        );
       }
     } catch (error) {
       console.error("Error fetching reservations:", error);
@@ -751,13 +769,13 @@ export default function ClientDashboard() {
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                         <div className="flex-1">
                           <p className="font-semibold text-lg">
-                            {reservation.trip.route.departure.name} →{" "}
-                            {reservation.trip.route.arrival.name}
+                            {reservation.trip.route.departureLocation} →{" "}
+                            {reservation.trip.route.arrivalLocation}
                           </p>
                           <p className="text-sm text-gray-600">
                             Code Réservation:{" "}
                             <span className="font-mono text-blue-700">
-                              {reservation.reservationCode}
+                              {reservation.reservationNumber}
                             </span>
                           </p>
                           <p className="text-sm text-gray-600">
@@ -766,9 +784,14 @@ export default function ClientDashboard() {
                           <p className="text-sm text-gray-600">
                             Arrivée: {formatDate(reservation.trip.arrivalTime)}
                           </p>
-                          <p className="text-sm text-gray-600">
-                            Siège: {reservation.seat.number}
-                          </p>
+                          {reservation.tickets.map((ticket) => (
+                            <p
+                              key={ticket.id}
+                              className="text-sm text-gray-600"
+                            >
+                              Siège {ticket.seatNumber}: {ticket.ticketNumber}
+                            </p>
+                          ))}
                           <p className="text-sm text-gray-600">
                             Montant:{" "}
                             <span className="font-bold text-green-600">
@@ -787,7 +810,9 @@ export default function ClientDashboard() {
                               Annuler
                             </Button>
                           )}
-                          {reservation.ticket?.qrCode && (
+                          {reservation.tickets.some(
+                            (ticket) => ticket.qrCode
+                          ) && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -921,25 +946,22 @@ export default function ClientDashboard() {
             <h3 className="text-xl font-bold text-gray-900">
               Votre Billet QR Code
             </h3>
-            {selectedReservation.ticket?.qrCode ? (
+            {selectedReservation.tickets.some((ticket) => ticket.qrCode) ? (
               <>
-                <img
-                  src={selectedReservation.ticket.qrCode || "/placeholder.svg"}
-                  alt="QR Code du Billet"
-                  className="w-full max-w-[250px] h-auto mx-auto border border-gray-200 rounded-md p-2 animate-fade-in"
-                />
-                <p className="text-sm text-gray-700 font-medium">
-                  Code Billet:{" "}
-                  <span className="font-mono text-blue-700">
-                    {selectedReservation.ticket.ticketCode}
-                  </span>
-                </p>
+                {selectedReservation.tickets.map((ticket) => (
+                  <p
+                    key={ticket.id}
+                    className="text-sm text-gray-700 font-medium"
+                  >
+                    Siège {ticket.seatNumber}: {ticket.ticketNumber}
+                  </p>
+                ))}
                 <p className="text-xs text-gray-500">
-                  Présentez ce QR code au caissier pour validation.
+                  Présentez ces QR codes au caissier pour validation.
                 </p>
               </>
             ) : (
-              <p className="text-red-500">QR Code non disponible.</p>
+              <p className="text-red-500">QR Codes non disponibles.</p>
             )}
             <Button onClick={() => setShowQRCode(false)} className="w-full">
               Fermer

@@ -1,203 +1,103 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { NextRequest } from "next/server";
 
-// GET - Récupérer les détails d'une entreprise
 export async function GET(
-  request: NextRequest,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session || session.user.role !== "PATRON") {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+    if (!session) {
+      return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const userId = session.user.id;
-    const companyId = params.id;
+    const { id } = params;
 
-    console.log("Fetching company details for:", { userId, companyId });
-
-    // D'abord, vérifier si l'entreprise existe
-    const companyExists = await prisma.company.findUnique({
-      where: { id: companyId },
-      select: { id: true, ownerId: true, name: true },
-    });
-
-    console.log("Company exists check:", companyExists);
-
-    if (!companyExists) {
-      return NextResponse.json(
-        { error: "Entreprise non trouvée dans la base de données" },
-        { status: 404 }
-      );
+    if (!id) {
+      return new NextResponse("Company ID is required", { status: 400 });
     }
 
-    // Vérifier que l'entreprise appartient au patron
-    if (companyExists.ownerId !== userId) {
-      return NextResponse.json(
-        { error: "Vous n'avez pas accès à cette entreprise" },
-        { status: 403 }
-      );
-    }
-
-    // Récupérer les détails complets
     const company = await prisma.company.findUnique({
-      where: { id: companyId },
+      where: {
+        id: id,
+      },
       include: {
-        _count: {
-          select: {
-            employees: true,
-            buses: true,
-            routes: true,
-            trips: true,
-            reservations: true,
-          },
-        },
         employees: {
-          take: 5,
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            employeeRole: true,
-            createdAt: true,
+          where: {
+            status: "ACTIVE", // Only fetch active employees for dashboard stats
           },
         },
         buses: {
-          take: 5,
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            plateNumber: true,
-            model: true,
-            capacity: true,
-            status: true,
-            isActive: true,
+          where: {
+            status: "ACTIVE", // Only fetch active buses for dashboard stats
           },
         },
         routes: {
-          take: 5,
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            name: true,
-            departureLocation: true,
-            arrivalLocation: true,
-            distance: true,
-            estimatedDuration: true,
-            status: true,
+          where: {
+            status: "ACTIVE", // Only fetch active routes for dashboard stats
           },
         },
+        trips: {
+          // Fetch all trips to calculate total revenue and scheduled trips
+          include: {
+            route: true,
+            bus: true,
+          },
+        },
+        owner: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        // Include other relations if needed for the dashboard, e.g., documents, subscriptions
       },
     });
 
     if (!company) {
-      return NextResponse.json(
-        { error: "Erreur lors de la récupération des détails" },
-        { status: 500 }
-      );
+      return new NextResponse("Company not found", { status: 404 });
     }
 
-    // Statistiques avec gestion d'erreur
-    let stats = {
-      totalRevenue: 0,
-      monthlyRevenue: 0,
-      activeTrips: 0,
-      completedTrips: 0,
-    };
+    // Authorization check: Only the owner or an admin can view company details
+    const isOwner = company.ownerId === session.user.id;
+    const isAdmin = session.user.role === "ADMIN";
 
-    try {
-      const [totalRevenue, monthlyRevenue, activeTrips, completedTrips] =
-        await Promise.all([
-          // Revenus totaux
-          prisma.reservation
-            .aggregate({
-              where: {
-                companyId: companyId,
-                status: "CONFIRMED",
-              },
-              _sum: {
-                totalAmount: true,
-              },
-            })
-            .catch(() => ({ _sum: { totalAmount: 0 } })),
-
-          // Revenus du mois
-          prisma.reservation
-            .aggregate({
-              where: {
-                companyId: companyId,
-                status: "CONFIRMED",
-                createdAt: {
-                  gte: new Date(
-                    new Date().getFullYear(),
-                    new Date().getMonth(),
-                    1
-                  ),
-                },
-              },
-              _sum: {
-                totalAmount: true,
-              },
-            })
-            .catch(() => ({ _sum: { totalAmount: 0 } })),
-
-          // Voyages actifs
-          prisma.trip
-            .count({
-              where: {
-                companyId: companyId,
-                status: "SCHEDULED",
-              },
-            })
-            .catch(() => 0),
-
-          // Voyages terminés
-          prisma.trip
-            .count({
-              where: {
-                companyId: companyId,
-                status: "COMPLETED",
-              },
-            })
-            .catch(() => 0),
-        ]);
-
-      stats = {
-        totalRevenue: totalRevenue._sum.totalAmount || 0,
-        monthlyRevenue: monthlyRevenue._sum.totalAmount || 0,
-        activeTrips,
-        completedTrips,
-      };
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-      // Garder les stats par défaut
+    if (!isOwner && !isAdmin) {
+      return new NextResponse("Forbidden", { status: 403 });
     }
 
+    // Calculate computed properties for the dashboard
+    const totalRevenue = company.trips.reduce(
+      (sum, trip) => sum + trip.basePrice,
+      0
+    );
+    const activeEmployeesCount = company.employees.length;
+    const activeBusesCount = company.buses.length;
+    const activeRoutesCount = company.routes.length;
+    const scheduledTripsCount = company.trips.filter(
+      (trip) => trip.status === "SCHEDULED"
+    ).length;
+
+    // Return a simplified company object with computed stats
     const companyWithStats = {
       ...company,
-      stats,
+      totalRevenue,
+      activeEmployees: activeEmployeesCount,
+      activeBuses: activeBusesCount,
+      activeRoutes: activeRoutesCount,
+      scheduledTrips: scheduledTripsCount,
     };
 
-    console.log("Returning company data:", {
-      id: company.id,
-      name: company.name,
-    });
     return NextResponse.json(companyWithStats);
   } catch (error) {
     console.error("Error fetching company details:", error);
-    return NextResponse.json(
-      {
-        error: "Erreur serveur",
-        details: error instanceof Error ? error.message : "Erreur inconnue",
-      },
-      { status: 500 }
-    );
+    return new NextResponse("Internal Server Error", { status: 500 });
   }
 }
 

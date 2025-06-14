@@ -1051,6 +1051,7 @@ seatNumbers          Int[]             @default([])
 totalAmount          Float
 status               ReservationStatus @default(PENDING)
 paymentStatus        PaymentStatus     @default(PENDING)
+paidAt               DateTime?         // Added this field
 
 // Payment information
 paymentMethod String?
@@ -1078,6 +1079,9 @@ discountAmount    Float?         @default(0)
 
 // Expiration
 expiresAt     DateTime?
+
+// Metadata for additional data
+metadata      Json?
 
 trip          Trip              @relation(fields: [tripId], references: [id])
 tripId        String
@@ -1108,6 +1112,7 @@ currency      String       @default("XOF")
 status        PaymentStatus @default(PENDING)
 method        PaymentMethod
 reference     String?      @unique
+transactionId String?      // Added this field
 
 // Payment details
 processorId   String?      // ID from payment processor

@@ -249,76 +249,110 @@ export default function BookingForm({
   const onSubmit = async (values: BookingFormValues) => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tripId: trip.id,
-          selectedSeats: values.selectedSeats.map((seat, index) => ({
-            seatNumber: seat,
-            name:
-              values.passengers[index]?.name ||
-              session?.user?.name ||
-              "Passager", // Fallback for guest booking
-            phone:
-              values.passengers[index]?.phone || session?.user?.phone || "", // Fallback for guest booking
-            countryCode:
-              values.passengers[index]?.countryCode ||
-              session?.user?.countryCode ||
-              "", // Fallback
-            email:
-              values.passengers[index]?.email || session?.user?.email || "", // Fallback for guest booking
-          })),
-          paymentMethod: values.paymentMethod,
-        }),
-      });
+      let response;
+      let bookingData;
 
-      const booking = await response.json();
-
-      if (response.ok) {
-        // Emit socket event for cashier dashboard
-        if (socket) {
-          socket.emit("reservation-confirmed", {
-            reservationId: booking.reservation.id,
-            companyId: trip.company.id,
-            userId: session?.user?.id || null,
+      if (values.paymentMethod === "MOBILE_MONEY") {
+        // Initiate CinetPay payment
+        response = await fetch("/api/payments/mobile-money/initiate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             tripId: trip.id,
-            ticketCodes: booking.tickets.map((t: any) => t.ticketNumber), // Corrected to ticketNumber
+            passengerName:
+              values.passengers[0]?.name || session?.user?.name || "Passager",
+            passengerPhone:
+              values.passengers[0]?.phone || session?.user?.phone || "",
+            passengerEmail:
+              values.passengers[0]?.email || session?.user?.email || "",
+            seatNumbers: values.selectedSeats.map((s) =>
+              Number.parseInt(s, 10)
+            ), // Pass as numbers
+            totalAmount: trip.currentPrice * values.selectedSeats.length,
+            companyId: trip.company.id,
+            passengerDetails: values.passengers, // Pass full passenger details for callback
+          }),
+        });
+        bookingData = await response.json();
+
+        if (response.ok) {
+          onBookingComplete({
+            paymentRequired: true,
+            paymentUrl: bookingData.paymentUrl,
+            message: bookingData.message,
+          });
+        } else {
+          toast({
+            title: "Erreur de paiement",
+            description:
+              bookingData.error ||
+              "Une erreur est survenue lors de l'initialisation du paiement.",
+            variant: "destructive",
           });
         }
-
-        // Generate WhatsApp message content
-        const ticketNumbers = booking.tickets
-          .map((t: any) => t.ticketNumber)
-          .join(", ");
-        const whatsappMessage = encodeURIComponent(
-          `Félicitations pour votre réservation ! Voici vos codes de ticket: ${ticketNumbers}. Scannez les QR codes en gare. Vous devrez être en gare 2 heures avant le départ afin de confirmer votre réservation en caisse.`
-        );
-        const passengerPhone =
-          values.passengers[0]?.phone || session?.user?.phone || "";
-        const countryCode =
-          values.passengers[0]?.countryCode || session?.user?.countryCode || "";
-
-        // Construct the WhatsApp link (ensure phone number is in international format without leading +)
-        // Remove '+' from country code and any leading '0' from phone number
-        const fullPhoneNumberForWhatsapp = `${countryCode.replace(
-          /\+/g,
-          ""
-        )}${passengerPhone.replace(/^0+/, "")}`; // Use /^0+/ to remove all leading zeros
-        const whatsappLink = `https://wa.me/${fullPhoneNumberForWhatsapp}?text=${whatsappMessage}`;
-
-        onBookingComplete({
-          ...booking,
-          whatsappLink: whatsappLink, // Pass the generated WhatsApp link
-          whatsappMessage: decodeURIComponent(whatsappMessage), // Pass the decoded message for toast
-        });
       } else {
-        toast({
-          title: "Erreur de réservation",
-          description:
-            booking.error || "Une erreur est survenue lors de la réservation.",
-          variant: "destructive",
+        // Direct booking for CASH or CARD (tickets generated immediately)
+        response = await fetch("/api/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tripId: trip.id,
+            selectedSeats: values.selectedSeats.map((seat, index) => ({
+              seatNumber: seat,
+              name:
+                values.passengers[index]?.name ||
+                session?.user?.name ||
+                "Passager",
+              phone:
+                values.passengers[index]?.phone || session?.user?.phone || "",
+              countryCode:
+                values.passengers[index]?.countryCode ||
+                session?.user?.countryCode ||
+                "",
+              email:
+                values.passengers[index]?.email || session?.user?.email || "",
+            })),
+            paymentMethod: values.paymentMethod,
+          }),
         });
+        bookingData = await response.json();
+
+        if (response.ok) {
+          // Generate WhatsApp message content
+          const ticketNumbers = bookingData.tickets
+            .map((t: any) => t.ticketNumber)
+            .join(", ");
+          const whatsappMessage = encodeURIComponent(
+            `Félicitations pour votre réservation ! Voici vos codes de ticket: ${ticketNumbers}. Scannez les QR codes en gare. Vous devrez être en gare 2 heures avant le départ afin de confirmer votre réservation en caisse.`
+          );
+          const passengerPhone =
+            values.passengers[0]?.phone || session?.user?.phone || "";
+          const countryCode =
+            values.passengers[0]?.countryCode ||
+            session?.user?.countryCode ||
+            "";
+
+          const fullPhoneNumberForWhatsapp = `${countryCode.replace(
+            /\+/g,
+            ""
+          )}${passengerPhone.replace(/^0+/, "")}`;
+          const whatsappLink = `https://wa.me/${fullPhoneNumberForWhatsapp}?text=${whatsappMessage}`;
+
+          onBookingComplete({
+            ...bookingData,
+            paymentRequired: false,
+            whatsappLink: whatsappLink,
+            whatsappMessage: decodeURIComponent(whatsappMessage),
+          });
+        } else {
+          toast({
+            title: "Erreur de réservation",
+            description:
+              bookingData.error ||
+              "Une erreur est survenue lors de la réservation.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error("Booking error:", error);
@@ -364,7 +398,7 @@ export default function BookingForm({
               <Badge variant="outline" className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 {trip.bus.plateNumber}
-              </Badge>
+              </Badge>{" "}
             </div>
             <div className="text-2xl font-bold text-green-600">
               {trip.currentPrice.toLocaleString()} FCFA

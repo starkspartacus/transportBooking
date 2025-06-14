@@ -897,3 +897,91 @@ export interface Coordinates {
   lat: number;
   lng: number;
 }
+
+import type {
+  User as PrismaClientUser,
+  Company as PrismaClientCompany,
+  Trip as PrismaClientTrip,
+  Route as PrismaRouteClient,
+  Bus as PrismaBusClient,
+  Reservation as PrismaReservationClient,
+  Ticket as PrismaTicketClient,
+  Payment as PrismaPaymentClient,
+  Activity as PrismaActivityClient,
+  Notification as PrismaNotificationClient,
+  User as PrismaEmployeeClient,
+  Subscription as PrismaSubscriptionClient,
+  SubscriptionTransaction as PrismaSubscriptionTransactionClient,
+} from "@prisma/client";
+
+// Extend existing types for more detailed relations
+export type TripWithDetailsExtended = PrismaClientTrip & {
+  route: PrismaRouteClient;
+  bus: PrismaBusClient;
+  company: PrismaClientCompany;
+  reservations: PrismaReservationClient[]; // Include reservations to check occupied seats
+};
+
+export type ReservationWithDetails = PrismaReservationClient & {
+  trip: PrismaClientTrip & {
+    route: PrismaRouteClient;
+    bus: PrismaBusClient;
+  };
+  user: PrismaClientUser | null;
+  tickets: PrismaTicketClient[];
+  payments: PrismaPaymentClient[];
+};
+
+export type CompanyWithDetailsExtended = PrismaClientCompany & {
+  owner: PrismaClientUser;
+  buses: PrismaBusClient[];
+  routes: PrismaRouteClient[];
+  trips: PrismaClientTrip[];
+  employees: PrismaEmployeeClient[];
+  subscriptions: PrismaSubscriptionClient[];
+};
+
+export type EmployeeWithDetails = PrismaEmployeeClient & {
+  company: PrismaClientCompany;
+  user: PrismaClientUser;
+};
+
+export type UserWithDetails = PrismaClientUser & {
+  companies: PrismaClientCompany[];
+  reservations: PrismaReservationClient[];
+  tickets: PrismaTicketClient[];
+  payments: PrismaPaymentClient[];
+  activities: PrismaActivityClient[];
+  notifications: PrismaNotificationClient[];
+  employeeProfile: PrismaEmployeeClient | null;
+};
+
+export type RouteWithDetails = PrismaRouteClient & {
+  company: PrismaClientCompany;
+  trips: PrismaClientTrip[];
+};
+
+export type BusWithDetails = PrismaBusClient & {
+  company: PrismaClientCompany;
+  trips: PrismaClientTrip[];
+};
+
+export type NotificationWithDetails = Notification & {
+  user: PrismaClientUser;
+};
+
+export type SubscriptionWithDetails = Subscription & {
+  company: PrismaClientCompany;
+  user: PrismaClientUser;
+};
+
+export type SubscriptionTransactionWithDetails =
+  PrismaSubscriptionTransactionClient & {
+    user: PrismaClientUser;
+    company: PrismaClientCompany;
+  };
+
+export type ActivityWithDetails = Activity & {
+  user: PrismaClientUser | null;
+  company: PrismaClientCompany | null;
+};

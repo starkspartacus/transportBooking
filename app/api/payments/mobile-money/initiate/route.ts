@@ -1,219 +1,193 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import crypto from "crypto";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { cinetpayService } from "@/lib/cinetpay"; // Corrected import to cinetpayService
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
     const body = await request.json();
 
     const {
-      cpm_trans_id,
-      cpm_site_id,
-      signature,
-      cpm_amount,
-      cpm_currency,
-      cpm_payid,
-      cpm_payment_date,
-      cpm_payment_time,
-      cpm_error_message,
-      cpm_result,
-      cpm_trans_status,
-      cpm_designation,
-      cpm_phone_prefixe,
-      cpm_phone_num,
-      cpm_custom,
+      tripId,
+      passengerName,
+      passengerPhone,
+      passengerEmail,
+      seatNumbers,
+      totalAmount,
+      companyId,
+      passengerDetails,
     } = body;
 
-    // Vérifier la signature
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.CINETPAY_SECRET_KEY!)
-      .update(
-        cpm_site_id +
-          cpm_trans_id +
-          cpm_amount +
-          cpm_currency +
-          process.env.CINETPAY_SECRET_KEY
-      )
-      .digest("hex");
-
-    if (signature !== expectedSignature) {
-      console.error("Signature invalide:", { signature, expectedSignature });
+    // Validation
+    if (
+      !tripId ||
+      !passengerName ||
+      !passengerPhone ||
+      !totalAmount ||
+      !companyId ||
+      !seatNumbers ||
+      !Array.isArray(seatNumbers) ||
+      seatNumbers.length === 0
+    ) {
       return NextResponse.json(
-        { error: "Signature invalide" },
+        { error: "Données manquantes pour l'initialisation du paiement." },
         { status: 400 }
       );
     }
 
-    // Trouver la réservation
-    const reservation = await prisma.reservation.findFirst({
-      where: { paymentReference: cpm_trans_id },
+    // Vérifier la disponibilité du voyage
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
       include: {
-        trip: {
-          include: {
-            route: true,
-            bus: true,
-            company: true,
-          },
-        },
+        route: true,
+        bus: true,
         company: true,
+        reservations: {
+          where: {
+            status: { in: ["PENDING", "CONFIRMED", "CHECKED_IN"] },
+          },
+          select: { seatNumbers: true },
+        },
       },
     });
 
-    if (!reservation) {
-      console.error("Réservation non trouvée:", cpm_trans_id);
+    if (!trip) {
+      return NextResponse.json({ error: "Voyage non trouvé" }, { status: 404 });
+    }
+
+    // Check for already occupied seats
+    const occupiedSeatNumbers = trip.reservations.flatMap((res) =>
+      res.seatNumbers.map((s) => s.toString())
+    );
+    const requestedSeatStrings = seatNumbers.map((s: number) => s.toString());
+
+    for (const seat of requestedSeatStrings) {
+      if (occupiedSeatNumbers.includes(seat)) {
+        return NextResponse.json(
+          { error: `Le siège ${seat} est déjà réservé.` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (trip.availableSeats < seatNumbers.length) {
       return NextResponse.json(
-        { error: "Réservation non trouvée" },
-        { status: 404 }
+        { error: "Sièges non disponibles" },
+        { status: 400 }
       );
     }
 
-    if (cpm_result === "00" && cpm_trans_status === "ACCEPTED") {
-      // Paiement réussi
-      await prisma.$transaction(async (tx) => {
-        // Mettre à jour la réservation
-        await tx.reservation.update({
-          where: { id: reservation.id },
-          data: {
-            status: "CONFIRMED",
-            paymentStatus: "PAID",
-            paidAmount: Number.parseFloat(cpm_amount),
-          },
-        });
+    // Générer une référence unique pour CinetPay
+    const paymentReference = cinetpayService.generateTransactionId("BOOK");
 
-        // Mettre à jour les sièges disponibles
-        await tx.trip.update({
-          where: { id: reservation.tripId },
-          data: {
-            availableSeats: {
-              decrement: reservation.seatNumbers.length,
-            },
-            bookedSeats: {
-              push: reservation.seatNumbers,
-            },
-          },
-        });
+    // Create reservation in PENDING state
+    const reservation = await prisma.reservation.create({
+      data: {
+        reservationNumber: paymentReference, // Use paymentReference as reservation number for now
+        userId: session?.user?.id || null,
+        tripId,
+        companyId,
+        totalAmount,
+        seatNumbers: seatNumbers, // Store as numbers
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes to complete payment
+        status: "PENDING", // Reservation is pending until payment confirmed
+        paymentStatus: "PENDING",
+        paymentMethod: "MOBILE_MONEY",
+        passengerCount: seatNumbers.length,
+        passengerName: passengerName,
+        passengerPhone: passengerPhone,
+        passengerEmail: passengerEmail,
+        passengerCountryCode: passengerDetails[0]?.countryCode || null, // Assuming first passenger is main
+        passengerDetails: passengerDetails, // Store full details for ticket creation in callback
+      },
+    });
 
-        // Créer le paiement
-        await tx.payment.create({
-          data: {
-            amount: Number.parseFloat(cpm_amount),
-            currency: cpm_currency,
-            status: "PAID",
-            method: "MOBILE_MONEY",
-            reference: cpm_trans_id,
-            processorId: cpm_payid,
-            userId: reservation.userId,
-            companyId: reservation.companyId,
-            reservationId: reservation.id,
-            metadata: {
-              phone: `${cpm_phone_prefixe}${cpm_phone_num}`,
-              paymentDate: cpm_payment_date,
-              paymentTime: cpm_payment_time,
-            },
-          },
-        });
+    // Update available seats for the trip immediately to prevent double booking
+    await prisma.trip.update({
+      where: { id: tripId },
+      data: {
+        availableSeats: { decrement: seatNumbers.length },
+      },
+    });
 
-        // Générer les tickets
-        for (let i = 0; i < reservation.seatNumbers.length; i++) {
-          const seatNumber = reservation.seatNumbers[i];
-          const ticketNumber = `TKT_${Date.now()}_${Math.random()
-            .toString(36)
-            .substr(2, 6)}`;
+    // Initier le paiement CinetPay
+    const paymentData = {
+      amount: totalAmount,
+      currency: "XOF", // Assuming XOF as currency
+      transactionId: paymentReference,
+      description: `Réservation de billets pour ${trip.route.departureLocation} - ${trip.route.arrivalLocation}`,
+      customerName: passengerName,
+      customerEmail: passengerEmail || `${passengerPhone}@temp.com`,
+      customerPhone: passengerPhone,
+      notifyUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payments/mobile-money/callback`, // CinetPay will call this
+      returnUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/client/reservations?status=pending&ref=${paymentReference}`, // User redirected here after CinetPay
+      cancelUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/client/reservations?status=cancelled&ref=${paymentReference}`, // User redirected here if payment cancelled
+      channels: "MOBILE_MONEY",
+      metadata: {
+        reservationId: reservation.id,
+        tripId: trip.id,
+        companyId: companyId,
+        userId: session?.user?.id || null,
+        seatNumbers: JSON.stringify(seatNumbers), // Pass as stringified JSON
+        passengerDetails: JSON.stringify(passengerDetails), // Pass as stringified JSON
+      },
+    };
 
-          // Générer QR Code sécurisé
-          const qrData = {
-            ticketNumber,
-            tripId: reservation.tripId,
-            seatNumber,
-            passengerName: reservation.passengerName,
-            timestamp: Date.now(),
-          };
+    const paymentResponse = await cinetpayService.initializePayment(
+      paymentData
+    );
 
-          const qrString = JSON.stringify(qrData);
-          const qrHash = crypto
-            .createHash("sha256")
-            .update(qrString + process.env.NEXTAUTH_SECRET)
-            .digest("hex");
-
-          await tx.ticket.create({
-            data: {
-              ticketNumber,
-              passengerName: reservation.passengerName,
-              passengerPhone: reservation.passengerPhone,
-              passengerEmail: reservation.passengerEmail,
-              seatNumber,
-              price: reservation.totalAmount / reservation.seatNumbers.length,
-              status: "VALID",
-              qrCode: Buffer.from(qrString).toString("base64"),
-              qrHash,
-              userId: reservation.userId,
-              tripId: reservation.tripId,
-              companyId: reservation.companyId,
-              reservationId: reservation.id,
-            },
-          });
-        }
-
-        // Enregistrer l'activité
-        await tx.activity.create({
-          data: {
-            type: "PAYMENT_COMPLETED",
-            description: `Paiement mobile money confirmé pour ${cpm_amount} ${cpm_currency}`,
-            status: "SUCCESS",
-            userId: reservation.userId,
-            companyId: reservation.companyId,
-            metadata: {
-              reservationId: reservation.id,
-              paymentReference: cpm_trans_id,
-              amount: Number.parseFloat(cpm_amount),
-              method: "MOBILE_MONEY",
-              processorId: cpm_payid,
-            },
-          },
-        });
+    if (paymentResponse.code !== "201") {
+      // CinetPay success code for initialization
+      // If CinetPay initiation fails, revert reservation and seats
+      await prisma.reservation.delete({ where: { id: reservation.id } });
+      await prisma.trip.update({
+        where: { id: tripId },
+        data: {
+          availableSeats: { increment: seatNumbers.length },
+        },
       });
-
-      return NextResponse.json({
-        success: true,
-        message: "Paiement confirmé avec succès",
-      });
-    } else {
-      // Paiement échoué
-      await prisma.$transaction(async (tx) => {
-        await tx.reservation.update({
-          where: { id: reservation.id },
-          data: {
-            status: "CANCELLED",
-            paymentStatus: "FAILED",
-            cancellationReason: cpm_error_message || "Paiement échoué",
-          },
-        });
-
-        await tx.activity.create({
-          data: {
-            type: "PAYMENT_FAILED",
-            description: `Paiement mobile money échoué: ${cpm_error_message}`,
-            status: "FAILED",
-            userId: reservation.userId,
-            companyId: reservation.companyId,
-            metadata: {
-              reservationId: reservation.id,
-              paymentReference: cpm_trans_id,
-              error: cpm_error_message,
-              result: cpm_result,
-            },
-          },
-        });
-      });
-
-      return NextResponse.json({
-        success: false,
-        message: "Paiement échoué",
-        error: cpm_error_message,
-      });
+      return NextResponse.json(
+        {
+          error:
+            paymentResponse.message ||
+            "Erreur lors de l'initialisation du paiement CinetPay",
+        },
+        { status: 500 }
+      );
     }
+
+    // Enregistrer l'activité
+    await prisma.activity.create({
+      data: {
+        type: "PAYMENT_INITIATED",
+        description: `Paiement mobile money initié pour ${totalAmount} FCFA (Réservation #${reservation.reservationNumber})`,
+        status: "INFO",
+        userId: session?.user?.id || null,
+        companyId,
+        metadata: {
+          reservationId: reservation.id,
+          paymentReference,
+          amount: totalAmount,
+          method: "MOBILE_MONEY",
+        },
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      reservationId: reservation.id,
+      paymentUrl: paymentResponse.data?.payment_url,
+      paymentReference,
+      message: "Paiement initié avec succès. Redirection vers CinetPay...",
+    });
   } catch (error) {
-    console.error("Erreur callback paiement:", error);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    console.error("Erreur initiation paiement mobile money:", error);
+    return NextResponse.json(
+      { error: "Erreur serveur interne" },
+      { status: 500 }
+    );
   }
 }

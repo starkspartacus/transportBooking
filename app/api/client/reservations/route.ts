@@ -23,16 +23,40 @@ export async function GET(request: NextRequest) {
       include: {
         trip: {
           include: {
-            route: {
-              include: {
-                departure: true,
-                arrival: true,
+            route: true,
+            bus: {
+              select: {
+                plateNumber: true,
+                model: true,
+                brand: true,
+              },
+            },
+            company: {
+              select: {
+                id: true,
+                name: true,
+                logo: true,
               },
             },
           },
         },
-        seat: true,
-        ticket: true,
+        tickets: {
+          select: {
+            id: true,
+            ticketNumber: true,
+            qrCode: true,
+            status: true,
+            seatNumber: true,
+          },
+        },
+        payments: {
+          select: {
+            id: true,
+            status: true,
+            amount: true,
+            method: true,
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -40,6 +64,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(reservations);
   } catch (error) {
     console.error("Get client reservations error:", error);
+    // Return more detailed error information in development
+    if (process.env.NODE_ENV === "development") {
+      return NextResponse.json(
+        {
+          error: "Internal server error",
+          details: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 }
+      );
+    }
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -13,12 +13,28 @@ export async function GET() {
         city: true,
         commune: true,
         rating: true,
-        totalTrips: true,
+        // ADDED: Include a count of active trips for each company
+        _count: {
+          select: {
+            trips: {
+              where: {
+                status: { in: ["SCHEDULED", "BOARDING"] }, // Only count trips that are scheduled or boarding
+                isArchived: false, // Exclude archived trips
+              },
+            },
+          },
+        },
       },
       orderBy: { name: "asc" },
     });
 
-    return NextResponse.json(companies);
+    // Map the result to include totalTrips directly
+    const companiesWithTripCount = companies.map((company) => ({
+      ...company,
+      totalTrips: company._count.trips, // Assign the counted trips
+    }));
+
+    return NextResponse.json(companiesWithTripCount);
   } catch (error) {
     console.error(error);
     return NextResponse.json(

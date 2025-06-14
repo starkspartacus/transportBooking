@@ -31,7 +31,7 @@ import {
   Sparkles,
   Heart,
 } from "lucide-react";
-import { AFRICAN_COUNTRIES } from "@/constants/countries";
+import { ALL_COUNTRIES } from "@/constants/countries";
 
 interface ProfileData {
   name: string;
@@ -308,7 +308,7 @@ export default function ProfileSettings() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {AFRICAN_COUNTRIES.map((country) => (
+                    {ALL_COUNTRIES.map((country) => (
                       <SelectItem key={country.code} value={country.code}>
                         {country.flag} {country.code}
                       </SelectItem>
@@ -400,9 +400,9 @@ export default function ProfileSettings() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {AFRICAN_COUNTRIES.map((country) => (
-                      <SelectItem key={country.value} value={country.value}>
-                        {country.flag} {country.label}
+                    {ALL_COUNTRIES.map((country) => (
+                      <SelectItem key={country.code} value={country.code}>
+                        {country.flag} {country.code}
                       </SelectItem>
                     ))}
                   </SelectContent>

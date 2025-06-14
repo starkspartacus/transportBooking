@@ -22,6 +22,7 @@ import type { TripWithDetails } from "@/lib/types";
 import { Confetti } from "@/components/ui/confetti";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation"; // Import useRouter
+import { QrCodeDisplayModal } from "@/components/booking/qr-code-display-modal"; // Import QR code modal
 
 interface TripBookingSectionProps {
   trip: TripWithDetails;
@@ -30,36 +31,66 @@ interface TripBookingSectionProps {
 export function TripBookingSection({ trip }: TripBookingSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [bookedTickets, setBookedTickets] = useState<any[]>([]); // To store tickets for QR display
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const router = useRouter(); // Initialize useRouter
 
   const handleBookingComplete = (booking: any) => {
-    setShowConfetti(true);
-    setIsOpen(false);
-    toast({
-      title: "Réservation confirmée !",
-      description: `Votre réservation #${booking.reservation.reservationNumber} a été effectuée avec succès.`,
-      variant: "success",
-    });
-    // Display the WhatsApp message as a separate toast
-    toast({
-      title: "Informations importantes",
-      description: booking.whatsappMessage, // Use the decoded message
-      duration: 10000, // Longer duration for important info
-      variant: "info",
-      action: booking.whatsappLink ? (
-        <a
-          href={booking.whatsappLink}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Button variant="whatsapp">Ouvrir WhatsApp</Button>
-        </a>
-      ) : undefined,
-    });
-    // Hide confetti after some time
-    setTimeout(() => setShowConfetti(false), 5000);
+    setIsOpen(false); // Close the booking form modal
+
+    if (booking.paymentRequired) {
+      // For Mobile Money, redirect to CinetPay
+      if (booking.paymentUrl) {
+        toast({
+          title: "Paiement requis",
+          description: "Vous allez être redirigé vers la page de paiement.",
+          variant: "info",
+        });
+        window.location.href = booking.paymentUrl;
+      } else {
+        toast({
+          title: "Réservation en attente de paiement",
+          description:
+            "Votre réservation est en attente de paiement. Veuillez suivre les instructions.",
+          variant: "info",
+        });
+      }
+    } else {
+      // For CASH payments, or after CinetPay callback confirms, tickets are ready
+      setShowConfetti(true);
+      setBookedTickets(booking.tickets || []); // Store tickets for QR display
+      setShowQrModal(true); // Show QR code modal
+
+      toast({
+        title: "Réservation confirmée !",
+        description: `Votre réservation #${booking.reservation.reservationNumber} a été effectuée avec succès.`,
+        variant: "success",
+      });
+
+      // Display the WhatsApp message as a separate toast
+      if (booking.whatsappMessage) {
+        toast({
+          title: "Informations importantes",
+          description: booking.whatsappMessage, // Use the decoded message
+          duration: 10000, // Longer duration for important info
+          variant: "info",
+          action: booking.whatsappLink ? (
+            <a
+              href={booking.whatsappLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button variant="outline">Ouvrir WhatsApp</Button>
+            </a>
+          ) : undefined,
+        });
+      }
+
+      // Hide confetti after some time
+      setTimeout(() => setShowConfetti(false), 5000);
+    }
 
     // Re-fetch trip data to update available seats for the current client
     router.refresh();
@@ -109,6 +140,15 @@ export function TripBookingSection({ trip }: TripBookingSectionProps) {
             {Content}
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* QR Code Display Modal */}
+      {showQrModal && bookedTickets.length > 0 && (
+        <QrCodeDisplayModal
+          tickets={bookedTickets}
+          isOpen={showQrModal}
+          onClose={() => setShowQrModal(false)}
+        />
       )}
     </>
   );
