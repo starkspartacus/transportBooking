@@ -6,18 +6,15 @@ import { prisma } from "@/lib/prisma";
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    // Ensure session and user ID exist
+    if (!session?.user?.id) {
+      console.warn(
+        "Unauthorized access attempt to /api/client/reservations: No user ID in session."
+      );
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const userId = session.user.id;
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: "User ID not found in session" },
-        { status: 400 }
-      );
-    }
 
     const reservations = await prisma.reservation.findMany({
       where: {

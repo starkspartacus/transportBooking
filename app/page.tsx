@@ -1,10 +1,61 @@
+"use client";
+
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Clock, Users, Shield, Zap } from "lucide-react";
+import { MapPin, Clock, Users, Shield, Zap, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 export default function HomePage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "loading") {
+      // Do nothing while session is loading
+      return;
+    }
+
+    if (session?.user) {
+      // User is logged in, redirect based on role
+      switch (session.user.role) {
+        case "ADMIN":
+          router.push("/admin");
+          break;
+        case "PATRON":
+          router.push("/patron");
+          break;
+        case "CLIENT":
+          router.push("/client");
+          break;
+        case "CAISSIER":
+          router.push("/caissier");
+          break;
+        case "GESTIONNAIRE":
+          router.push("/gestionnaire");
+          break;
+        default:
+          // Fallback for unknown roles or if role is not set
+          router.push("/dashboard"); // Or a generic dashboard
+          break;
+      }
+    }
+  }, [session, status, router]);
+
+  if (status === "loading" || session?.user) {
+    // Show a loading spinner or nothing while redirecting
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <p className="ml-2 text-gray-600">Redirection en cours...</p>
+      </div>
+    );
+  }
+
+  // Render the public home page if not logged in
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
       {/* Header */}
@@ -28,7 +79,6 @@ export default function HomePage() {
                   S'inscrire
                 </Button>
               </Link>
-              
             </div>
           </div>
         </div>

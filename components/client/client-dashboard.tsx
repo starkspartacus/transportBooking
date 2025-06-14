@@ -16,20 +16,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { NotificationBell } from "@/components/ui/notification-bell";
-import {
-  Search,
-  MapPin,
-  Clock,
-  Bus,
-  Filter,
-  Star,
-  Heart,
-  Share2,
-} from "lucide-react";
+import { Search, Clock, Bus, Filter, Star, Heart, Luggage } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useRouter } from "next/navigation";
-import { AFRICAN_COUNTRIES } from "@/constants/countries";
+import { ALL_COUNTRIES } from "@/constants/countries";
+import { TripCard } from "@/components/search/trip-card"; // Import TripCard
+import type { TripWithDetails } from "@/lib/types"; // Import TripWithDetails type
 
 interface Company {
   id: string;
@@ -40,39 +33,6 @@ interface Company {
   commune: string;
   rating?: number;
   totalTrips?: number;
-}
-
-interface Trip {
-  id: string;
-  departureTime: string;
-  arrivalTime: string;
-  availableSeats: number;
-  status: string;
-  route: {
-    name: string;
-    price: number;
-    departure: {
-      name: string;
-      city: string;
-      country: string;
-    };
-    arrival: {
-      name: string;
-      city: string;
-      country: string;
-    };
-  };
-  bus: {
-    plateNumber: string;
-    model: string;
-    amenities?: string[];
-  };
-  company: {
-    id: string;
-    name: string;
-    logo: string;
-    rating?: number;
-  };
 }
 
 interface Reservation {
@@ -107,10 +67,12 @@ export default function ClientDashboard() {
   const { data: session } = useSession();
   const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [trips, setTrips] = useState<Trip[]>([]);
+  const [trips, setTrips] = useState<TripWithDetails[]>([]); // Use TripWithDetails
   const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [filteredTrips, setFilteredTrips] = useState<Trip[]>([]);
-  const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+  const [filteredTrips, setFilteredTrips] = useState<TripWithDetails[]>([]); // Use TripWithDetails
+  const [selectedTrip, setSelectedTrip] = useState<TripWithDetails | null>(
+    null
+  );
   const [selectedReservation, setSelectedReservation] =
     useState<Reservation | null>(null);
   const [showQRCode, setShowQRCode] = useState(false);
@@ -158,10 +120,15 @@ export default function ClientDashboard() {
   const fetchTrips = async () => {
     setIsLoading(true);
     try {
+      // Fetch all trips without specific filters initially
       const response = await fetch("/api/trips");
-      const data = await response.json();
-      setTrips(data);
-      setFilteredTrips(data);
+      const result = await response.json();
+      if (response.ok) {
+        setTrips(result.trips);
+        setFilteredTrips(result.trips);
+      } else {
+        console.error("Failed to fetch trips:", result.error);
+      }
     } catch (error) {
       console.error("Error fetching trips:", error);
     } finally {
@@ -173,7 +140,11 @@ export default function ClientDashboard() {
     try {
       const response = await fetch("/api/client/reservations");
       const data = await response.json();
-      setReservations(data);
+      if (response.ok) {
+        setReservations(data);
+      } else {
+        console.error("Failed to fetch reservations:", data.error);
+      }
     } catch (error) {
       console.error("Error fetching reservations:", error);
     }
@@ -197,17 +168,15 @@ export default function ClientDashboard() {
 
   const handleCountryChange = (country: string) => {
     setFilters((prev) => ({ ...prev, country, city: "", commune: "" }));
-    const countryData = AFRICAN_COUNTRIES.find((c) => c.name === country);
-    setAvailableCities(countryData?.cities.map((c) => c.name) || []);
+    const countryData = ALL_COUNTRIES.find((c) => c.name === country);
+    setAvailableCities(countryData?.cities?.map((c) => c.name) || []);
     setAvailableCommunes([]);
   };
 
   const handleCityChange = (city: string) => {
     setFilters((prev) => ({ ...prev, city, commune: "" }));
-    const countryData = AFRICAN_COUNTRIES.find(
-      (c) => c.name === filters.country
-    );
-    const cityData = countryData?.cities.find((c) => c.name === city);
+    const countryData = ALL_COUNTRIES.find((c) => c.name === filters.country);
+    const cityData = countryData?.cities?.find((c) => c.name === city);
     setAvailableCommunes(cityData?.communes || []);
   };
 
@@ -220,45 +189,55 @@ export default function ClientDashboard() {
     let filtered = [...trips];
 
     // Apply company filter
-    if (filters.companyId) {
+    if (filters.companyId && filters.companyId !== "all") {
       filtered = filtered.filter(
         (trip) => trip.company.id === filters.companyId
       );
     }
 
-    // Apply country filter
-    if (filters.country) {
+    // Apply country filter (departure or arrival country)
+    if (filters.country && filters.country !== "all") {
       filtered = filtered.filter(
         (trip) =>
-          trip.route.departure.country === filters.country ||
-          trip.route.arrival.country === filters.country
+          trip.route.departureCountry === filters.country ||
+          trip.route.arrivalCountry === filters.country
       );
     }
 
-    // Apply city filter
-    if (filters.city) {
+    // Apply city filter (departure or arrival city)
+    if (filters.city && filters.city !== "all") {
       filtered = filtered.filter(
         (trip) =>
-          trip.route.departure.city === filters.city ||
-          trip.route.arrival.city === filters.city
+          trip.route.departureLocation.includes(filters.city) ||
+          trip.route.arrivalLocation.includes(filters.city)
       );
     }
 
     // Apply departure time filter
-    if (filters.departureTime) {
+    if (filters.departureTime && filters.departureTime !== "all") {
       const selectedHour = Number.parseInt(filters.departureTime);
       filtered = filtered.filter((trip) => {
         const departureHour = new Date(trip.departureTime).getHours();
-        return departureHour === selectedHour;
+        // Filter for trips departing within the specified 6-hour block
+        if (selectedHour === 6) return departureHour >= 6 && departureHour < 12;
+        if (selectedHour === 12)
+          return departureHour >= 12 && departureHour < 18;
+        if (selectedHour === 18)
+          return departureHour >= 18 && departureHour <= 23;
+        if (selectedHour === 0) return departureHour >= 0 && departureHour < 6;
+        return true; // Should not happen with valid values
       });
     }
 
     // Apply price range filter
-    if (filters.priceRange) {
-      const [min, max] = filters.priceRange.split("-").map(Number);
+    if (filters.priceRange && filters.priceRange !== "all") {
+      const [min, maxStr] = filters.priceRange.split("-");
+      const minPrice = Number(min);
+      const maxPrice = maxStr ? Number(maxStr) : Number.POSITIVE_INFINITY;
+
       filtered = filtered.filter((trip) => {
-        const price = trip.route.price;
-        return price >= min && (max ? price <= max : true);
+        const price = trip.currentPrice;
+        return price >= minPrice && price <= maxPrice;
       });
     }
 
@@ -267,9 +246,12 @@ export default function ClientDashboard() {
       const query = filters.searchQuery.toLowerCase();
       filtered = filtered.filter(
         (trip) =>
-          trip.route.departure.name.toLowerCase().includes(query) ||
-          trip.route.arrival.name.toLowerCase().includes(query) ||
-          trip.company.name.toLowerCase().includes(query)
+          trip.route.departureLocation.toLowerCase().includes(query) ||
+          trip.route.arrivalLocation.toLowerCase().includes(query) ||
+          trip.company.name.toLowerCase().includes(query) ||
+          trip.bus.model.toLowerCase().includes(query) ||
+          trip.bus.brand?.toLowerCase().includes(query) ||
+          trip.bus.model?.toLowerCase().includes(query)
       );
     }
 
@@ -277,9 +259,9 @@ export default function ClientDashboard() {
     filtered.sort((a, b) => {
       switch (filters.sortBy) {
         case "price-low":
-          return a.route.price - b.route.price;
+          return a.currentPrice - b.currentPrice;
         case "price-high":
-          return b.route.price - a.route.price;
+          return b.currentPrice - a.currentPrice;
         case "rating":
           return (b.company.rating || 0) - (a.company.rating || 0);
         case "departure":
@@ -310,7 +292,7 @@ export default function ClientDashboard() {
     setAvailableCommunes([]);
   };
 
-  const bookTrip = (trip: Trip) => {
+  const bookTrip = (trip: TripWithDetails) => {
     setSelectedTrip(trip);
     router.push(`/booking/${trip.id}`);
   };
@@ -345,15 +327,17 @@ export default function ClientDashboard() {
     }
   };
 
-  const shareTrip = (trip: Trip) => {
+  const shareTrip = (trip: TripWithDetails) => {
     if (navigator.share) {
       navigator.share({
-        title: `Voyage ${trip.route.departure.name} - ${trip.route.arrival.name}`,
+        title: `Voyage ${trip.route.departureLocation} - ${trip.route.arrivalLocation}`,
         text: `Découvrez ce voyage avec ${trip.company.name}`,
-        url: window.location.href,
+        url: `${window.location.origin}/trips/${trip.id}`, // Share specific trip URL
       });
     } else {
-      navigator.clipboard.writeText(window.location.href);
+      navigator.clipboard.writeText(
+        `${window.location.origin}/trips/${trip.id}`
+      );
       alert("Lien copié dans le presse-papiers");
     }
   };
@@ -506,7 +490,10 @@ export default function ClientDashboard() {
             </div>
             <div className="flex items-center gap-4">
               <NotificationBell />
-              <Button variant="outline" onClick={() => router.push("/profile")}>
+              <Button
+                variant="outline"
+                onClick={() => router.push("/settings")}
+              >
                 Mon profil
               </Button>
               <Button
@@ -571,7 +558,11 @@ export default function ClientDashboard() {
               <CardContent className="space-y-4 lg:space-y-6">
                 {/* Search and Filters */}
                 <div
-                  className={`space-y-4 ${showFilters ? "block" : "hidden"}`}
+                  className={`space-y-4 transition-all duration-300 ease-in-out ${
+                    showFilters
+                      ? "max-h-screen opacity-100"
+                      : "max-h-0 opacity-0 overflow-hidden"
+                  }`}
                 >
                   <div className="flex flex-col lg:flex-row gap-4">
                     <div className="flex-1">
@@ -631,7 +622,7 @@ export default function ClientDashboard() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Tous les pays</SelectItem>
-                          {AFRICAN_COUNTRIES.map((country) => (
+                          {ALL_COUNTRIES.map((country) => (
                             <SelectItem key={country.code} value={country.name}>
                               {country.flag} {country.name}
                             </SelectItem>
@@ -725,167 +716,7 @@ export default function ClientDashboard() {
                     </div>
                   ) : filteredTrips.length > 0 ? (
                     filteredTrips.map((trip) => (
-                      <div
-                        key={trip.id}
-                        className="border rounded-lg p-4 hover:shadow-md transition-shadow bg-white"
-                      >
-                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-3">
-                              <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                                {trip.company.logo ? (
-                                  <img
-                                    src={
-                                      trip.company.logo || "/placeholder.svg"
-                                    }
-                                    alt={trip.company.name}
-                                    className="w-6 h-6 rounded-full"
-                                  />
-                                ) : (
-                                  <Bus className="w-4 h-4 text-gray-600" />
-                                )}
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium">
-                                    {trip.company.name}
-                                  </span>
-                                  {trip.company.rating && (
-                                    <div className="flex items-center gap-1">
-                                      {renderStars(trip.company.rating)}
-                                      <span className="text-xs text-gray-600">
-                                        ({trip.company.rating})
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() =>
-                                    toggleFavorite(trip.company.id)
-                                  }
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Heart
-                                    className={`h-4 w-4 ${
-                                      favorites.includes(trip.company.id)
-                                        ? "fill-red-500 text-red-500"
-                                        : "text-gray-400"
-                                    }`}
-                                  />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => shareTrip(trip)}
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Share2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
-                              <div>
-                                <div className="flex items-start gap-2">
-                                  <MapPin className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                  <div className="min-w-0">
-                                    <p className="font-medium truncate">
-                                      {trip.route.departure.name}
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                      {formatDate(trip.departureTime)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div>
-                                <div className="flex items-start gap-2">
-                                  <MapPin className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                                  <div className="min-w-0">
-                                    <p className="font-medium truncate">
-                                      {trip.route.arrival.name}
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                      {formatDate(trip.arrivalTime)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2 lg:gap-4 text-sm">
-                              <div className="flex items-center gap-1">
-                                <Bus className="h-3 w-3 text-gray-600" />
-                                <span className="truncate">
-                                  {trip.bus.model}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Clock className="h-3 w-3 text-gray-600" />
-                                <span>
-                                  {Math.round(
-                                    (new Date(trip.arrivalTime).getTime() -
-                                      new Date(trip.departureTime).getTime()) /
-                                      (1000 * 60)
-                                  )}{" "}
-                                  min
-                                </span>
-                              </div>
-                              <Badge
-                                variant="outline"
-                                className="bg-blue-50 text-blue-700 border-blue-200"
-                              >
-                                {trip.availableSeats} places
-                              </Badge>
-                              {getTripStatusBadge(trip.status)}
-                            </div>
-
-                            {trip.bus.amenities &&
-                              trip.bus.amenities.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                  {trip.bus.amenities
-                                    .slice(0, 3)
-                                    .map((amenity, index) => (
-                                      <Badge
-                                        key={index}
-                                        variant="secondary"
-                                        className="text-xs"
-                                      >
-                                        {amenity}
-                                      </Badge>
-                                    ))}
-                                  {trip.bus.amenities.length > 3 && (
-                                    <Badge
-                                      variant="secondary"
-                                      className="text-xs"
-                                    >
-                                      +{trip.bus.amenities.length - 3}
-                                    </Badge>
-                                  )}
-                                </div>
-                              )}
-                          </div>
-
-                          <div className="flex flex-col items-end gap-2 lg:min-w-[120px]">
-                            <div className="text-xl lg:text-2xl font-bold text-green-600">
-                              {trip.route.price.toLocaleString()} FCFA
-                            </div>
-                            <Button
-                              onClick={() => bookTrip(trip)}
-                              disabled={trip.availableSeats === 0}
-                              className="w-full lg:w-auto"
-                            >
-                              {trip.availableSeats === 0
-                                ? "Complet"
-                                : "Réserver"}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
+                      <TripCard key={trip.id} trip={trip} />
                     ))
                   ) : (
                     <div className="text-center py-12 text-gray-500">
@@ -901,9 +732,221 @@ export default function ClientDashboard() {
             </Card>
           </TabsContent>
 
-          {/* Autres onglets... */}
+          {/* Reservations Tab */}
+          <TabsContent value="reservations">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Mes Réservations
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {reservations.length > 0 ? (
+                  reservations.map((reservation) => (
+                    <div
+                      key={reservation.id}
+                      className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div className="flex-1">
+                          <p className="font-semibold text-lg">
+                            {reservation.trip.route.departure.name} →{" "}
+                            {reservation.trip.route.arrival.name}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Code Réservation:{" "}
+                            <span className="font-mono text-blue-700">
+                              {reservation.reservationCode}
+                            </span>
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Départ: {formatDate(reservation.trip.departureTime)}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Arrivée: {formatDate(reservation.trip.arrivalTime)}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Siège: {reservation.seat.number}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Montant:{" "}
+                            <span className="font-bold text-green-600">
+                              {reservation.totalAmount.toLocaleString()} FCFA
+                            </span>
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          {getStatusBadge(reservation.status)}
+                          {reservation.status === "PENDING" && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => cancelReservation(reservation.id)}
+                            >
+                              Annuler
+                            </Button>
+                          )}
+                          {reservation.ticket?.qrCode && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedReservation(reservation);
+                                setShowQRCode(true);
+                              }}
+                            >
+                              Voir QR Code
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12 text-gray-500">
+                    <Luggage className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Vous n'avez aucune réservation pour le moment.</p>
+                    <Button
+                      variant="link"
+                      onClick={() => router.push("/search")}
+                    >
+                      Rechercher un voyage
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Companies Tab */}
+          <TabsContent value="companies">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bus className="h-5 w-5" />
+                  Entreprises Partenaires
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {companies.length > 0 ? (
+                  companies.map((company) => (
+                    <div
+                      key={company.id}
+                      className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          {company.logo ? (
+                            <img
+                              src={company.logo || "/placeholder.svg"}
+                              alt={company.name}
+                              className="w-14 h-14 rounded-full object-contain"
+                            />
+                          ) : (
+                            <Bus className="w-8 h-8 text-gray-600" />
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-bold text-lg">{company.name}</h3>
+                          <p className="text-sm text-gray-600">
+                            {company.city}, {company.country}
+                          </p>
+                          {company.rating && (
+                            <div className="flex items-center gap-1 mt-1">
+                              {renderStars(company.rating)}
+                              <span className="text-xs text-gray-600">
+                                ({company.rating})
+                              </span>
+                            </div>
+                          )}
+                          {company.totalTrips !== undefined && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {company.totalTrips} voyages disponibles
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => toggleFavorite(company.id)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Heart
+                              className={`h-4 w-4 ${
+                                favorites.includes(company.id)
+                                  ? "fill-red-500 text-red-500"
+                                  : "text-gray-400"
+                              }`}
+                            />
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() =>
+                              router.push(`/companies/${company.id}`)
+                            }
+                          >
+                            Voir les voyages
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12 text-gray-500">
+                    <Bus className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Aucune entreprise partenaire trouvée.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
+
+      {/* QR Code Dialog */}
+      {selectedReservation && (
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${
+            showQRCode ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+          onClick={() => setShowQRCode(false)}
+        >
+          <div
+            className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center space-y-4 transform transition-transform duration-300 scale-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-gray-900">
+              Votre Billet QR Code
+            </h3>
+            {selectedReservation.ticket?.qrCode ? (
+              <>
+                <img
+                  src={selectedReservation.ticket.qrCode || "/placeholder.svg"}
+                  alt="QR Code du Billet"
+                  className="w-full max-w-[250px] h-auto mx-auto border border-gray-200 rounded-md p-2 animate-fade-in"
+                />
+                <p className="text-sm text-gray-700 font-medium">
+                  Code Billet:{" "}
+                  <span className="font-mono text-blue-700">
+                    {selectedReservation.ticket.ticketCode}
+                  </span>
+                </p>
+                <p className="text-xs text-gray-500">
+                  Présentez ce QR code au caissier pour validation.
+                </p>
+              </>
+            ) : (
+              <p className="text-red-500">QR Code non disponible.</p>
+            )}
+            <Button onClick={() => setShowQRCode(false)} className="w-full">
+              Fermer
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

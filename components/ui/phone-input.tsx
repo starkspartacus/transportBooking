@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AFRICAN_COUNTRIES } from "@/constants/countries";
+import { ALL_COUNTRIES } from "@/constants/countries";
 
 interface PhoneInputProps {
   countryCodeValue?: string;
@@ -38,7 +38,7 @@ export function PhoneInput({
 
   useEffect(() => {
     // Extraire les préfixes téléphoniques des pays
-    const countryPrefixes = AFRICAN_COUNTRIES.map((country) => ({
+    const countryPrefixes = ALL_COUNTRIES.map((country) => ({
       code: country.code,
       prefix: country.phonePrefix,
       flag: country.flag,
