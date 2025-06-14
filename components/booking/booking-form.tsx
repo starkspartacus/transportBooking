@@ -283,7 +283,7 @@ export default function BookingForm({
             companyId: trip.company.id,
             userId: session?.user?.id || null,
             tripId: trip.id,
-            ticketCodes: booking.tickets.map((t: any) => t.ticketCode),
+            ticketCodes: booking.tickets.map((t: any) => t.ticketNumber), // Corrected to ticketNumber
           });
         }
 
@@ -304,12 +304,13 @@ export default function BookingForm({
         const fullPhoneNumberForWhatsapp = `${countryCode.replace(
           /\+/g,
           ""
-        )}${passengerPhone.replace(/^0/, "")}`;
+        )}${passengerPhone.replace(/^0+/, "")}`; // Use /^0+/ to remove all leading zeros
         const whatsappLink = `https://wa.me/${fullPhoneNumberForWhatsapp}?text=${whatsappMessage}`;
 
         onBookingComplete({
           ...booking,
           whatsappLink: whatsappLink, // Pass the generated WhatsApp link
+          whatsappMessage: decodeURIComponent(whatsappMessage), // Pass the decoded message for toast
         });
       } else {
         toast({
@@ -337,7 +338,7 @@ export default function BookingForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-4">
         {/* Trip Details (always visible) */}
-        <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-600">Départ</p>
@@ -373,7 +374,7 @@ export default function BookingForm({
 
         {/* Step 1: Seat Selection */}
         {currentStep === 1 && (
-          <div>
+          <div className="transition-all duration-300 ease-in-out">
             <Label className="text-base font-medium">
               Choisir votre siège(s)
             </Label>
@@ -394,8 +395,9 @@ export default function BookingForm({
                         : "outline"
                     }
                     className={cn(
-                      "h-12",
-                      isSelected && "bg-blue-500 text-white hover:bg-blue-600",
+                      "h-12 transition-all duration-200",
+                      isSelected &&
+                        "bg-primary text-primary-foreground hover:bg-primary/90",
                       isOccupied &&
                         "bg-gray-300 text-gray-600 cursor-not-allowed hover:bg-gray-300"
                     )}
@@ -416,7 +418,7 @@ export default function BookingForm({
               type="button"
               onClick={handleNextStep}
               disabled={currentSelectedSeats.length === 0}
-              className="mt-6 w-full"
+              className="mt-6 w-full transition-all duration-200"
             >
               Suivant <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -425,13 +427,16 @@ export default function BookingForm({
 
         {/* Step 2: Passenger Details */}
         {currentStep === 2 && (
-          <div>
+          <div className="transition-all duration-300 ease-in-out">
             <h3 className="text-base font-medium mb-4">
               Détails du/des passager(s)
             </h3>
             {currentSelectedSeats.length > 0 ? (
               currentSelectedSeats.map((seat, index) => (
-                <Card key={seat} className="mb-4 p-4">
+                <Card
+                  key={seat}
+                  className="mb-4 p-4 shadow-sm transition-all duration-200"
+                >
                   <CardTitle className="text-lg mb-4">Siège {seat}</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
@@ -498,7 +503,12 @@ export default function BookingForm({
               </p>
             )}
             <div className="flex justify-between mt-6">
-              <Button type="button" variant="outline" onClick={handlePrevStep}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePrevStep}
+                className="transition-all duration-200"
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Précédent
               </Button>
               <Button
@@ -509,6 +519,7 @@ export default function BookingForm({
                   currentPassengers.length === 0 ||
                   currentPassengers.some((p) => !p.name || !p.phone)
                 }
+                className="transition-all duration-200"
               >
                 Suivant <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -518,7 +529,7 @@ export default function BookingForm({
 
         {/* Step 3: Payment Method & Summary */}
         {currentStep === 3 && (
-          <div>
+          <div className="transition-all duration-300 ease-in-out">
             <h3 className="text-base font-medium mb-4">Mode de paiement</h3>
             <FormField
               control={form.control}
@@ -530,7 +541,7 @@ export default function BookingForm({
                       <Button
                         type="button"
                         variant={field.value === "CASH" ? "default" : "outline"}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 transition-all duration-200"
                         onClick={() => field.onChange("CASH")}
                       >
                         <CreditCard className="h-4 w-4" />
@@ -539,7 +550,7 @@ export default function BookingForm({
                       <Button
                         type="button"
                         variant={field.value === "CARD" ? "default" : "outline"}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 transition-all duration-200"
                         onClick={() => field.onChange("CARD")}
                       >
                         <CreditCard className="h-4 w-4" />
@@ -550,7 +561,7 @@ export default function BookingForm({
                         variant={
                           field.value === "MOBILE_MONEY" ? "default" : "outline"
                         }
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 transition-all duration-200"
                         onClick={() => field.onChange("MOBILE_MONEY")}
                       >
                         <CreditCard className="h-4 w-4" />
@@ -564,7 +575,7 @@ export default function BookingForm({
             />
 
             {/* Booking Summary */}
-            <div className="bg-blue-50 p-4 rounded-lg mt-6">
+            <div className="bg-secondary/10 p-4 rounded-lg mt-6 shadow-sm">
               <h3 className="font-medium mb-2">Résumé de la réservation</h3>
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
@@ -611,10 +622,19 @@ export default function BookingForm({
 
             {/* Book Button */}
             <div className="flex justify-between mt-6">
-              <Button type="button" variant="outline" onClick={handlePrevStep}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePrevStep}
+                className="transition-all duration-200"
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Précédent
               </Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="transition-all duration-200"
+              >
                 {isLoading
                   ? "Réservation en cours..."
                   : "Confirmer la réservation"}

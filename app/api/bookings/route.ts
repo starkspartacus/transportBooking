@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
         data: {
           amount: totalAmount,
           method: paymentMethod,
-          status: paymentMethod === "CASH" ? "PENDING" : "PENDING", // Payment status is PENDING until processed by CinetPay or confirmed by cashier
+          status: paymentMethod === "CASH" ? "PAID" : "PENDING", // Cash payments are PAID immediately
           reservationId: reservation.id,
           userId: userId, // Use determined userId
           companyId: trip.companyId,

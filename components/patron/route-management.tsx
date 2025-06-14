@@ -538,7 +538,7 @@ export default function EnhancedRouteManagement({
                                 </SelectItem>
                               ))
                             ) : (
-                              <SelectItem value="" disabled>
+                              <SelectItem value="no-city" disabled>
                                 Aucune ville disponible
                               </SelectItem>
                             )}
