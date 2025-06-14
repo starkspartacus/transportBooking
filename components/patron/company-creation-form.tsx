@@ -41,7 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { Progress } from "@/components/ui/progress";
-import { AFRICAN_COUNTRIES } from "@/constants/countries";
+import { ALL_COUNTRIES } from "@/constants/countries";
 
 // Schema de validation pour le formulaire d'entreprise
 const companySchema = z.object({
@@ -383,7 +383,7 @@ export default function CompanyCreationForm() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {AFRICAN_COUNTRIES.map((country) => (
+                          {ALL_COUNTRIES.map((country) => (
                             <SelectItem
                               key={country.code}
                               value={country.phonePrefix}
@@ -447,7 +447,7 @@ export default function CompanyCreationForm() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {AFRICAN_COUNTRIES.map((country) => (
+                          {ALL_COUNTRIES.map((country) => (
                             <SelectItem key={country.code} value={country.name}>
                               {country.flag} {country.name}
                             </SelectItem>
@@ -518,7 +518,7 @@ export default function CompanyCreationForm() {
               </FormDescription>
 
               <div className="grid grid-cols-2 gap-2 mb-4">
-                {AFRICAN_COUNTRIES.map((country) => (
+                {ALL_COUNTRIES.map((country) => (
                   <Button
                     key={country.code}
                     type="button"
@@ -544,7 +544,7 @@ export default function CompanyCreationForm() {
               {operatingCountries.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {operatingCountries.map((countryCode) => {
-                    const country = AFRICAN_COUNTRIES.find(
+                    const country = ALL_COUNTRIES.find(
                       (c) => c.code === countryCode
                     );
                     return (

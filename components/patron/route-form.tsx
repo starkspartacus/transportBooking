@@ -26,7 +26,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
-import { AFRICAN_COUNTRIES } from "@/constants/countries";
+import { ALL_COUNTRIES } from "@/constants/countries";
 
 const routeFormSchema = z.object({
   name: z.string().min(3, "Le nom doit contenir au moins 3 caractères"),
@@ -247,7 +247,7 @@ export default function RouteForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {AFRICAN_COUNTRIES.map((country) => (
+                      {ALL_COUNTRIES.map((country) => (
                         <SelectItem key={country.code} value={country.code}>
                           {country.name}
                         </SelectItem>
@@ -275,7 +275,7 @@ export default function RouteForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {AFRICAN_COUNTRIES.map((country) => (
+                      {ALL_COUNTRIES.map((country) => (
                         <SelectItem key={country.code} value={country.code}>
                           {country.name}
                         </SelectItem>

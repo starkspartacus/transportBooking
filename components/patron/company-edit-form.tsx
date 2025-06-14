@@ -30,7 +30,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  AFRICAN_COUNTRIES,
+  ALL_COUNTRIES,
   getCitiesByCountryCode,
   getCommunesByCity,
 } from "@/constants/countries";
@@ -120,7 +120,7 @@ export default function CompanyEditForm({ companyId }: CompanyEditFormProps) {
         });
 
         // Charger les villes et communes
-        const countryCode = AFRICAN_COUNTRIES.find(
+        const countryCode = ALL_COUNTRIES.find(
           (c) => c.name === company.country
         )?.code;
         if (countryCode) {
@@ -150,7 +150,7 @@ export default function CompanyEditForm({ companyId }: CompanyEditFormProps) {
   };
 
   const handleCountryChange = (countryCode: string) => {
-    const country = AFRICAN_COUNTRIES.find((c) => c.code === countryCode);
+    const country = ALL_COUNTRIES.find((c) => c.code === countryCode);
     if (country) {
       setSelectedCountry(countryCode);
       const cities = getCitiesByCountryCode(countryCode);
@@ -371,7 +371,7 @@ export default function CompanyEditForm({ companyId }: CompanyEditFormProps) {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {AFRICAN_COUNTRIES.map((country) => (
+                          {ALL_COUNTRIES.map((country) => (
                             <SelectItem
                               key={country.code}
                               value={country.phonePrefix}
@@ -433,7 +433,7 @@ export default function CompanyEditForm({ companyId }: CompanyEditFormProps) {
                       <SelectValue placeholder="Choisir le pays" />
                     </SelectTrigger>
                     <SelectContent>
-                      {AFRICAN_COUNTRIES.map((country) => (
+                      {ALL_COUNTRIES.map((country) => (
                         <SelectItem key={country.id} value={country.code}>
                           {country.flag} {country.name}
                         </SelectItem>

@@ -61,7 +61,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { NATIONALITIES, DEPARTMENTS, POSITIONS } from "@/constants/employee";
-import { AFRICAN_COUNTRIES } from "@/constants/countries"; // Added AFRICAN_COUNTRIES import
+import { ALL_COUNTRIES } from "@/constants/countries"; // Added AFRICAN_COUNTRIES import
 
 // Define a type for the department keys
 type DepartmentKey = keyof typeof POSITIONS;
@@ -117,7 +117,7 @@ const initialFormData: EmployeeFormData = {
   lastName: "",
   email: "",
   phone: "",
-  countryCode: AFRICAN_COUNTRIES[0]?.code || "+225", // Default to first African country or +225
+  countryCode: ALL_COUNTRIES[0]?.code || "+225", // Default to first African country or +225
   role: "CAISSIER",
   status: "ACTIVE",
   nationality: NATIONALITIES[0]?.code || "CI", // Default to first nationality or CI
@@ -129,7 +129,7 @@ const initialFormData: EmployeeFormData = {
   // Informations personnelles supplémentaires
   image: "",
   address: "",
-  country: AFRICAN_COUNTRIES[0]?.code || "CI", // Default to first African country or CI
+  country: ALL_COUNTRIES[0]?.code || "CI", // Default to first African country or CI
   city: "",
   commune: "",
   dateOfBirth: "",
@@ -231,7 +231,7 @@ export default function EmployeeForm({
           lastName: data.lastName || "",
           email: data.email || "",
           phone: data.phone || "",
-          countryCode: data.countryCode || AFRICAN_COUNTRIES[0]?.code || "+225",
+          countryCode: data.countryCode || ALL_COUNTRIES[0]?.code || "+225",
           role: (data.role || "CAISSIER") as "GESTIONNAIRE" | "CAISSIER",
           status: (data.status || "ACTIVE") as "ACTIVE" | "SUSPENDED",
           nationality: data.nationality || NATIONALITIES[0]?.code || "CI",
@@ -246,7 +246,7 @@ export default function EmployeeForm({
           hireDate: formatDateForInput(data.hireDate),
           image: data.image || "",
           address: data.address || "",
-          country: data.country || AFRICAN_COUNTRIES[0]?.code || "CI",
+          country: data.country || ALL_COUNTRIES[0]?.code || "CI",
           city: data.city || "",
           commune: data.commune || "",
           dateOfBirth: formatDateForInput(data.dateOfBirth),
@@ -1048,7 +1048,7 @@ export default function EmployeeForm({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="max-h-[200px]">
-                      {AFRICAN_COUNTRIES.map((country) => (
+                      {ALL_COUNTRIES.map((country) => (
                         <SelectItem key={country.code} value={country.code}>
                           {country.flag} {country.code}
                         </SelectItem>
@@ -1111,7 +1111,7 @@ export default function EmployeeForm({
                     <SelectValue placeholder="Sélectionner un pays" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[200px]">
-                    {AFRICAN_COUNTRIES.map((country) => (
+                    {ALL_COUNTRIES.map((country) => (
                       <SelectItem key={country.code} value={country.code}>
                         {country.flag} {country.name}
                       </SelectItem>

@@ -47,7 +47,7 @@ import {
   DEPARTMENTS,
   type POSITIONS,
 } from "@/constants/employee";
-import { AFRICAN_COUNTRIES } from "@/constants/countries";
+import { ALL_COUNTRIES } from "@/constants/countries";
 import EmployeeForm from "./employee-form"; // Importez le composant EmployeeForm
 import EmployeeCard from "@/components/ui/employee-card"; // Import the new EmployeeCard
 
@@ -273,7 +273,7 @@ export default function EmployeeManagement({
           setPhoneData({
             phone: employee.phone || "",
             countryCode:
-              employee.countryCode || AFRICAN_COUNTRIES[0]?.code || "+225", // Fallback to first African country code
+              employee.countryCode || ALL_COUNTRIES[0]?.code || "+225", // Fallback to first African country code
           });
           setShowPhoneDialog(true);
         } else {
@@ -820,7 +820,7 @@ export default function EmployeeManagement({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="max-h-[200px]">
-                    {AFRICAN_COUNTRIES.map((country) => (
+                    {ALL_COUNTRIES.map((country) => (
                       <SelectItem key={country.code} value={country.code}>
                         {country.flag} {country.code}
                       </SelectItem>

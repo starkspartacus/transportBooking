@@ -24,7 +24,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { TripWithDetails } from "@/lib/types"; // Import TripWithDetails
-import type { User } from "@prisma/client"; // Add this import
 
 // Type pour les détails de passager
 const passengerSchema = z.object({
@@ -32,6 +31,7 @@ const passengerSchema = z.object({
   name: z.string().min(2, "Le nom est requis."),
   phone: z.string().min(8, "Le numéro de téléphone est requis."),
   countryCode: z.string().optional(),
+  email: z.string().email("Email invalide.").optional().or(z.literal("")), // Added email field
 });
 
 // Schéma du formulaire de réservation
@@ -175,8 +175,9 @@ export default function BookingForm({
           name: "",
           phone: "",
           countryCode: "",
+          email: "",
         }
-      );
+      ); // Added email
     });
     setValue("passengers", newPassengers);
   };
@@ -197,8 +198,9 @@ export default function BookingForm({
               name: "",
               phone: "",
               countryCode: "",
+              email: "",
             }
-          );
+          ); // Added email
         });
         setValue("passengers", updatedPassengers);
       }
@@ -254,16 +256,16 @@ export default function BookingForm({
             seatNumber: seat,
             name:
               values.passengers[index]?.name ||
-              (session?.user as User)?.name ||
-              "Passager",
+              session?.user?.name ||
+              "Passager", // Fallback for guest booking
             phone:
-              values.passengers[index]?.phone ||
-              (session?.user as User)?.phone ||
-              "",
+              values.passengers[index]?.phone || session?.user?.phone || "", // Fallback for guest booking
             countryCode:
               values.passengers[index]?.countryCode ||
-              (session?.user as User)?.countryCode ||
-              "",
+              session?.user?.countryCode ||
+              "", // Fallback
+            email:
+              values.passengers[index]?.email || session?.user?.email || "", // Fallback for guest booking
           })),
           paymentMethod: values.paymentMethod,
         }),
@@ -283,14 +285,28 @@ export default function BookingForm({
           });
         }
 
+        // Generate WhatsApp message content
+        const ticketNumbers = booking.tickets
+          .map((t: any) => t.ticketNumber)
+          .join(", ");
+        const whatsappMessage = encodeURIComponent(
+          `Félicitations pour votre réservation ! Voici vos codes de ticket: ${ticketNumbers}. Scannez les QR codes en gare. Vous devrez être en gare 2 heures avant le départ afin de confirmer votre réservation en caisse.`
+        );
+        const passengerPhone =
+          values.passengers[0]?.phone || session?.user?.phone || "";
+        const countryCode =
+          values.passengers[0]?.countryCode || session?.user?.countryCode || "";
+
+        // Construct the WhatsApp link (ensure phone number is in international format without leading +)
+        const fullPhoneNumberForWhatsapp = `${countryCode.replace(
+          /\+/g,
+          ""
+        )}${passengerPhone.replace(/^0/, "")}`; // Remove '+' from country code and leading zero from phone
+        const whatsappLink = `https://wa.me/${fullPhoneNumberForWhatsapp}?text=${whatsappMessage}`;
+
         onBookingComplete({
           ...booking,
-          // Simulate WhatsApp message content for user feedback
-          whatsappMessage: `Félicitations pour votre réservation ! Voici vos codes de ticket: ${booking.tickets
-            .map((t: any) => t.ticketNumber)
-            .join(
-              ", "
-            )}. Scannez les QR codes en gare. Vous devrez être en gare 2 heures avant le départ afin de confirmer votre réservation en caisse.`,
+          whatsappLink: whatsappLink, // Pass the generated WhatsApp link
         });
       } else {
         toast({
@@ -442,7 +458,26 @@ export default function BookingForm({
                                   code
                                 )
                               }
-                              prefix="+225"
+                              initialCountryCode={getValues(
+                                `passengers.${index}.countryCode`
+                              )} // Pass initial country code
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`passengers.${index}.email`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email (Optionnel)</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Email du passager"
+                              type="email"
+                              {...field}
                             />
                           </FormControl>
                           <FormMessage />

@@ -45,7 +45,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { AFRICAN_COUNTRIES } from "@/constants/countries";
+import { ALL_COUNTRIES } from "@/constants/countries";
 import {
   calculateRoute,
   calculateEstimatedPrice,
@@ -115,14 +115,14 @@ export default function EnhancedRouteManagement({
 
   // Get cities for selected country
   const getDepartureCities = useCallback(() => {
-    const country = AFRICAN_COUNTRIES.find(
+    const country = ALL_COUNTRIES.find(
       (c) => c.code === formData.departureCountry
     );
     return country?.cities || [];
   }, [formData.departureCountry]);
 
   const getArrivalCities = useCallback(() => {
-    const country = AFRICAN_COUNTRIES.find(
+    const country = ALL_COUNTRIES.find(
       (c) => c.code === formData.arrivalCountry
     );
     return country?.cities || [];
@@ -163,11 +163,11 @@ export default function EnhancedRouteManagement({
     setCalculating(true);
     try {
       const departureCountryName =
-        AFRICAN_COUNTRIES.find((c) => c.code === formData.departureCountry)
-          ?.name || "";
+        ALL_COUNTRIES.find((c) => c.code === formData.departureCountry)?.name ||
+        "";
       const arrivalCountryName =
-        AFRICAN_COUNTRIES.find((c) => c.code === formData.arrivalCountry)
-          ?.name || "";
+        ALL_COUNTRIES.find((c) => c.code === formData.arrivalCountry)?.name ||
+        "";
 
       const routeData = await calculateRoute(
         departureCity,
@@ -510,7 +510,7 @@ export default function EnhancedRouteManagement({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {AFRICAN_COUNTRIES.map((country) => (
+                          {ALL_COUNTRIES.map((country) => (
                             <SelectItem key={country.code} value={country.code}>
                               {country.flag} {country.name}
                             </SelectItem>
@@ -563,7 +563,7 @@ export default function EnhancedRouteManagement({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {AFRICAN_COUNTRIES.map((country) => (
+                          {ALL_COUNTRIES.map((country) => (
                             <SelectItem key={country.code} value={country.code}>
                               {country.flag} {country.name}
                             </SelectItem>
@@ -835,13 +835,13 @@ export default function EnhancedRouteManagement({
                         </div>
                         <div className="text-gray-500">
                           {
-                            AFRICAN_COUNTRIES.find(
+                            ALL_COUNTRIES.find(
                               (c) => c.code === route.departureCountry
                             )?.flag
                           }{" "}
                           →{" "}
                           {
-                            AFRICAN_COUNTRIES.find(
+                            ALL_COUNTRIES.find(
                               (c) => c.code === route.arrivalCountry
                             )?.flag
                           }

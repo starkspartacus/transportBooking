@@ -121,7 +121,11 @@ export default function MultiCompanyDashboard() {
             <h1 className="text-lg font-bold text-gray-900">
               Tableau de bord Patron
             </h1>
-            <CompanySelector />
+            <CompanySelector
+              selectedCompanyId={null}
+              onSelectCompany={() => {}}
+              ownerId={""}
+            />
           </div>
           <NotificationBell />
         </div>
@@ -138,7 +142,11 @@ export default function MultiCompanyDashboard() {
               <p className="text-gray-600">Gestion de vos entreprises</p>
             </div>
             <div className="flex items-center gap-4">
-              <CompanySelector />
+              <CompanySelector
+                selectedCompanyId={null}
+                onSelectCompany={() => {}}
+                ownerId={""}
+              />
               <NotificationBell />
               <Button onClick={() => router.push("/patron/settings")}>
                 <Settings className="h-4 w-4 mr-2" />

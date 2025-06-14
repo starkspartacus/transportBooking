@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
     const {
       tripId,
-      selectedSeats, // Now an array of { seatNumber: string; name: string; phone: string; countryCode: string; }
+      selectedSeats, // Now an array of { seatNumber: string; name: string; phone: string; countryCode: string; email?: string; }
       paymentMethod,
     } = await request.json();
 
@@ -98,12 +98,29 @@ export async function POST(request: NextRequest) {
 
       // Determine userId based on session or guest data
       const userId = session?.user?.id || null;
-      const passengerName =
+      const mainPassengerName =
         selectedSeats[0]?.name || session?.user?.name || "N/A";
-      const passengerPhone =
+      const mainPassengerPhone =
         selectedSeats[0]?.phone || session?.user?.phone || "N/A";
-      const passengerEmail =
-        selectedSeats[0]?.email || session?.user?.email || null; // Assuming email might be passed for guests
+      const mainPassengerEmail =
+        selectedSeats[0]?.email || session?.user?.email || null;
+
+      // Prepare passengerDetails JSON object
+      const passengerDetails = {
+        mainPassenger: {
+          name: mainPassengerName,
+          phone: mainPassengerPhone,
+          email: mainPassengerEmail,
+          countryCode: selectedSeats[0]?.countryCode,
+        },
+        otherPassengers: selectedSeats.slice(1).map((p) => ({
+          seatNumber: p.seatNumber,
+          name: p.name,
+          phone: p.phone,
+          email: p.email,
+          countryCode: p.countryCode,
+        })),
+      };
 
       // Create reservation
       const reservation = await tx.reservation.create({
@@ -113,20 +130,16 @@ export async function POST(request: NextRequest) {
           tripId: trip.id,
           companyId: trip.companyId,
           totalAmount: totalAmount,
-          seatNumbers: seatsToReserve.map((s) => Number.parseInt(s, 10)), // Store selected seat numbers as array of ints
+          seatNumbers: selectedSeats.map((s) =>
+            Number.parseInt(s.seatNumber, 10)
+          ), // Store selected seat numbers as array of ints
           expiresAt,
           status: paymentMethod === "CASH" ? "CONFIRMED" : "PENDING", // Cash payments are confirmed immediately
           paymentMethod,
           passengerCount: selectedSeats.length,
-          passengerName: passengerName,
-          passengerPhone: passengerPhone,
-          passengerDetails: {
-            create: {
-              name: passengerName,
-              phone: passengerPhone,
-              email: passengerEmail,
-            },
-          },
+          passengerName: mainPassengerName, // Primary booker's name (direct field)
+          passengerPhone: mainPassengerPhone, // Primary booker's phone (direct field)
+          passengerDetails: passengerDetails, // Store all passenger details as JSON
         },
         include: {
           trip: {
@@ -157,6 +170,7 @@ export async function POST(request: NextRequest) {
             seatNumber: Number.parseInt(seatInfo.seatNumber, 10),
             passengerName: seatInfo.name,
             passengerPhone: seatInfo.phone,
+            passengerEmail: seatInfo.email, // Store passenger email directly on ticket (assuming schema supports it)
             price: trip.currentPrice, // Price per ticket
             status: paymentMethod === "CASH" ? "VALID" : "RESERVED", // Use RESERVED for pending payment tickets
             // Assuming QR generation is handled later or client-side for display
